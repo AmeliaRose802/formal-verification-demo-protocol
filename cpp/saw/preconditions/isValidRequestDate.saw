@@ -1,0 +1,18 @@
+    // Domain precondition for §4.3.1 isValidRequestDate:
+    //
+    //   The C++ implementation uses signed `std::int64_t` for both
+    //   timestamps and the window, but real Unix-epoch timestamps and
+    //   real window widths are non-negative.  Without this constraint
+    //   SAW finds a "signed subtraction overflow (nsw)" UB counter-
+    //   example with `requestTimestamp` near INT64_MIN and
+    //   `currentTime` near INT64_MAX — values that cannot occur for
+    //   any real wall-clock time.
+    //
+    //   With non-negative bounds, the signed and unsigned interpre-
+    //   tations of all three values coincide, which is exactly what
+    //   the Cryptol spec (which uses `[64]`) assumes.  We also bound
+    //   the window to keep the subtraction in non-negative signed
+    //   range.
+    llvm_precond {{ requestTimestamp >=$ 0 }};
+    llvm_precond {{ currentTime      >=$ 0 }};
+    llvm_precond {{ windowSeconds    >=$ 0 }};

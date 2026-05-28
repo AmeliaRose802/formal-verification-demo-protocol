@@ -1,0 +1,252 @@
+// SDEP — Rust-ABI Cryptol view of the pure decision logic.
+//
+// `cryptol/SDEP.cry` models the protocol at the minimum bit-widths
+// necessary to express the spec: enums are 2- or 3-bit, booleans are
+// `Bit`.  The Rust implementation, when compiled to LLVM bitcode at
+// `-O release`, encodes its enums per the Rust ABI:
+//
+//   * `bool`                → i1
+//   * 3-variant `enum`s      → i8  (values 0,1,2 — declaration order)
+//   * 5-variant `enum`s      → i8  (values 0..4)
+//   * 4-variant `enum`s      → i8  (values 0..3)
+//   * 2-variant trivial enum → i1  (niche-packed!)  e.g. ActivationResult
+//
+// Each definition below is structurally identical to the corresponding
+// definition in `cryptol/SDEP.cry`, so every Rust↔Cryptol equivalence
+// proof is implicitly also a proof that the byte-level model agrees
+// with the bit-level spec.
+
+module SDEP_rust where
+
+import SDEP
+
+////////////////////////////////////////////////////////////////////////
+// Enum byte / bit constants (must match `derive(...)` order in
+// rust/src/lib.rs).
+////////////////////////////////////////////////////////////////////////
+
+// FleetMode  : enum { Disabled, Enabled }  → i8 by `repr(Rust)` here
+//   (not used in any function we verify; included for completeness)
+FM_Disabled_b        = 0 : [8]
+FM_Enabled_b         = 1 : [8]
+
+// KeyVaultResult : enum { Ok, NotFound, IoError } → i8
+KV_Ok_b              = 0 : [8]
+KV_NotFound_b        = 1 : [8]
+KV_IoError_b         = 2 : [8]
+
+// AuthResult : enum { Authenticated, Unauthenticated, VaultUnavailable } → i8
+AR_Authenticated_b   = 0 : [8]
+AR_Unauthenticated_b = 1 : [8]
+AR_VaultUnavailable_b= 2 : [8]
+
+// ActivationResult : enum { Success, AlreadyActive } → niche-packed to i1.
+// Rust ONLY has two variants here, whereas Cryptol SDEP.cry has three
+// (Success, AlreadyActive, IoFailure). Vault failures are conveyed via
+// AuthResult::VaultUnavailable in the Rust API, not ActivationResult.
+type ActivationResultBit = [1]
+AC_Success_bit       = 0 : ActivationResultBit
+AC_AlreadyActive_bit = 1 : ActivationResultBit
+
+// ProvisionResult : { Succeeded, Unauthorized, BadRequest, Disabled,
+//                     InternalError } → i8
+PR_Succeeded_b       = 0 : [8]
+PR_Unauthorized_b    = 1 : [8]
+PR_BadRequest_b      = 2 : [8]
+PR_Disabled_b        = 3 : [8]
+PR_InternalError_b   = 4 : [8]
+
+// EnrollmentResult : { Succeeded, Unauthorized, Disabled, InternalError } → i8
+ER_Succeeded_b       = 0 : [8]
+ER_Unauthorized_b    = 1 : [8]
+ER_Disabled_b        = 2 : [8]
+ER_InternalError_b   = 3 : [8]
+
+// AccessMode : { Off, Audit, Enforce } → i8
+AM_Off_b             = 0 : [8]
+AM_Audit_b           = 1 : [8]
+AM_Enforce_b         = 2 : [8]
+
+// AccessDecision : { Allow, Deny, NoRule } → i8
+AD_Allow_b           = 0 : [8]
+AD_Deny_b            = 1 : [8]
+AD_NoRule_b          = 2 : [8]
+
+////////////////////////////////////////////////////////////////////////
+// 4.1 provision_key — LLVM: (i1, i1, i8, i1) -> i8
+////////////////////////////////////////////////////////////////////////
+// Rust body:
+//   if !fleet_enabled                 -> Disabled
+//   if !valid_request                 -> BadRequest
+//   if vault_result != Ok             -> InternalError
+//   if key_is_active                  -> Unauthorized
+//   else                              -> Succeeded
+//
+// LLVM gives the i8 vault_result parameter the `range(0,3)` attribute
+// (only 3 valid KeyVaultResult discriminants). Cryptol can't carry
+// that as an i8 precondition the way `range(...)` does in LLVM, so
+// the SAW spec will assert  vault_result <  3  before executing.
+provision_key_rust : [1] -> [1] -> [8] -> [1] -> [8]
+provision_key_rust fleetEnabled validRequest vaultResult keyIsActive =
+  if fleetEnabled  == 0    then PR_Disabled_b
+   | validRequest  == 0    then PR_BadRequest_b
+   | vaultResult  != KV_Ok_b
+                           then PR_InternalError_b
+   | keyIsActive  != 0     then PR_Unauthorized_b
+  else                          PR_Succeeded_b
+
+////////////////////////////////////////////////////////////////////////
+// 4.2 enroll_device — LLVM: (i1, i1, i8, i1) -> i8
+////////////////////////////////////////////////////////////////////////
+// activation_result is niche-packed to i1 (Rust enum with 2 variants).
+enroll_device_rust : [1] -> [1] -> [8] -> [1] -> [8]
+enroll_device_rust fleetEnabled validMetadata authResult activationResult =
+  if fleetEnabled    == 0          then ER_Disabled_b
+   | validMetadata   == 0          then ER_Unauthorized_b
+   | authResult     == AR_Authenticated_b then
+        (if activationResult == AC_Success_bit       then ER_Succeeded_b
+         else                                             ER_Unauthorized_b)
+   | authResult     == AR_VaultUnavailable_b
+                                   then ER_InternalError_b
+  else                                  ER_Unauthorized_b
+
+////////////////////////////////////////////////////////////////////////
+// 4.3 authenticate — LLVM: (i1, i1, i1) -> i1
+////////////////////////////////////////////////////////////////////////
+authenticate_rust : [1] -> [1] -> [1] -> [1]
+authenticate_rust dateValid signatureValid claimsValid =
+  dateValid && signatureValid && claimsValid
+
+////////////////////////////////////////////////////////////////////////
+// 4.5 enforce_access — LLVM: (i8, i8) -> { i1, i1 }
+////////////////////////////////////////////////////////////////////////
+// Rust returns AccessEnforcement { allowed: bool, logged: bool } which
+// LLVM lowers to an anonymous { i1, i1 } struct in the return slot.
+// Field order matches struct-declaration order: allowed, logged.
+//
+// Cryptol's pair maps to the same { i1, i1 } on the SAW side via
+// `llvm_struct_value`.
+enforce_access_rust : [8] -> [8] -> ([1], [1])
+enforce_access_rust mode decision =
+  if mode == AM_Off_b                     then (1, 0)
+   | mode == AM_Audit_b                   then
+        (if decision == AD_Deny_b         then (1, 1) else (1, 0))
+   | mode == AM_Enforce_b                 then
+        (if decision == AD_Allow_b        then (1, 0)
+          | decision == AD_Deny_b         then (0, 1)
+         else                                  (1, 0))
+  else                                         (1, 0)
+
+////////////////////////////////////////////////////////////////////////
+// 4.6 get_status — LLVM:
+//   void @get_status(ptr sret([20 x i8]) %_0,
+//                    i1 %fleet_enabled,
+//                    i1 %has_key,
+//                    i1 %key_is_active,
+//                    ptr %key_id)              // ptr to [u8;16]
+////////////////////////////////////////////////////////////////////////
+// EnrollmentStatus layout (release build, repr(Rust) deterministic):
+//
+//   offset 0   : fleet_mode (i8, 0=Disabled, 1=Enabled — taken from
+//                fleet_enabled by `zext i1 to i8`)
+//   offset 1   : has_key  (i8, 0 or 1 — zext)
+//   offset 2   : Option<Uuid> tag (i8) — 0=None when key_is_active is
+//                false, 1=Some when key_is_active is true
+//   offset 3..18 : key_id  ([u8;16]) — the optimised release build
+//                  unconditionally memcpys these 16 bytes from the
+//                  key_id input, whether or not the Option tag is 1.
+//   offset 19  : is_active (i8, 0 or 1 — same as Option tag)
+//
+// All 20 bytes are written by the function, so the SAW postcondition
+// pins the entire buffer; nothing is `undef`.
+get_status_rust : [1] -> [1] -> [1] -> [16][8] -> [20][8]
+get_status_rust fleetEnabled hasKey keyIsActive keyId =
+    [ fmByte
+    , hkByte
+    , kaByte
+    ] # keyId #
+    [ kaByte
+    ]
+  where
+    fmByte = (0b0000000 # fleetEnabled) : [8]
+    hkByte = (0b0000000 # hasKey)       : [8]
+    kaByte = (0b0000000 # keyIsActive)  : [8]
+
+////////////////////////////////////////////////////////////////////////
+// 5. Sanity bridges: prove the Rust-ABI definitions agree with the
+//    bit-level spec in SDEP.cry under the well-formedness preconditions.
+////////////////////////////////////////////////////////////////////////
+
+// Lift a 2-variant niche-packed ActivationResult to the 2-bit
+// SDEP.cry ActivationResult.
+liftAR : ActivationResultBit -> ActivationResult
+liftAR b = if b == 0 then AC_Success else AC_AlreadyActive
+
+// Lift an 8-bit AuthResult (low 2 bits used) to the 2-bit SDEP.cry
+// AuthResult.  Restricted to well-formed inputs.
+liftAuth : [8] -> AuthResult
+liftAuth r =
+  if r == AR_Authenticated_b   then AR_Authenticated
+   | r == AR_Unauthenticated_b then AR_Unauthenticated
+   | r == AR_VaultUnavailable_b then AR_VaultUnavailable
+  else AR_Unauthenticated      // unreachable for well-formed inputs
+
+liftKV : [8] -> KeyVaultResult
+liftKV r =
+  if r == KV_Ok_b       then KV_Ok
+   | r == KV_NotFound_b then KV_NotFound
+   | r == KV_IoError_b  then KV_IoError
+  else KV_IoError       // unreachable
+
+liftPR : ProvisionResult -> [8]
+liftPR r =
+  if r == PR_Succeeded     then PR_Succeeded_b
+   | r == PR_Unauthorized  then PR_Unauthorized_b
+   | r == PR_BadRequest    then PR_BadRequest_b
+   | r == PR_Disabled      then PR_Disabled_b
+  else                          PR_InternalError_b
+
+liftER : EnrollmentResult -> [8]
+liftER r =
+  if r == ER_Succeeded     then ER_Succeeded_b
+   | r == ER_Unauthorized  then ER_Unauthorized_b
+   | r == ER_Disabled      then ER_Disabled_b
+  else                          ER_InternalError_b
+
+// provision_key_rust agrees with bit-level provisionKey under the
+// well-formedness preconditions on the i8 vaultResult.
+property provision_key_rust_matches_spec
+    (fleetEnabled : [1]) (validRequest : [1]) (vaultResult : [8])
+    (keyIsActive : [1]) =
+  (vaultResult <= 2) ==>
+    provision_key_rust fleetEnabled validRequest vaultResult keyIsActive
+      == liftPR (provisionKey (fleetEnabled != 0) (validRequest != 0)
+                              (liftKV vaultResult)
+                              (keyIsActive != 0))
+
+property enroll_device_rust_matches_spec
+    (fleetEnabled : [1]) (validMetadata : [1]) (authResult : [8])
+    (activationResult : ActivationResultBit) =
+  (authResult <= 2) ==>
+    enroll_device_rust fleetEnabled validMetadata authResult activationResult
+      == liftER (enrollDevice (fleetEnabled != 0) (validMetadata != 0)
+                              (liftAuth authResult)
+                              (liftAR activationResult))
+
+property authenticate_rust_matches_spec d s c =
+  authenticate_rust d s c == (if authenticate (d!=0) (s!=0) (c!=0) then 1 else 0)
+
+property enforce_access_rust_matches_spec (mode : [8]) (decision : [8]) =
+  (mode <= 2) ==> (decision <= 2) ==>
+    enforce_access_rust mode decision == liftEA (enforceAccess (liftAM mode)
+                                                               (liftAD decision))
+  where
+    liftAM r =
+      if r == AM_Off_b     then AM_Off
+       | r == AM_Audit_b   then AM_Audit
+      else                       AM_Enforce
+    liftAD r =
+      if r == AD_Allow_b   then AD_Allow
+       | r == AD_Deny_b    then AD_Deny
+      else                       AD_NoRule
+    liftEA (a, l) = ((if a then 1 else 0) : [1], (if l then 1 else 0) : [1])

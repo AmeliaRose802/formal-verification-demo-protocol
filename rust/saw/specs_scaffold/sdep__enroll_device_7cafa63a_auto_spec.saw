@@ -1,0 +1,29 @@
+// Auto-generated spec for: _ZN4sdep13enroll_device17hd635f356501eb3c3E
+// Constraints derived from type system and annotations
+// WARNING: Function may throw -- exception path not modeled
+
+let sdep__enroll_device_7cafa63a_auto_spec : LLVMSetup () = do {
+
+    // Parameter: fleet_enabled
+    fleet_enabled <- llvm_fresh_var "fleet_enabled" (llvm_int 1);
+
+    // Parameter: valid_metadata
+    valid_metadata <- llvm_fresh_var "valid_metadata" (llvm_int 1);
+
+    // Parameter: auth_result
+    auth_result <- llvm_fresh_var "auth_result" (llvm_int 8);
+
+    // Parameter: activation_result
+    activation_result <- llvm_fresh_var "activation_result" (llvm_int 1);
+
+    llvm_execute_func [llvm_term fleet_enabled, llvm_term valid_metadata, llvm_term auth_result, llvm_term activation_result];
+
+    ret <- llvm_fresh_var "ret" (llvm_int 8);
+    // ACTION REQUIRED: This spec only proves absence of undefined behavior.
+    // For functional correctness, import your Cryptol spec and replace ret:
+    //   import "my_spec.cry";
+    //   llvm_return (llvm_term {{ my_spec x : [8] }});
+    llvm_return (llvm_term ret);
+};
+
+// Usage: ov_sdep__enroll_device_7cafa63a <- llvm_verify m "_ZN4sdep13enroll_device17hd635f356501eb3c3E" [] false sdep__enroll_device_7cafa63a_auto_spec z3;

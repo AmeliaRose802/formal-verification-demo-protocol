@@ -1,0 +1,3 @@
+:load SDEP.cry
+:prove P23_VaultOkAlwaysProvisions
+:quit

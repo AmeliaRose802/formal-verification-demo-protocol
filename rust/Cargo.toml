@@ -1,0 +1,27 @@
+[package]
+name = "sdep"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+# Default feature set: production / tests / examples need the I/O-heavy
+# functions (canonicalization, HMAC signature checks, JSON claim parsing).
+default = ["io"]
+# `io` gates the iterator/HashMap/serde_json-using functions.  Disable
+# (`--no-default-features`) for SAW formal verification, where loading
+# bitcode that contains Windows-funclet exception-handling pulled in by
+# serde_json's `ErrorCode` drop code makes `llvm_load_module` fail with
+# `FUNC_CODE_OPERAND_BUNDLE`.
+io = []
+
+[dependencies]
+chrono = { version = "0.4", default-features = false, features = ["std", "serde", "clock"] }
+hmac = "0.12"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sha2 = "0.10"
+subtle = "2.5"
+uuid = { version = "1.0", features = ["v4", "serde"] }
+
+[dev-dependencies]
+base64 = "0.22"

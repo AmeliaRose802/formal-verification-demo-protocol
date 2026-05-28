@@ -1,0 +1,242 @@
+// Secure Device Enrollment Protocol (SDEP) — Attacker-visible gaps.
+//
+// This module mechanises security obligations the protocol's decision
+// logic DOES NOT meet. Every `property` here is expected to FAIL when
+// proved with Z3: the counterexample is the concrete attack.
+//
+// The purpose of the file is NOT to ship a working defence, it is to
+// keep a regression list of known holes so they can be triaged or
+// fixed without forgetting one. `prove_gaps.ps1` runs them and PASSES
+// when every property fails with a counterexample; if a future change
+// closes a gap, the corresponding property starts proving Q.E.D. and
+// the script flips the entry to "FIXED — close the gap row in SPEC.md".
+//
+// Mapping to spec.md §6 "Known Gaps":
+//
+//   G30  Provision has no caller authentication           §6.1
+//   G31  Provision response code is an active-key oracle  §6.2
+//   G32  getStatus reveals state to unauthenticated calls §6.3
+//   G33  Activation response code is a keyId oracle       §6.4
+//   G34  Claims are checked by name, not by value         §6.5
+//   G35  HMAC accepts a zero/low-entropy key              §6.6
+//
+// Stateful gaps that are NOT Cryptol-expressible (documented only):
+//
+//   G36  No nonce / no replay-window state                §6.7
+//   G37  Provision endpoint has no method check           §6.8
+//   G38  constant_time_equals is not control-flow proven  §6.9
+//
+// The file imports SDEP so the "secure" reference functions can be
+// compared to the actual production decision functions directly.
+
+module SDEP_gaps where
+
+import SDEP
+
+////////////////////////////////////////////////////////////////////////////////
+// G30 — Provision has no caller authentication.
+//
+// `provisionKey` takes `validRequest` (a flag computed from headers
+// only — X-Fleet-Metadata, X-Fleet-Auth-Scheme), `vaultResult`, and
+// `keyIsActive`. There is no AuthResult input. The C++ controller's
+// `handle_provision` likewise never inspects a signature or claims for
+// POST /enroll/key. Anyone on the link-local network (the spec's only
+// transport restriction) can drive the key store from "no key" to
+// "provisional" with attacker-controlled secret material — then race
+// the device to activate. The attacker becomes the device.
+//
+// `secureProvisionKey` below is what the function SHOULD have been:
+// the same control flow, plus an AuthResult input that must be
+// Authenticated before any state change. G30 asserts the two agree on
+// every well-formed input; Z3 exhibits a counterexample on
+// `authResult = Unauthenticated`, which is the attack.
+////////////////////////////////////////////////////////////////////////////////
+
+secureProvisionKey :
+  Bit -> Bit -> KeyVaultResult -> Bit -> AuthResult -> ProvisionResult
+secureProvisionKey fleetEnabled validRequest vaultResult keyIsActive authResult =
+  if ~ fleetEnabled                  then PR_Disabled
+   | ~ validRequest                  then PR_BadRequest
+   | authResult != AR_Authenticated  then PR_Unauthorized
+   | vaultResult != KV_Ok            then PR_InternalError
+   | keyIsActive                     then PR_Unauthorized
+  else                                    PR_Succeeded
+
+// EXPECTED VERDICT: FAIL.
+// Counterexample shape: fleetEnabled = True, validRequest = True,
+// vaultResult = KV_Ok, keyIsActive = False, authResult = AR_Unauthenticated.
+// LHS = PR_Succeeded; RHS = PR_Unauthorized.
+property G30_ProvisionRequiresAuth
+    fleetEnabled validRequest vaultResult keyIsActive authResult =
+  isKeyVaultResult vaultResult ==>
+    isAuthResult authResult ==>
+      provisionKey fleetEnabled validRequest vaultResult keyIsActive
+        == secureProvisionKey fleetEnabled validRequest vaultResult
+                              keyIsActive authResult
+
+////////////////////////////////////////////////////////////////////////////////
+// G31 — Provision response code is an active-key oracle.
+//
+// Two `provisionKey` invocations that agree on every input *except*
+// `keyIsActive` return different ProvisionResults: `Succeeded` (200)
+// when no active key, `Unauthorized` (401) when active. An attacker
+// with no credentials can poll POST /enroll/key and read the status
+// code to learn whether the device has an active enrollment key. This
+// is a fingerprinting / state-disclosure oracle on a public-by-design
+// endpoint.
+////////////////////////////////////////////////////////////////////////////////
+
+// EXPECTED VERDICT: FAIL.
+// Counterexample: LHS = PR_Succeeded, RHS = PR_Unauthorized.
+property G31_ProvisionResponseLeaksActiveState
+    fleetEnabled validRequest vaultResult =
+  isKeyVaultResult vaultResult ==>
+    fleetEnabled ==>
+      validRequest ==>
+        vaultResult == KV_Ok ==>
+          provisionKey fleetEnabled validRequest vaultResult False
+            == provisionKey fleetEnabled validRequest vaultResult True
+
+////////////////////////////////////////////////////////////////////////////////
+// G32 — getStatus discloses state to unauthenticated callers.
+//
+// `getStatus(fleetEnabled, hasKey, keyIsActive, keyId)` has NO auth
+// input. The C++ `handle_status` matches: anyone hitting GET
+// /enroll/status learns fleetMode, hasKey, isActive, and the keyId
+// (when active). For an enrolled device this leaks the active key
+// identifier to an arbitrary network peer, which is a precondition
+// for several other attacks (G33's keyId-probing oracle, log
+// correlation across compromised peers, etc).
+//
+// `secureGetStatus` below adds a `callerAuth` input and returns an
+// all-redacted EnrollmentStatus to unauthenticated callers. G32
+// compares the two; Z3 finds a cex whenever the device actually has
+// a key (i.e. `hasKey \/ keyIsActive`).
+////////////////////////////////////////////////////////////////////////////////
+
+redactedStatus : EnrollmentStatus
+redactedStatus =
+  { fleetMode = FM_Disabled
+  , hasKey    = False
+  , keyId     = none
+  , isActive  = False
+  }
+
+secureGetStatus : Bit -> Bit -> Bit -> UUID -> Bit -> EnrollmentStatus
+secureGetStatus fleetEnabled hasKey keyIsActive keyId callerAuth =
+  if callerAuth then getStatus fleetEnabled hasKey keyIsActive keyId
+                else redactedStatus
+
+// EXPECTED VERDICT: FAIL.
+// Counterexample: any input where the produced status is not all-zero
+// (e.g. fleetEnabled = True, or hasKey = True, or keyIsActive = True).
+property G32_StatusLeaksToUnauthenticated
+    fleetEnabled hasKey keyIsActive keyId =
+  getStatus fleetEnabled hasKey keyIsActive keyId
+    == secureGetStatus fleetEnabled hasKey keyIsActive keyId False
+
+////////////////////////////////////////////////////////////////////////////////
+// G33 — Activation response code is a keyId oracle.
+//
+// Inside `enrollDevice(true, true, _, _)`:
+//
+//   AR_Authenticated  + AC_IoFailure  -> ER_InternalError   (HTTP 500)
+//   AR_Unauthenticated + (any)        -> ER_Unauthorized    (HTTP 401)
+//
+// An attacker who has obtained a single valid signed canonical
+// payload (e.g. by passive observation on the link-local network
+// before the canonicalizer's auth-header exclusion was deployed, or
+// from a leaked log) can replay it against /enroll/key/{keyId}/activate
+// for various candidate keyIds:
+//
+//   - 500 ("InternalError") => signature verified, keyId mismatched
+//                              => the keyId is NOT the active one,
+//                                 BUT the controller now leaks that
+//                                 the request reached the activate
+//                                 path with a valid HMAC.
+//   - 401 ("Unauthorized")  => signature did not verify or auth
+//                              short-circuited before lookup.
+//
+// The 500/401 split therefore acts as a "did your signature verify?"
+// oracle on the network. A correct implementation would collapse the
+// post-auth lookup failure to Unauthorized so the two cases are
+// indistinguishable to the network observer.
+////////////////////////////////////////////////////////////////////////////////
+
+// EXPECTED VERDICT: FAIL.
+// Counterexample: LHS = ER_InternalError, RHS = ER_Unauthorized.
+property G33_ActivationOracleViaResponseCode =
+  enrollDevice True True AR_Authenticated   AC_IoFailure
+    == enrollDevice True True AR_Unauthenticated AC_Success
+
+////////////////////////////////////////////////////////////////////////////////
+// G34 — Claims are checked by name, not by value.
+//
+// `isValidClaims` in cpp/src/auth.cpp walks the JSON object and
+// returns true iff every required claim NAME appears as a top-level
+// key. It does not compare claim values. An attacker who can mint a
+// signed request — for instance, the link-local provisioning attacker
+// from G30 — can place arbitrary values under the required names
+// (e.g. `{"device-id": "attacker", "tenant": "victim-tenant"}`) and
+// pass the claims check intended to bind the signature to a specific
+// device or tenant.
+//
+// Below: a bounded (2 claims, 2-byte names/values) model of the two
+// checks. `claimsValidByName` is what the implementation does today;
+// `claimsValidByPair` is the value-binding check it should do. G34
+// asserts they agree; Z3 exhibits a cex with matching names and
+// mismatched values.
+////////////////////////////////////////////////////////////////////////////////
+
+type ClaimW   = 2                                  // bytes per name / value
+type ClaimsN  = 2                                  // bounded claim count
+type ClaimNV  = ([ClaimW][8], [ClaimW][8])         // (name, value)
+
+claimHasName : [ClaimW][8] -> [ClaimsN]ClaimNV -> Bit
+claimHasName n actual = or [ a.0 == n | a <- actual ]
+
+claimHasPair : ClaimNV -> [ClaimsN]ClaimNV -> Bit
+claimHasPair p actual = or [ a == p | a <- actual ]
+
+// What auth.cpp::isValidClaims actually does.
+claimsValidByName : [ClaimsN]ClaimNV -> [ClaimsN]ClaimNV -> Bit
+claimsValidByName required actual =
+  and [ claimHasName r.0 actual | r <- required ]
+
+// What it should do to bind the signature to claim VALUES.
+claimsValidByPair : [ClaimsN]ClaimNV -> [ClaimsN]ClaimNV -> Bit
+claimsValidByPair required actual =
+  and [ claimHasPair r actual | r <- required ]
+
+// EXPECTED VERDICT: FAIL.
+// Counterexample: required = [(n, v1), ...], actual = [(n, v2), ...]
+// with v1 != v2. LHS = True (name n present), RHS = False (pair (n,v1)
+// absent).
+property G34_ClaimsValueGap
+    (required : [ClaimsN]ClaimNV) (actual : [ClaimsN]ClaimNV) =
+  claimsValidByName required actual == claimsValidByPair required actual
+
+////////////////////////////////////////////////////////////////////////////////
+// G35 — HMAC accepts a zero / low-entropy key.
+//
+// Nothing in `provisionKey`, the key vault layer, or the abstract
+// `hmacSha256` model constrains the key's entropy. A vault bug or
+// misconfiguration that returned `secret = 0...0` would still pass
+// every signature check that uses it: `isValidSignature 0 r
+// (hmacSha256 0 r) == True` holds because P8 is parametric in the
+// key. A defence-in-depth check at provision time (reject all-zero
+// keys, enforce a min-entropy threshold) would block this; today the
+// spec does not require it.
+//
+// Note: this property uses the SAME abstract HMAC algebra as P8/P9,
+// so the cex is purely structural — it shows that the spec admits
+// the degenerate key. A real countermeasure must live above the
+// Cryptol model.
+////////////////////////////////////////////////////////////////////////////////
+
+// EXPECTED VERDICT: FAIL.
+// Counterexample: any r — LHS = True (zero key verifies its own tag),
+// RHS = False (the obligation the spec should enforce).
+property G35_HmacZeroKeyAccepted (r : Request) =
+  isValidSignature (zero : HmacKey) r (hmacSha256 (zero : HmacKey) r)
+    == False

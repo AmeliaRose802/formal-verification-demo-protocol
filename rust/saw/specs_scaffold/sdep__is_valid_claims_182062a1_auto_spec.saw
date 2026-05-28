@@ -1,0 +1,39 @@
+// Auto-generated spec for: _ZN4sdep15is_valid_claims17h5c0f3d63e82e50feE
+// Constraints derived from type system and annotations
+// WARNING: Function may throw -- exception path not modeled
+
+let sdep__is_valid_claims_182062a1_auto_spec : LLVMSetup () = do {
+
+    // Parameter: claims_json.0
+    claims_json.0_ptr <- llvm_alloc_readonly (llvm_int 8);
+    claims_json.0_before <- llvm_fresh_var "claims_json.0" (llvm_int 8);
+    llvm_points_to claims_json.0_ptr (llvm_term claims_json.0_before);
+    // noalias -- does not alias other params;
+
+    // Parameter: claims_json.1
+    claims_json.1 <- llvm_fresh_var "claims_json.1" (llvm_int 64);
+
+    // Parameter: required_claims.0
+    required_claims.0_ptr <- llvm_alloc_readonly (llvm_int 8);
+    required_claims.0_before <- llvm_fresh_var "required_claims.0" (llvm_int 8);
+    llvm_points_to required_claims.0_ptr (llvm_term required_claims.0_before);
+    // noalias -- does not alias other params;
+
+    // Parameter: required_claims.1
+    required_claims.1 <- llvm_fresh_var "required_claims.1" (llvm_int 64);
+
+    llvm_execute_func [claims_json.0_ptr, llvm_term claims_json.1, required_claims.0_ptr, llvm_term required_claims.1];
+
+    ret <- llvm_fresh_var "ret" (llvm_int 1);
+    // ACTION REQUIRED: This spec only proves absence of undefined behavior.
+    // For functional correctness, import your Cryptol spec and replace ret:
+    //   import "my_spec.cry";
+    //   llvm_return (llvm_term {{ my_spec x : [1] }});
+    llvm_return (llvm_term ret);
+
+    // Postconditions
+    llvm_points_to claims_json.0_ptr (llvm_term claims_json.0_before);
+    llvm_points_to required_claims.0_ptr (llvm_term required_claims.0_before);
+};
+
+// Usage: ov_sdep__is_valid_claims_182062a1 <- llvm_verify m "_ZN4sdep15is_valid_claims17h5c0f3d63e82e50feE" [] false sdep__is_valid_claims_182062a1_auto_spec z3;

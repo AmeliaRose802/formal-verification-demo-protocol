@@ -1,0 +1,36 @@
+// Auto-generated spec for: _ZN4sdep10get_status17h55eff1b57b3bd308E
+// Constraints derived from type system and annotations
+// WARNING: Function may throw -- exception path not modeled
+
+let sdep__get_status_414d29fa_auto_spec : LLVMSetup () = do {
+
+    // Parameter: _0
+    _0_ptr <- llvm_alloc (llvm_alias "ptr sret([20 x i8]) initializes((0, 20))");
+    _0_val <- llvm_fresh_var "_0" (llvm_alias "ptr sret([20 x i8]) initializes((0, 20))");
+    llvm_points_to _0_ptr (llvm_term _0_val);
+    // noalias -- does not alias other params;
+    // dereferenceable(20) bytes;
+
+    // Parameter: fleet_enabled
+    fleet_enabled <- llvm_fresh_var "fleet_enabled" (llvm_int 1);
+
+    // Parameter: has_key
+    has_key <- llvm_fresh_var "has_key" (llvm_int 1);
+
+    // Parameter: key_is_active
+    key_is_active <- llvm_fresh_var "key_is_active" (llvm_int 1);
+
+    // Parameter: key_id
+    key_id_ptr <- llvm_alloc_readonly (llvm_alias "ptr dead_on_return");
+    key_id_before <- llvm_fresh_var "key_id" (llvm_alias "ptr dead_on_return");
+    llvm_points_to key_id_ptr (llvm_term key_id_before);
+    // noalias -- does not alias other params;
+    // dereferenceable(16) bytes;
+
+    llvm_execute_func [_0_ptr, llvm_term fleet_enabled, llvm_term has_key, llvm_term key_is_active, key_id_ptr];
+
+    // Postconditions
+    llvm_points_to key_id_ptr (llvm_term key_id_before);
+};
+
+// Usage: ov_sdep__get_status_414d29fa <- llvm_verify m "_ZN4sdep10get_status17h55eff1b57b3bd308E" [] false sdep__get_status_414d29fa_auto_spec z3;

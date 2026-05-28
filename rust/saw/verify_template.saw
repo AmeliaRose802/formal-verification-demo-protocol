@@ -1,0 +1,139 @@
+// SDEP — Rust SAW verification template.
+//
+// Mangled-name placeholders (filled in by run.ps1):
+//   @PROVISION_KEY@       — _ZN4sdep13provision_key17h…E
+//   @ENROLL_DEVICE@       — _ZN4sdep13enroll_device17h…E
+//   @AUTHENTICATE@        — _ZN4sdep12authenticate17h…E
+//   @ENFORCE_ACCESS@      — _ZN4sdep14enforce_access17h…E
+//   @GET_STATUS@          — _ZN4sdep10get_status17h…E
+
+enable_experimental;
+
+m <- llvm_load_module "sdep.bc";
+
+import "SDEP_rust.cry";
+
+print "════════════════════════════════════════════════════════";
+print "  SDEP Rust ↔ Cryptol equivalence proofs";
+print "════════════════════════════════════════════════════════";
+
+////////////////////////////////////////////////////////////////////////
+// 1. provision_key   :  (i1, i1, i8, i1) → i8
+////////////////////////////////////////////////////////////////////////
+let provision_key_spec = do {
+    fleet_enabled <- llvm_fresh_var "fleet_enabled" (llvm_int 1);
+    valid_request <- llvm_fresh_var "valid_request" (llvm_int 1);
+    vault_result  <- llvm_fresh_var "vault_result"  (llvm_int 8);
+    key_is_active <- llvm_fresh_var "key_is_active" (llvm_int 1);
+
+    // LLVM `range(0,3)` precondition on vault_result.
+    llvm_precond {{ vault_result <= 2 }};
+
+    llvm_execute_func [ llvm_term fleet_enabled
+                      , llvm_term valid_request
+                      , llvm_term vault_result
+                      , llvm_term key_is_active ];
+
+    llvm_return (llvm_term
+        {{ provision_key_rust fleet_enabled valid_request vault_result key_is_active }});
+};
+print "─── provision_key ─────────────────────────────────────";
+llvm_verify m "@PROVISION_KEY@" [] false provision_key_spec z3;
+
+////////////////////////////////////////////////////////////////////////
+// 2. enroll_device   :  (i1, i1, i8, i1) → i8
+////////////////////////////////////////////////////////////////////////
+let enroll_device_spec = do {
+    fleet_enabled     <- llvm_fresh_var "fleet_enabled"     (llvm_int 1);
+    valid_metadata    <- llvm_fresh_var "valid_metadata"    (llvm_int 1);
+    auth_result       <- llvm_fresh_var "auth_result"       (llvm_int 8);
+    activation_result <- llvm_fresh_var "activation_result" (llvm_int 1);
+
+    llvm_precond {{ auth_result <= 2 }};
+
+    llvm_execute_func [ llvm_term fleet_enabled
+                      , llvm_term valid_metadata
+                      , llvm_term auth_result
+                      , llvm_term activation_result ];
+
+    llvm_return (llvm_term
+        {{ enroll_device_rust fleet_enabled valid_metadata auth_result activation_result }});
+};
+print "─── enroll_device ─────────────────────────────────────";
+llvm_verify m "@ENROLL_DEVICE@" [] false enroll_device_spec z3;
+
+////////////////////////////////////////////////////////////////////////
+// 3. authenticate    :  (i1, i1, i1) → i1
+////////////////////////////////////////////////////////////////////////
+let authenticate_spec = do {
+    d <- llvm_fresh_var "date_valid"      (llvm_int 1);
+    s <- llvm_fresh_var "signature_valid" (llvm_int 1);
+    c <- llvm_fresh_var "claims_valid"    (llvm_int 1);
+
+    llvm_execute_func [llvm_term d, llvm_term s, llvm_term c];
+
+    llvm_return (llvm_term {{ authenticate_rust d s c }});
+};
+print "─── authenticate ──────────────────────────────────────";
+llvm_verify m "@AUTHENTICATE@" [] false authenticate_spec z3;
+
+////////////////////////////////////////////////////////////////////////
+// 4. enforce_access  :  (i8, i8) → { i1, i1 }
+////////////////////////////////////////////////////////////////////////
+//
+// Rust returns a 2-tuple of i1.  In SAW we model the {i1,i1} struct
+// return with `llvm_struct_value` over the two Cryptol projections.
+let enforce_access_spec = do {
+    mode     <- llvm_fresh_var "mode"     (llvm_int 8);
+    decision <- llvm_fresh_var "decision" (llvm_int 8);
+
+    llvm_precond {{ mode     <= 2 }};
+    llvm_precond {{ decision <= 2 }};
+
+    llvm_execute_func [llvm_term mode, llvm_term decision];
+
+    llvm_return (llvm_struct_value
+        [ llvm_term {{ (enforce_access_rust mode decision).0 }}
+        , llvm_term {{ (enforce_access_rust mode decision).1 }}
+        ]);
+};
+print "─── enforce_access ────────────────────────────────────";
+llvm_verify m "@ENFORCE_ACCESS@" [] false enforce_access_spec z3;
+
+////////////////////////////////////////////////////////////////////////
+// 5. get_status     :  void(ptr sret([20 x i8]), i1, i1, i1, ptr)
+////////////////////////////////////////////////////////////////////////
+//
+// We allocate the 20-byte sret buffer + a 16-byte read-only key_id
+// buffer, then prove that after the call the sret buffer holds the
+// exact bytes predicted by `get_status_rust` in SDEP_rust.cry.
+let get_status_spec = do {
+    out_ptr   <- llvm_alloc (llvm_array 20 (llvm_int 8));
+    keyid_ptr <- llvm_alloc_readonly (llvm_array 16 (llvm_int 8));
+
+    fleet_enabled <- llvm_fresh_var "fleet_enabled" (llvm_int 1);
+    has_key       <- llvm_fresh_var "has_key"       (llvm_int 1);
+    key_is_active <- llvm_fresh_var "key_is_active" (llvm_int 1);
+    key_id        <- llvm_fresh_var "key_id"        (llvm_array 16 (llvm_int 8));
+
+    llvm_points_to keyid_ptr (llvm_term key_id);
+
+    llvm_execute_func [ out_ptr
+                      , llvm_term fleet_enabled
+                      , llvm_term has_key
+                      , llvm_term key_is_active
+                      , keyid_ptr ];
+
+    // sret buffer holds the predicted 20 bytes.
+    llvm_points_to out_ptr (llvm_term
+        {{ get_status_rust fleet_enabled has_key key_is_active key_id }});
+
+    // key_id buffer is unchanged (readonly).
+    llvm_points_to keyid_ptr (llvm_term key_id);
+};
+print "─── get_status ────────────────────────────────────────";
+llvm_verify m "@GET_STATUS@" [] false get_status_spec z3;
+
+print "════════════════════════════════════════════════════════";
+print "  ALL RUST ↔ CRYPTOL EQUIVALENCE PROOFS PASSED";
+print "════════════════════════════════════════════════════════";

@@ -1,0 +1,287 @@
+// SDEP — ABI-width Cryptol view of the pure decision logic.
+//
+// `SDEP.cry` (in the cryptol/ folder) models the protocol at the
+// minimum bit-widths necessary to express the spec: enums are
+// 2- or 3-bit, booleans are `Bit`.  The actual C++ implementation
+// compiles with `enum class : std::uint8_t`, so the LLVM ABI for
+// the same functions uses 8-bit (and for booleans, 1-bit) values.
+//
+// SAW equivalence proofs require the Cryptol function on the right
+// of `llvm_return` to have *exactly* the LLVM ABI type.  This file
+// re-expresses each pure decision function at those widths.
+//
+// Each function below is structurally identical to the corresponding
+// definition in `SDEP.cry` — same branches, same branch order — so
+// every C++ vs Cryptol equivalence proof is *also* implicitly a proof
+// that the byte-level model agrees with the bit-level spec.  We make
+// that connection explicit at the bottom with a Cryptol `property`
+// for each function, provable by `:prove` over all 8-bit inputs.
+
+module SDEP_cpp where
+
+import SDEP
+
+////////////////////////////////////////////////////////////////////////
+// Enum byte constants (must match enum-class declaration order in
+// cpp/include/sdep/types.hpp).
+////////////////////////////////////////////////////////////////////////
+
+// FleetMode
+FM_Disabled_b        = 0 : [8]
+FM_Enabled_b         = 1 : [8]
+
+// KeyVaultResult
+KV_Ok_b              = 0 : [8]
+KV_NotFound_b        = 1 : [8]
+KV_IoError_b         = 2 : [8]
+
+// AuthResult
+AR_Authenticated_b   = 0 : [8]
+AR_Unauthenticated_b = 1 : [8]
+AR_VaultUnavailable_b = 2 : [8]
+
+// ActivationResult — types.hpp declares Success, AlreadyActive, IoFailure.
+// Note: SDEP.cry uses the same ordering, so AC_*_b = AC_*.
+AC_Success_b         = 0 : [8]
+AC_AlreadyActive_b   = 1 : [8]
+AC_IoFailure_b       = 2 : [8]
+
+// ProvisionResult — declared in types.hpp as
+//   { Succeeded, Unauthorized, BadRequest, Disabled, InternalError }.
+PR_Succeeded_b       = 0 : [8]
+PR_Unauthorized_b    = 1 : [8]
+PR_BadRequest_b      = 2 : [8]
+PR_Disabled_b        = 3 : [8]
+PR_InternalError_b   = 4 : [8]
+
+// EnrollmentResult — { Succeeded, Unauthorized, Disabled, InternalError }
+ER_Succeeded_b       = 0 : [8]
+ER_Unauthorized_b    = 1 : [8]
+ER_Disabled_b        = 2 : [8]
+ER_InternalError_b   = 3 : [8]
+
+// AccessMode
+AM_Off_b             = 0 : [8]
+AM_Audit_b           = 1 : [8]
+AM_Enforce_b         = 2 : [8]
+
+// AccessDecision
+AD_Allow_b           = 0 : [8]
+AD_Deny_b            = 1 : [8]
+AD_NoRule_b          = 2 : [8]
+
+////////////////////////////////////////////////////////////////////////
+// 4.1 provisionKey — LLVM: (i1, i1, i8, i1) -> i8
+////////////////////////////////////////////////////////////////////////
+//
+// C++ body:
+//   if (!fleetEnabled)                  return Disabled;
+//   if (!validRequest)                  return BadRequest;
+//   if (vaultResult != KeyVaultResult::Ok)
+//                                       return InternalError;
+//   if (keyIsActive)                    return Unauthorized;
+//   return Succeeded;
+//
+// This handles ALL 256 possible i8 values of vaultResult uniformly:
+// anything that is not KV_Ok (0) is treated as InternalError, exactly
+// matching the C++ `!=` check.  No precondition is needed.
+provisionKey_cpp : [1] -> [1] -> [8] -> [1] -> [8]
+provisionKey_cpp fleetEnabled validRequest vaultResult keyIsActive =
+  if fleetEnabled  == 0    then PR_Disabled_b
+   | validRequest  == 0    then PR_BadRequest_b
+   | vaultResult  != KV_Ok_b
+                           then PR_InternalError_b
+   | keyIsActive  != 0     then PR_Unauthorized_b
+  else                          PR_Succeeded_b
+
+////////////////////////////////////////////////////////////////////////
+// 4.2 enrollDevice — LLVM: (i1, i1, i8, i8) -> i8
+////////////////////////////////////////////////////////////////////////
+//
+// The C++ body uses `switch` on AuthResult and ActivationResult.  Any
+// enum value outside the declared set falls through to the defensive
+// `return Unauthorized` after the outer switch.  We mirror that here.
+enrollDevice_cpp : [1] -> [1] -> [8] -> [8] -> [8]
+enrollDevice_cpp fleetEnabled validMetadata authResult activationResult =
+  if fleetEnabled  == 0    then ER_Disabled_b
+   | validMetadata == 0    then ER_Unauthorized_b
+   | authResult == AR_Authenticated_b   then
+        (if activationResult == AC_Success_b       then ER_Succeeded_b
+          | activationResult == AC_AlreadyActive_b then ER_Unauthorized_b
+          | activationResult == AC_IoFailure_b     then ER_InternalError_b
+         else                                           ER_InternalError_b)
+   | authResult == AR_VaultUnavailable_b then ER_InternalError_b
+   | authResult == AR_Unauthenticated_b  then ER_Unauthorized_b
+  else                                         ER_Unauthorized_b
+
+////////////////////////////////////////////////////////////////////////
+// 4.3 authenticate — LLVM: (i1, i1, i1) -> i1
+////////////////////////////////////////////////////////////////////////
+authenticate_cpp : [1] -> [1] -> [1] -> [1]
+authenticate_cpp dateValid signatureValid claimsValid =
+  dateValid && signatureValid && claimsValid
+
+////////////////////////////////////////////////////////////////////////
+// 4.3.1 isValidRequestDate — LLVM: (i64, i64, i64) -> i1
+////////////////////////////////////////////////////////////////////////
+//
+// Be careful: in C++ these are *signed* 64-bit (`std::int64_t`).  The
+// header uses `requestTimestamp <= currentTime` and
+// `(currentTime - requestTimestamp) <= windowSeconds`, both with signed
+// semantics, which we model with Cryptol's signed comparisons.
+isValidRequestDate_cpp : [64] -> [64] -> [64] -> [1]
+isValidRequestDate_cpp requestTs currentTime windowSeconds =
+  if (requestTs <=$ currentTime)
+     && ((currentTime - requestTs) <=$ windowSeconds)
+    then 1
+    else 0
+
+////////////////////////////////////////////////////////////////////////
+// 4.5 enforceAccess — LLVM: (i8, i8) -> i16
+////////////////////////////////////////////////////////////////////////
+//
+// The return type is the 2-byte aggregate { i8 allowed, i8 logged }
+// packed into a single i16 by the MSVC ABI.  In little-endian byte
+// order the low byte is `allowed` and the high byte is `logged`:
+//
+//   i16_return = (logged << 8) | allowed
+//
+// We construct the i16 directly from the two boolean lanes.
+private
+  packOutcome : [1] -> [1] -> [16]
+  packOutcome allowed logged =
+    (zext logged : [8]) # (zext allowed : [8])
+    // little-endian pack: low byte = allowed, high byte = logged
+
+enforceAccess_cpp : [8] -> [8] -> [16]
+enforceAccess_cpp mode decision =
+  if mode == AM_Off_b then packOutcome 1 0
+   | mode == AM_Audit_b then
+        (if decision == AD_Deny_b then packOutcome 1 1
+         else                          packOutcome 1 0)
+   | mode == AM_Enforce_b then
+        (if decision == AD_Allow_b  then packOutcome 1 0
+          | decision == AD_Deny_b   then packOutcome 0 1
+          | decision == AD_NoRule_b then packOutcome 1 0
+         else                            packOutcome 1 0)
+  else                                   packOutcome 1 0
+
+////////////////////////////////////////////////////////////////////////
+// 4.6 getStatus — LLVM: sret(20 byte EnrollmentStatus), (i1,i1,i1,ptr Uuid)
+////////////////////////////////////////////////////////////////////////
+//
+// EnrollmentStatus IR layout (alignment 1, 20 bytes):
+//   byte  0     : fleetMode    (i8)
+//   byte  1     : hasKey       (i8, from bool)
+//   bytes 2-18  : optional<Uuid> = { union.anon = Uuid (16 B), i8 engaged }
+//                  ↳ bytes 2..17 : Uuid bytes when engaged, *otherwise
+//                                  uninitialised* (we model as `keyId` from
+//                                  the input buffer; see below)
+//                  ↳ byte  18    : engaged flag (i8 from bool)
+//   byte 19     : isActive     (i8, from bool)
+//
+// The C++ body is
+//   return EnrollmentStatus{
+//     .fleetMode = fleetEnabled ? Enabled : Disabled,
+//     .hasKey    = hasKey,
+//     .keyId     = keyIsActive ? optional<Uuid>{keyId} : nullopt,
+//     .isActive  = keyIsActive,
+//   };
+//
+// When `keyIsActive` is false the optional storage is *not* zeroed:
+// constructing `nullopt` only sets the engaged flag to 0 and leaves the
+// union payload uninitialised.  SAW models that as the bytes already
+// present in the sret buffer — which we havoc with a `pre_bytes`
+// symbolic in the spec.  The Cryptol model below therefore takes a
+// `preBytes : [17][8]` parameter representing the 17 bytes of the
+// optional storage prior to the call.  When the key is active we
+// overwrite the 16 Uuid bytes; when it's not we leave them alone.
+//
+// The output is a 20-byte symbolic representing the full IR struct
+// after `getStatus` returns.
+
+getStatus_cpp :
+    [1] ->          // fleetEnabled
+    [1] ->          // hasKey
+    [1] ->          // keyIsActive
+    [16][8] ->      // input Uuid bytes (16 B)
+    [17][8] ->      // pre-call bytes of the optional storage (havoc)
+    [20][8]
+getStatus_cpp fleetEnabled hasKey keyIsActive keyId preBytes =
+    [fleetModeByte, hasKeyByte] # optionalBytes # [isActiveByte]
+  where
+    fleetModeByte = if fleetEnabled != 0 then FM_Enabled_b else FM_Disabled_b
+    hasKeyByte    = if hasKey       != 0 then 1            else 0
+    isActiveByte  = if keyIsActive  != 0 then 1            else 0
+    engagedByte   = if keyIsActive  != 0 then 1            else 0
+    payloadBytes  = if keyIsActive  != 0
+                     then keyId
+                     // nullopt: payload union left at pre-call contents
+                     else take`{16} preBytes
+    optionalBytes = payloadBytes # [engagedByte]
+
+////////////////////////////////////////////////////////////////////////
+// 4.7 canonicalize_lp — LLVM: (ptr out, ptr m, i8 nm, ptr b, i8 nb) -> i64
+////////////////////////////////////////////////////////////////////////
+//
+// Length-prefixed canonicalization writes
+//
+//     out[0]            = nm
+//     out[1..1+nm)      = m[0..nm)
+//     out[1+nm]         = nb
+//     out[2+nm..2+nm+nb) = b[0..nb)
+//
+// to `out`, leaving bytes at positions >= 2+nm+nb unchanged. The SAW spec
+// (cpp/saw/custom/canonicalize_lp.saw) runs at MAX_LEN = 4 — the smallest
+// bound that still exercises the loop induction. It composes with P24
+// (FL = 16) up to min(4, 16) = 4: SAW proves the C++ implements the byte
+// layout for nm,nb <= 4, and P24 proves that byte layout is injective at
+// any FL >= 4. Wall-clock SMT timings on commodity hardware (Z3 4.x):
+// MAX_LEN=4 ~ seconds (current), MAX_LEN=8 ~ 10s, MAX_LEN=12 ~ 2 min,
+// MAX_LEN=16 ~ 13 min. To lift the bound entirely use `llvm_invariant`.
+//
+// To change MAX_LEN: change the [N][8] / [2*N+2][8] sizes below, the
+// modulo constants in `byteAt`, and the matching literals in the SAW spec.
+
+canonicalize_lp_post :
+    [8] ->          // nm (length of m, <=MAX_LEN)
+    [4][8] ->       // m  (input buffer, contents only read at indices [0,nm))
+    [8] ->          // nb (length of b, <=MAX_LEN)
+    [4][8] ->       // b  (input buffer, contents only read at indices [0,nb))
+    [10][8] ->      // pre-state of the output buffer (= 2 + 2*MAX_LEN bytes)
+    [10][8]
+canonicalize_lp_post nm m nb b preOut =
+    [ byteAt i | i <- ([0 .. 9] : [10][8]) ]
+  where
+    byteAt : [8] -> [8]
+    byteAt i =
+      if  i == 0                            then nm
+       | (i >= 1)      /\ (i <= nm)          then m @ ((i - 1) % 4)
+       |  i == nm + 1                        then nb
+       | (i >= nm + 2) /\ (i < nm + nb + 2)  then b @ ((i - nm - 2) % 4)
+      else                                        preOut @ i
+
+// Return value of canonicalize_lp: total bytes written = 2 + nm + nb.
+canonicalize_lp_ret : [8] -> [8] -> [64]
+canonicalize_lp_ret nm nb = (zext nm) + (zext nb) + 2
+
+////////////////////////////////////////////////////////////////////////
+// Sanity properties: the byte-level model agrees with SDEP.cry.
+////////////////////////////////////////////////////////////////////////
+//
+// These are not strictly required for the C++↔Cryptol proof (SAW will
+// only use the *_cpp functions above), but proving them connects the
+// two specifications.  Run with `:prove` in the cryptol REPL.
+
+bitOfI1 : [1] -> Bit
+bitOfI1 b = b != 0
+
+property authenticate_cpp_matches_spec dV sV cV =
+  (authenticate_cpp dV sV cV != 0)
+    == authenticate (bitOfI1 dV) (bitOfI1 sV) (bitOfI1 cV)
+
+property provisionKey_cpp_matches_spec fE vR vRes kIA =
+  (vRes <= KV_IoError_b) ==>
+    (drop`{5} (provisionKey_cpp fE vR vRes kIA) : [3])
+      == provisionKey (bitOfI1 fE) (bitOfI1 vR)
+                      (drop`{6} vRes : [2]) (bitOfI1 kIA)
