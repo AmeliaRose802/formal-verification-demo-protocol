@@ -119,7 +119,7 @@ FleetController::handle_activate(const DeviceRequest& request,
     // computation against the candidate key happens at the transport layer);
     // we still verify date + claims locally. Freshness is checked against
     // `request.timestamp` — the same byte range bound into the signed
-    // canonical payload (P29_TimestampBound).
+    // canonical payload (P29_VerifierUsesRequestBoundTimestamp).
     const std::int64_t now = clock_ ? clock_->now_unix() : 0;
     const bool dateValid =
         isValidRequestDate(request.timestamp, now, dateWindowSeconds_);

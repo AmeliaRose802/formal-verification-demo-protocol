@@ -186,20 +186,20 @@ getStatus fleetEnabled hasKey keyIsActive keyId =
 
 // ---- Category A: Key Lifecycle Safety -------------------------------------
 
-// P1: Key Monotonicity. Once a key is active, any subsequent activation
-// attempt returns AlreadyActive. We model "the activation outcome when the
-// key is already active" as a function of the activation oracle; the spec
-// states this as an invariant on activationResult, which we express as:
-// for any inputs, if the system reports the key is active then enrollDevice
-// can never return Succeeded.
-property P1_KeyMonotonicity fleetEnabled validMetadata authResult keyAlreadyActive =
+// P1: An active key cannot be re-activated. Once the activation oracle
+// reports the key is already active, enrollDevice can never return Succeeded
+// no matter what other inputs the request carries. (Historical name:
+// "Key Monotonicity".)
+property P1_ActiveKeyCannotBeReactivated fleetEnabled validMetadata authResult keyAlreadyActive =
   isAuthResult authResult ==>
     keyAlreadyActive ==>
       enrollDevice fleetEnabled validMetadata authResult AC_AlreadyActive
         != ER_Succeeded
 
-// P2: Active prevents provisioning.
-property P2_ActivePreventsProvisioning fleetEnabled validRequest vaultResult =
+// P2: An active key blocks further provisioning. Even with a valid request
+// and a healthy vault, attempting to provision while the key is already
+// active returns Unauthorized.
+property P2_ActiveKeyBlocksProvisioning fleetEnabled validRequest vaultResult =
   isKeyVaultResult vaultResult ==>
     fleetEnabled ==>
       validRequest ==>
@@ -207,16 +207,17 @@ property P2_ActivePreventsProvisioning fleetEnabled validRequest vaultResult =
           provisionKey fleetEnabled validRequest vaultResult True
             == PR_Unauthorized
 
-// P3: Key ID hidden until active.
-property P3_KeyIdHiddenUntilActive fleetEnabled hasKey keyId =
+// P3: Key ID is hidden before activation.
+property P3_KeyIdHiddenBeforeActivation fleetEnabled hasKey keyId =
   (getStatus fleetEnabled hasKey False keyId).keyId == none
 
-// P4: Key ID revealed when active.
-property P4_KeyIdRevealedWhenActive fleetEnabled hasKey keyId =
+// P4: Key ID is revealed after activation.
+property P4_KeyIdRevealedAfterActivation fleetEnabled hasKey keyId =
   (getStatus fleetEnabled hasKey True keyId).keyId == some keyId
 
-// P5: Disabled rejects all.
-property P5_DisabledRejectsAll validRequest vaultResult validMetadata
+// P5: A disabled fleet rejects every request — both provisionKey and
+// enrollDevice short-circuit to their respective Disabled results.
+property P5_DisabledFleetRejectsEverything validRequest vaultResult validMetadata
                                authResult activationResult keyIsActive =
   isKeyVaultResult vaultResult ==>
     isAuthResult authResult ==>
@@ -227,27 +228,30 @@ property P5_DisabledRejectsAll validRequest vaultResult validMetadata
 
 // ---- Category B: Authentication Security ----------------------------------
 
-// P6: Auth requires valid date.
-property P6_AuthRequiresValidDate sigValid claimsValid =
+// P6: Authentication rejects any request with an invalid date, regardless of
+// the other checks.
+property P6_AuthRejectsInvalidDate sigValid claimsValid =
   authenticate False sigValid claimsValid == False
 
-// P7: Auth requires valid signature.
-property P7_AuthRequiresValidSignature dateValid claimsValid =
+// P7: Authentication rejects any request with an invalid signature,
+// regardless of the other checks.
+property P7_AuthRejectsInvalidSignature dateValid claimsValid =
   authenticate dateValid False claimsValid == False
 
-// P8: Correct signature verifies.
-property P8_CorrectSignatureVerifies (k : HmacKey) (r : Request) =
+// P8: A correct HMAC always verifies. Computing the HMAC with the right key
+// and feeding the result back into isValidSignature succeeds.
+property P8_CorrectHmacVerifies (k : HmacKey) (r : Request) =
   isValidSignature k r (hmacSha256 k r) == True
 
-// P9: Wrong signature fails.
-property P9_WrongSignatureFails (k : HmacKey) (r : Request) (sig : HmacTag) =
+// P9: A wrong HMAC always fails to verify. Any tag that is not the canonical
+// HMAC of (k, r) is rejected.
+property P9_WrongHmacFails (k : HmacKey) (r : Request) (sig : HmacTag) =
   (sig != hmacSha256 k r) ==> (isValidSignature k r sig == False)
 
-// P10: Missing metadata fails (when the fleet is enabled).
-// Note: when the fleet is disabled, enrollDevice short-circuits to
-// ER_Disabled before the metadata check, so we restrict this property
-// to the fleetEnabled case. The disabled case is covered by P5.
-property P10_MissingMetadataFails fleetEnabled authResult activationResult =
+// P10: An enrollment with missing metadata returns Unauthorized when the
+// fleet is enabled. (When the fleet is disabled, enrollDevice short-circuits
+// to ER_Disabled before the metadata check; that case is covered by P5.)
+property P10_MissingMetadataIsUnauthorized fleetEnabled authResult activationResult =
   fleetEnabled ==>
     isAuthResult authResult ==>
       isActivationResult activationResult ==>
@@ -256,42 +260,42 @@ property P10_MissingMetadataFails fleetEnabled authResult activationResult =
 
 // ---- Category C: Access Control -------------------------------------------
 
-// P11: Off mode allows all (and logs nothing).
-property P11_OffModeAllowsAll decision =
+// P11: Access-off mode allows every decision and logs nothing.
+property P11_AccessOffAllowsWithoutLogging decision =
   isAccessDecision decision ==>
     enforceAccess AM_Off decision == (True, False)
 
-// P12: Audit mode never denies.
-property P12_AuditNeverDenies decision =
+// P12: Access-audit mode never denies (regardless of the underlying decision).
+property P12_AccessAuditNeverDenies decision =
   isAccessDecision decision ==>
     (enforceAccess AM_Audit decision).0 == True
 
-// P13: Enforce blocks denied.
-property P13_EnforceBlocksDenied =
+// P13: Access-enforce mode blocks any explicitly denied request.
+property P13_AccessEnforceBlocksDenials =
   enforceAccess AM_Enforce AD_Deny == (False, True)
 
-// P14: Enforce allows permitted.
-property P14_EnforceAllowsPermitted =
+// P14: Access-enforce mode allows any explicitly permitted request.
+property P14_AccessEnforceAllowsPermitted =
   enforceAccess AM_Enforce AD_Allow == (True, False)
 
 // ---- Category D: Protocol Liveness ----------------------------------------
 
-// P15: Can provision when ready.
-property P15_CanProvisionWhenReady =
+// P15: A valid, authorized provisioning request on an inactive key succeeds.
+property P15_AuthorizedRequestOnInactiveKeySucceeds =
   provisionKey True True KV_Ok False == PR_Succeeded
 
-// P16: Authenticated activation succeeds.
-property P16_AuthenticatedActivationSucceeds =
+// P16: An authenticated enrollment with a successful activation succeeds.
+property P16_AuthenticatedEnrollmentSucceeds =
   enrollDevice True True AR_Authenticated AC_Success == ER_Succeeded
 
-// P17: Timestamp at boundary is valid.
-property P17_TimestampAtBoundaryValid (requestTs : Timestamp) (window : Window) =
+// P17: A timestamp exactly at the window boundary is accepted.
+property P17_TimestampAtBoundaryAccepted (requestTs : Timestamp) (window : Window) =
   // Avoid 64-bit overflow when constructing currentTime.
   (requestTs <= (~ zero) - window) ==>
     isValidRequestDate requestTs (requestTs + window) window == True
 
-// P18: Timestamp beyond boundary is invalid.
-property P18_TimestampBeyondBoundaryInvalid
+// P18: A timestamp beyond the window boundary is rejected.
+property P18_TimestampBeyondBoundaryRejected
     (requestTs : Timestamp) (currentTime : Timestamp) (window : Window) =
   (requestTs <= currentTime) ==>
     ((currentTime - requestTs) > window) ==>
@@ -299,27 +303,28 @@ property P18_TimestampBeyondBoundaryInvalid
 
 // ---- Category E: Error Handling -------------------------------------------
 
-// P19: Vault unavailable is InternalError.
-property P19_VaultUnavailableIsInternal activationResult =
+// P19: A vault-unavailable result maps to InternalError.
+property P19_VaultUnavailableIsInternalError activationResult =
   isActivationResult activationResult ==>
     enrollDevice True True AR_VaultUnavailable activationResult
       == ER_InternalError
 
-// P20: BadRequest distinct from Unauthorized.
-property P20_BadRequestDistinct vaultResult keyIsActive =
+// P20: An invalid request (validMetadata == False) maps to BadRequest, not
+// Unauthorized.
+property P20_InvalidRequestIsBadRequest vaultResult keyIsActive =
   isKeyVaultResult vaultResult ==>
     provisionKey True False vaultResult keyIsActive == PR_BadRequest
 
-// P21: Activate without metadata is Unauthorized.
-property P21_ActivateWithoutMetadataUnauthorized authResult activationResult =
+// P21: Activate without metadata maps to Unauthorized.
+property P21_ActivateWithoutMetadataIsUnauthorized authResult activationResult =
   isAuthResult authResult ==>
     isActivationResult activationResult ==>
       enrollDevice True False authResult activationResult == ER_Unauthorized
 
-// P22: Activation I/O failure is InternalError. An activation result that is
-// neither Success nor AlreadyActive (i.e. an I/O failure) must yield
-// InternalError when authentication succeeded.
-property P22_ActivationIoFailureIsInternal activationResult =
+// P22: An activation I/O failure maps to InternalError. Any activation
+// result that is neither Success nor AlreadyActive (i.e. an I/O failure)
+// yields InternalError when authentication succeeded.
+property P22_ActivationIoFailureIsInternalError activationResult =
   isActivationResult activationResult ==>
     (activationResult != AC_Success) ==>
       (activationResult != AC_AlreadyActive) ==>
@@ -390,11 +395,11 @@ canonNormalized n b =
 canonLenPrefixed : [IW] -> [FL][8] -> [IW] -> [FL][8] -> [2 * FL + 2][8]
 canonLenPrefixed nm m nb b = [nm] # m # [nb] # b
 
-// P23: Length-prefixed canonicalization is byte-injective — distinct
-// normalized requests produce distinct canonical byte streams.
+// P23: Distinct normalized requests have distinct canonical byte streams.
+// (Length-prefixed canonicalization is byte-injective.)
 // EXPECTED VERDICT: PASS. This is the safety property the production
 // canonicalizer satisfies after the delimiter -> length-prefix fix.
-property P23_CanonicalizationInjective
+property P23_DistinctRequestsHaveDistinctCanonicalBytes
     nm1 m1 nb1 b1 nm2 m2 nb2 b2 =
   ( (nm1 <= (`FL : [IW])) /\ (nb1 <= (`FL : [IW])) /\
     (nm2 <= (`FL : [IW])) /\ (nb2 <= (`FL : [IW])) /\
@@ -424,12 +429,13 @@ property P23_CanonicalizationInjective
 // encoding were exhibited in rust/tests/validate_canon_gaps.rs.
 ////////////////////////////////////////////////////////////////////////////////
 
-// P24: `canonicalize_headers` is byte-injective in the header map.
+// P24: Distinct normalized header lists have distinct canonical byte
+// streams. (`canonicalize_headers` is byte-injective in the header map.)
 // The production encoder length-prefixes every name and value with an
 // 8-byte big-endian tag (same shape as canonicalizePayload), so distinct
 // normalized header records produce distinct canonical byte streams.
 // EXPECTED VERDICT: PASS — the encoding closes the smuggling gap.
-property P24_HeaderCanonInjective nm1 m1 nb1 b1 nm2 m2 nb2 b2 =
+property P24_DistinctHeadersHaveDistinctCanonicalBytes nm1 m1 nb1 b1 nm2 m2 nb2 b2 =
   ( (nm1 <= (`FL : [IW])) /\ (nb1 <= (`FL : [IW])) /\
     (nm2 <= (`FL : [IW])) /\ (nb2 <= (`FL : [IW])) /\
     canonNormalized nm1 m1 /\ canonNormalized nb1 b1 /\
@@ -437,11 +443,12 @@ property P24_HeaderCanonInjective nm1 m1 nb1 b1 nm2 m2 nb2 b2 =
     canonLenPrefixed nm1 m1 nb1 b1 == canonLenPrefixed nm2 m2 nb2 b2 )
     ==> ((nm1, m1, nb1, b1) == (nm2, m2, nb2, b2))
 
-// P25: `canonicalize_query` is byte-injective in the query map.
+// P25: Distinct normalized query lists have distinct canonical byte
+// streams. (`canonicalize_query` is byte-injective in the query map.)
 // Same length-prefix shape; no separators are needed because the length
 // tag uniquely marks each record boundary.
 // EXPECTED VERDICT: PASS.
-property P25_QueryCanonInjective nm1 m1 nb1 b1 nm2 m2 nb2 b2 =
+property P25_DistinctQueriesHaveDistinctCanonicalBytes nm1 m1 nb1 b1 nm2 m2 nb2 b2 =
   ( (nm1 <= (`FL : [IW])) /\ (nb1 <= (`FL : [IW])) /\
     (nm2 <= (`FL : [IW])) /\ (nb2 <= (`FL : [IW])) /\
     canonNormalized nm1 m1 /\ canonNormalized nb1 b1 /\
@@ -459,15 +466,15 @@ property P25_QueryCanonInjective nm1 m1 nb1 b1 nm2 m2 nb2 b2 =
 // of the existing model.
 ////////////////////////////////////////////////////////////////////////////////
 
-// P26: Enforce mode with no matching rule allows silently (matches the
-// spec's implicit fall-through and the C++/Rust impl's `else` branch).
-property P26_EnforceNoRuleAllowsSilently =
+// P26: Access-enforce mode with no matching rule allows silently (matches
+// the spec's implicit fall-through and the C++/Rust impl's `else` branch).
+property P26_EnforceWithoutRuleAllowsSilently =
   enforceAccess AM_Enforce AD_NoRule == (True, False)
 
-// P27: Audit mode logs IFF the underlying decision is Deny — never on
-// Allow or NoRule. Closes the .1 = logged projection that P12 leaves
+// P27: Access-audit mode logs IFF the underlying decision is Deny — never
+// on Allow or NoRule. Closes the .1 = logged projection that P12 leaves
 // unspecified.
-property P27_AuditLoggedOnlyOnDeny decision =
+property P27_AuditLogsOnlyOnDenial decision =
   isAccessDecision decision ==>
     (enforceAccess AM_Audit decision).1 == (decision == AD_Deny)
 
@@ -497,7 +504,8 @@ property P27_AuditLoggedOnlyOnDeny decision =
 //            into the signed canonical bytes: `DeviceRequest::timestamp`
 //            is appended to canonicalizePayload, and `handle_activate`
 //            passes `request.timestamp` (NOT a caller parameter) to
-//            `isValidRequestDate`. Mechanised as P29_TimestampBound
+//            `isValidRequestDate`. Mechanised as
+//            P29_VerifierUsesRequestBoundTimestamp
 //            against the structured `RequestS` model; the historical
 //            `requestTimestampUnix` caller parameter has been removed.
 //
@@ -597,7 +605,7 @@ canonicalizeS r =
 //
 // EXPECTED VERDICT: PASS. The encoder's `isAuth` skip enforces this; if a
 // future refactor removes the skip, this property breaks immediately.
-property P28_AuthHeaderExcluded r v1 v2 =
+property P28_AuthHeaderValueExcludedFromCanonicalization r v1 v2 =
   ( requestNormalized r /\ fieldNormalized v1 /\ fieldNormalized v2 ) ==>
     canonicalizeS { r | hdrs = [ if h.isAuth then { h | value = v1 } else h
                                 | h <- r.hdrs ] }
@@ -624,5 +632,5 @@ verifierTimestamp_current r _ = r.timestamp
 // EXPECTED VERDICT: PASS — the verifier uses the request-bound timestamp,
 // so a replayed signed request cannot be paired with a fresh "current
 // time" parameter to forge freshness.
-property P29_TimestampBound r tsFromCaller =
+property P29_VerifierUsesRequestBoundTimestamp r tsFromCaller =
   verifierTimestamp_current r tsFromCaller == r.timestamp

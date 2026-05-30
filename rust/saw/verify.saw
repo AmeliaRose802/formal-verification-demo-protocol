@@ -6,6 +6,7 @@
 //   _ZN4sdep12authenticate17h364e28f17616133cE        ? _ZN4sdep12authenticate17h?E
 //   _ZN4sdep14enforce_access17hb17b8496c08d3ccaE      ? _ZN4sdep14enforce_access17h?E
 //   _ZN4sdep10get_status17h55eff1b57b3bd308E          ? _ZN4sdep10get_status17h?E
+//   _ZN4sdep26is_valid_request_date_secs17h244fe1778829151eE       ? _ZN4sdep26is_valid_request_date_secs17h?E
 
 enable_experimental;
 
@@ -133,6 +134,24 @@ let get_status_spec = do {
 };
 print "??? get_status ????????????????????????????????????????";
 llvm_verify m "_ZN4sdep10get_status17h55eff1b57b3bd308E" [] false get_status_spec z3;
+
+////////////////////////////////////////////////////////////////////////
+// 6. is_valid_request_date_secs  :  (i64, i64, i64) ? i1
+////////////////////////////////////////////////////////////////////////
+let is_valid_request_date_secs_spec = do {
+    request_secs   <- llvm_fresh_var "request_secs"   (llvm_int 64);
+    current_secs   <- llvm_fresh_var "current_secs"   (llvm_int 64);
+    window_seconds <- llvm_fresh_var "window_seconds" (llvm_int 64);
+
+    llvm_execute_func [ llvm_term request_secs
+                      , llvm_term current_secs
+                      , llvm_term window_seconds ];
+
+    llvm_return (llvm_term
+        {{ is_valid_request_date_secs_rust request_secs current_secs window_seconds }});
+};
+print "??? is_valid_request_date_secs ????????????????????????";
+llvm_verify m "_ZN4sdep26is_valid_request_date_secs17h244fe1778829151eE" [] false is_valid_request_date_secs_spec z3;
 
 print "????????????????????????????????????????????????????????";
 print "  ALL RUST ? CRYPTOL EQUIVALENCE PROOFS PASSED";

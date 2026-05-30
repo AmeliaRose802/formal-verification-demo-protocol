@@ -68,7 +68,7 @@ public:
     // into the signed canonical bytes by canonicalizePayload); no caller-
     // supplied timestamp parameter exists, so a replayed signed request
     // cannot be paired with a fresh "current time" to forge freshness.
-    // Mechanised as Cryptol property `P29_TimestampBound`.
+    // Mechanised as Cryptol property `P29_VerifierUsesRequestBoundTimestamp`.
     [[nodiscard]] ActivateResponse
     handle_activate(const DeviceRequest& request,
                     bool                 signatureValid);

@@ -46,7 +46,7 @@ struct DeviceRequest {
     // verifier checks freshness against `request.timestamp` directly —
     // never a caller-supplied parameter — so a replayed signed request
     // cannot be paired with a fresh "current time" to pass the freshness
-    // window. Mechanised as Cryptol property `P29_TimestampBound`.
+    // window. Mechanised as Cryptol property `P29_VerifierUsesRequestBoundTimestamp`.
     std::int64_t timestamp{0};
 };
 

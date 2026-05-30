@@ -76,11 +76,13 @@ try {
         --poison-to-undef 2>&1 | Out-Host
     if ($LASTEXITCODE) { throw "patch-llvm-ir failed" }
 
-    $llvmAs = 'C:\Users\ameliapayne\.rustup\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\x86_64-pc-windows-msvc\bin\llvm-as.exe'
-    if (-not (Test-Path $llvmAs)) {
+    $rustupBin = 'C:\Users\ameliapayne\.rustup\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\x86_64-pc-windows-msvc\bin'
+    $llvmAs = Join-Path $rustupBin 'llvm-as.exe'
+    $llvmOpt = Join-Path $rustupBin 'opt.exe'
+    if (-not (Test-Path $llvmAs) -or -not (Test-Path $llvmOpt)) {
         throw "rustup llvm-tools missing — run: rustup component add llvm-tools-preview"
     }
-    & $llvmAs .\sdep_patched.ll -o .\sdep.bc
+    & $llvmAs .\sdep_patched.ll -o .\sdep_full.bc
     if ($LASTEXITCODE) { throw "llvm-as failed" }
     Write-Host '  bitcode reassembled' -ForegroundColor DarkGray
 
@@ -115,11 +117,38 @@ try {
         '@AUTHENTICATE@'   = Find-Symbol '_ZN4sdep12authenticate17h'
         '@ENFORCE_ACCESS@' = Find-Symbol '_ZN4sdep14enforce_access17h'
         '@GET_STATUS@'     = Find-Symbol '_ZN4sdep10get_status17h'
+        '@IS_VALID_DATE@'  = Find-Symbol '_ZN4sdep26is_valid_request_date_secs17h'
     }
     Write-Host '─── resolved mangled symbols:' -ForegroundColor Cyan
     $symbols.GetEnumerator() | Sort-Object Key | ForEach-Object {
         Write-Host ('    {0,-18} → {1}' -f $_.Key, $_.Value) -ForegroundColor DarkGray
     }
+
+    # ------------------------------------------------------------------
+    # 4b. Strip bitcode to only the 5 target functions + transitive
+    #     callees.  Two reasons:
+    #       (a) Rust emits Win64 SEH cleanup pads on funclets for
+    #           anything that touches String/Vec/Format machinery
+    #           (e.g. core::iter Map::next inside chrono / serde
+    #           drops).  SAW 1.5's llvm-pretty-bc-parser doesn't
+    #           handle FUNC_CODE_OPERAND_BUNDLE on those calls and
+    #           aborts with "not implemented … FUNC_CODE_OPERAND_BUNDLE".
+    #       (b) Smaller bitcode = faster SAW load + cleaner failure
+    #           messages.
+    #     `internalize` marks everything except our 5 targets as
+    #     internal linkage; `globaldce` then deletes anything not
+    #     reachable from them.  The pure decision functions don't
+    #     transitively pull in chrono/serde, so the SEH funclets go
+    #     away.
+    # ------------------------------------------------------------------
+    Write-Host '─── opt --passes=internalize,globaldce (strip unrelated funcs)' -ForegroundColor Cyan
+    $keep = ($symbols.Values | Sort-Object -Unique) -join ','
+    & $llvmOpt --passes=internalize,globaldce `
+        --internalize-public-api-list=$keep `
+        .\sdep_full.bc -o .\sdep.bc 2>&1 | Out-Host
+    if ($LASTEXITCODE) { throw "opt internalize/globaldce failed" }
+    $stripped = (Get-Item .\sdep.bc).Length
+    Write-Host ("  stripped bitcode: {0} bytes" -f $stripped) -ForegroundColor DarkGray
 
     # ------------------------------------------------------------------
     # 5. Render verify.saw from the template.
@@ -131,7 +160,7 @@ try {
     if ($Only) {
         # Drop verification blocks that aren't in $Only.  We use the
         # `print "─── name ─────...` line as a section anchor.
-        $allTargets = @('provision_key','enroll_device','authenticate','enforce_access','get_status')
+        $allTargets = @('provision_key','enroll_device','authenticate','enforce_access','get_status','is_valid_request_date_secs')
         foreach ($t in $allTargets) {
             if ($Only -notcontains $t) {
                 $pattern = "(?s)print `"─── $t ─[^`"]*`";.*?(?=(print `"─── |print `"═))"

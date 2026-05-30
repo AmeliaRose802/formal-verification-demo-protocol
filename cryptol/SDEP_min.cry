@@ -1,0 +1,10 @@
+// Minimal subset of SDEP.cry for fast pipeline iteration.
+// Contains only `authenticate` — three bool inputs, bool output.
+module SDEP_min where
+
+authenticate : Bit -> Bit -> Bit -> Bit
+authenticate dateValid signatureValid claimsValid =
+  dateValid && signatureValid && claimsValid
+
+property P_authenticate_is_and dv sv cv =
+  authenticate dv sv cv == (dv && sv && cv)

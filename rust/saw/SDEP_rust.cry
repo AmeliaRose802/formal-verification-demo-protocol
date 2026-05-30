@@ -173,6 +173,32 @@ get_status_rust fleetEnabled hasKey keyIsActive keyId =
     kaByte = (0b0000000 # keyIsActive)  : [8]
 
 ////////////////////////////////////////////////////////////////////////
+// 4.7 is_valid_request_date_secs — LLVM: (i64, i64, i64) -> i1
+////////////////////////////////////////////////////////////////////////
+// Rust body (in lib.rs `is_valid_request_date_secs`):
+//
+//   if request_secs > current_secs { return false; }
+//   (current_secs - request_secs) <= window_seconds
+//
+// `>` / `-` / `<=` on `i64` are SIGNED two's-complement ops in Rust.
+// Cryptol's default `>`, `-`, `<=` on `[64]` are UNSIGNED, so we use
+// the signed primitives `sgt`/`sle` and lean on Cryptol modular
+// subtraction (which matches two's-complement bit-for-bit) for the
+// difference.
+//
+// Note: in debug builds the Rust subtraction would panic on signed
+// overflow (e.g. request_secs = i64::MIN, current_secs = 1), but at
+// `-O release` overflow-checks are disabled and the operation is the
+// same wrapping subtraction Cryptol models.  SAW verifies the release
+// bitcode, so the equivalence holds unconditionally on the i64 input
+// space.
+is_valid_request_date_secs_rust : [64] -> [64] -> [64] -> [1]
+is_valid_request_date_secs_rust requestSecs currentSecs windowSeconds =
+  if requestSecs >$ currentSecs then 0
+  else if (currentSecs - requestSecs) <=$ windowSeconds then 1
+  else 0
+
+////////////////////////////////////////////////////////////////////////
 // 5. Sanity bridges: prove the Rust-ABI definitions agree with the
 //    bit-level spec in SDEP.cry under the well-formedness preconditions.
 ////////////////////////////////////////////////////////////////////////

@@ -1,0 +1,23 @@
+{
+  "functions": {
+    "inWindow": {
+      "overall": {
+        "solver": "z3",
+        "status": "proven"
+      }
+    },
+    "isNonNull": {
+      "overall": {
+        "solver": "z3",
+        "status": "proven"
+      }
+    },
+    "pickGreater": {
+      "overall": {
+        "solver": "z3",
+        "status": "proven"
+      }
+    }
+  },
+  "properties": {}
+}

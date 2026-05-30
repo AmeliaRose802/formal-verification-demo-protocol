@@ -1,0 +1,75 @@
+---
+uid: SDEP
+title: SDEP Cryptol Spec
+---
+
+# SDEP Cryptol Spec
+
+## Types
+
+All type definitions: [types.md](types.md)
+
+## Functions
+
+All function definitions: [functions](functions/index.md)
+
+### Call Graph
+
+```mermaid
+graph LR
+  authenticate["authenticate"]
+  click authenticate "functions/authenticate.md" "authenticate"
+  canonLenPrefixed["canonLenPrefixed"]
+  click canonLenPrefixed "functions/canonLenPrefixed.md" "canonLenPrefixed"
+  canonNormalized["canonNormalized"]
+  click canonNormalized "functions/canonNormalized.md" "canonNormalized"
+  canonicalizeS["canonicalizeS"]
+  click canonicalizeS "functions/canonicalizeS.md" "canonicalizeS"
+  enforceAccess["enforceAccess"]:::decision
+  click enforceAccess "functions/enforceAccess.md" "enforceAccess"
+  enrollDevice["enrollDevice"]:::decision
+  click enrollDevice "functions/enrollDevice.md" "enrollDevice"
+  fieldNormalized["fieldNormalized"]
+  click fieldNormalized "functions/fieldNormalized.md" "fieldNormalized"
+  getStatus["getStatus"]
+  click getStatus "functions/getStatus.md" "getStatus"
+  hmacSha256["hmacSha256"]
+  click hmacSha256 "functions/hmacSha256.md" "hmacSha256"
+  isValidRequestDate["isValidRequestDate"]
+  click isValidRequestDate "functions/isValidRequestDate.md" "isValidRequestDate"
+  isValidSignature["isValidSignature"]
+  click isValidSignature "functions/isValidSignature.md" "isValidSignature"
+  lpField["lpField"]
+  click lpField "functions/lpField.md" "lpField"
+  lpHeader["lpHeader"]
+  click lpHeader "functions/lpHeader.md" "lpHeader"
+  provisionKey["provisionKey"]:::decision
+  click provisionKey "functions/provisionKey.md" "provisionKey"
+  requestNormalized["requestNormalized"]
+  click requestNormalized "functions/requestNormalized.md" "requestNormalized"
+  verifierTimestamp_current["verifierTimestamp_current"]
+  click verifierTimestamp_current "functions/verifierTimestamp_current.md" "verifierTimestamp_current"
+  canonicalizeS --> lpField
+  canonicalizeS --> lpHeader
+  isValidSignature --> hmacSha256
+  lpHeader --> lpField
+  requestNormalized --> fieldNormalized
+  classDef default fill:#f8fafc,stroke:#475569,stroke-width:1.5px,color:#0f172a
+  classDef decision fill:#ecfeff,stroke:#0e7490,stroke-width:1.5px,color:#164e63
+  classDef stub fill:#fff7ed,stroke:#c2410c,stroke-width:1.5px,stroke-dasharray: 5 5,color:#7c2d12
+```
+
+**Key:** 🔵 function · 🟢 decision
+
+## Security Properties
+
+| Category | Properties |
+|----------|------------|
+| [Key Lifecycle Safety](properties/key-lifecycle-safety.md) | P1–P5 |
+| [Authentication Security](properties/authentication-security.md) | P6–P10 |
+| [Access Control](properties/access-control.md) | P11–P14 |
+| [Protocol Liveness](properties/protocol-liveness.md) | P15–P18 |
+| [Error Handling](properties/error-handling.md) | P19–P27 |
+| [Auth-header exclusion](properties/auth-header-exclusion.md) | P28 |
+| [Timestamp binding](properties/timestamp-binding.md) | P29 |
+

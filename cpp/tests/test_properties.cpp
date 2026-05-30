@@ -76,8 +76,8 @@ struct FakeClock final : Clock {
 
 // -------------- Category A: Key lifecycle (P1..P5) ------------------------
 
-void test_P1_key_monotonicity() {
-    SECTION("P1 — Key Monotonicity");
+void test_P1_active_key_cannot_be_reactivated() {
+    SECTION("P1 — Active Key Cannot Be Re-Activated");
     KeyStore store;
     auto key = make_key(0x11);
     CHECK(store.provision(key).has_value());
@@ -90,8 +90,8 @@ void test_P1_key_monotonicity() {
     CHECK(store.isActive());
 }
 
-void test_P2_active_prevents_provisioning() {
-    SECTION("P2 — Active Prevents Provisioning");
+void test_P2_active_key_blocks_provisioning() {
+    SECTION("P2 — Active Key Blocks Provisioning");
     // Pure decision function form:
     CHECK(provisionKey(true, true, KeyVaultResult::Ok, /*keyIsActive=*/true)
           == ProvisionResult::Unauthorized);
@@ -105,8 +105,8 @@ void test_P2_active_prevents_provisioning() {
     CHECK(!reprov.has_value());
 }
 
-void test_P3_keyid_hidden_until_active() {
-    SECTION("P3 — Key ID Hidden Until Active");
+void test_P3_keyid_hidden_before_activation() {
+    SECTION("P3 — Key ID Hidden Before Activation");
     Uuid id{}; id.bytes.fill(0x55);
     const auto status = getStatus(/*fleetEnabled=*/true, /*hasKey=*/true,
                                   /*keyIsActive=*/false, id);
@@ -114,8 +114,8 @@ void test_P3_keyid_hidden_until_active() {
     CHECK(status.isActive == false);
 }
 
-void test_P4_keyid_revealed_when_active() {
-    SECTION("P4 — Key ID Revealed When Active");
+void test_P4_keyid_revealed_after_activation() {
+    SECTION("P4 — Key ID Revealed After Activation");
     Uuid id{}; id.bytes.fill(0x77);
     const auto status = getStatus(true, true, /*keyIsActive=*/true, id);
     CHECK(status.keyId.has_value());
@@ -123,8 +123,8 @@ void test_P4_keyid_revealed_when_active() {
     CHECK(status.isActive == true);
 }
 
-void test_P5_disabled_rejects_all() {
-    SECTION("P5 — Disabled Rejects All");
+void test_P5_disabled_fleet_rejects_everything() {
+    SECTION("P5 — Disabled Fleet Rejects Everything");
     for (const bool validReq : {false, true}) {
         for (const auto vr : {KeyVaultResult::Ok, KeyVaultResult::NotFound,
                               KeyVaultResult::IoError}) {
@@ -150,8 +150,8 @@ void test_P5_disabled_rejects_all() {
 
 // -------------- Category B: Authentication (P6..P10) ----------------------
 
-void test_P6_auth_requires_valid_date() {
-    SECTION("P6 — Auth Requires Valid Date");
+void test_P6_auth_rejects_invalid_date() {
+    SECTION("P6 — Auth Rejects Invalid Date");
     for (const bool sig : {false, true}) {
         for (const bool cl : {false, true}) {
             CHECK(authenticate(/*dateValid=*/false, sig, cl) == false);
@@ -159,8 +159,8 @@ void test_P6_auth_requires_valid_date() {
     }
 }
 
-void test_P7_auth_requires_valid_signature() {
-    SECTION("P7 — Auth Requires Valid Signature");
+void test_P7_auth_rejects_invalid_signature() {
+    SECTION("P7 — Auth Rejects Invalid Signature");
     for (const bool d : {false, true}) {
         for (const bool cl : {false, true}) {
             CHECK(authenticate(d, /*signatureValid=*/false, cl) == false);
@@ -168,8 +168,8 @@ void test_P7_auth_requires_valid_signature() {
     }
 }
 
-void test_P8_correct_signature_verifies() {
-    SECTION("P8 — Correct Signature Verifies");
+void test_P8_correct_hmac_verifies() {
+    SECTION("P8 — Correct HMAC Verifies");
     DeviceRequest req;
     req.method = "POST";
     req.path   = "/enroll/key/abc/activate";
@@ -192,8 +192,8 @@ void test_P8_correct_signature_verifies() {
                            std::span<const std::uint8_t>{sig}));
 }
 
-void test_P9_wrong_signature_fails() {
-    SECTION("P9 — Wrong Signature Fails");
+void test_P9_wrong_hmac_fails() {
+    SECTION("P9 — Wrong HMAC Fails");
     DeviceRequest req;
     req.method = "POST";
     req.path   = "/enroll/key/abc/activate";
@@ -213,8 +213,8 @@ void test_P9_wrong_signature_fails() {
                             std::span<const std::uint8_t>{truncated}));
 }
 
-void test_P10_missing_metadata_fails() {
-    SECTION("P10 — Missing Metadata Fails");
+void test_P10_missing_metadata_is_unauthorized() {
+    SECTION("P10 — Missing Metadata Is Unauthorized");
     for (const auto ar : {AuthResult::Authenticated,
                           AuthResult::Unauthenticated,
                           AuthResult::VaultUnavailable}) {
@@ -230,58 +230,58 @@ void test_P10_missing_metadata_fails() {
 
 // -------------- Category C: Access control (P11..P14) ---------------------
 
-void test_P11_off_allows_all() {
-    SECTION("P11 — Off Mode Allows All");
+void test_P11_access_off_allows_without_logging() {
+    SECTION("P11 — Access Off Allows Without Logging");
     for (const auto d : {AccessDecision::Allow, AccessDecision::Deny,
                          AccessDecision::NoRule}) {
         CHECK(enforceAccess(AccessMode::Off, d) == EnforceOutcome{true, false});
     }
 }
 
-void test_P12_audit_never_denies() {
-    SECTION("P12 — Audit Mode Never Denies");
+void test_P12_access_audit_never_denies() {
+    SECTION("P12 — Access Audit Never Denies");
     for (const auto d : {AccessDecision::Allow, AccessDecision::Deny,
                          AccessDecision::NoRule}) {
         CHECK(enforceAccess(AccessMode::Audit, d).allowed == true);
     }
 }
 
-void test_P13_enforce_blocks_denied() {
-    SECTION("P13 — Enforce Blocks Denied");
+void test_P13_access_enforce_blocks_denials() {
+    SECTION("P13 — Access Enforce Blocks Denials");
     CHECK(enforceAccess(AccessMode::Enforce, AccessDecision::Deny)
           == EnforceOutcome{false, true});
 }
 
-void test_P14_enforce_allows_permitted() {
-    SECTION("P14 — Enforce Allows Permitted");
+void test_P14_access_enforce_allows_permitted() {
+    SECTION("P14 — Access Enforce Allows Permitted");
     CHECK(enforceAccess(AccessMode::Enforce, AccessDecision::Allow)
           == EnforceOutcome{true, false});
 }
 
 // -------------- Category D: Liveness (P15..P18) ---------------------------
 
-void test_P15_can_provision_when_ready() {
-    SECTION("P15 — Can Provision When Ready");
+void test_P15_authorized_request_on_inactive_key_succeeds() {
+    SECTION("P15 — Authorized Request On Inactive Key Succeeds");
     CHECK(provisionKey(true, true, KeyVaultResult::Ok, false)
           == ProvisionResult::Succeeded);
 }
 
-void test_P16_authenticated_activation_succeeds() {
-    SECTION("P16 — Authenticated Activation Succeeds");
+void test_P16_authenticated_enrollment_succeeds() {
+    SECTION("P16 — Authenticated Enrollment Succeeds");
     CHECK(enrollDevice(true, true, AuthResult::Authenticated,
                        ActivationResult::Success)
           == EnrollmentResult::Succeeded);
 }
 
-void test_P17_boundary_inclusive() {
-    SECTION("P17 — Timestamp At Boundary Valid");
+void test_P17_timestamp_at_boundary_accepted() {
+    SECTION("P17 — Timestamp At Boundary Accepted");
     constexpr std::int64_t window = 900;
     constexpr std::int64_t now    = 1'000'000;
     CHECK(isValidRequestDate(now - window, now, window) == true);
 }
 
-void test_P18_beyond_boundary_invalid() {
-    SECTION("P18 — Timestamp Beyond Boundary Invalid");
+void test_P18_timestamp_beyond_boundary_rejected() {
+    SECTION("P18 — Timestamp Beyond Boundary Rejected");
     constexpr std::int64_t window = 900;
     constexpr std::int64_t now    = 1'000'000;
     CHECK(isValidRequestDate(now - window - 1, now, window) == false);
@@ -299,8 +299,8 @@ void test_P19_vault_unavailable_is_internal_error() {
     }
 }
 
-void test_P20_badrequest_distinct_from_unauthorized() {
-    SECTION("P20 — BadRequest Distinct From Unauthorized");
+void test_P20_invalid_request_is_bad_request() {
+    SECTION("P20 — Invalid Request Is Bad Request");
     for (const auto vr : {KeyVaultResult::Ok, KeyVaultResult::NotFound,
                           KeyVaultResult::IoError}) {
         for (const bool keyActive : {false, true}) {
@@ -431,26 +431,26 @@ void test_canonicalization_strips_auth_and_sorts() {
 } // namespace
 
 int main() {
-    test_P1_key_monotonicity();
-    test_P2_active_prevents_provisioning();
-    test_P3_keyid_hidden_until_active();
-    test_P4_keyid_revealed_when_active();
-    test_P5_disabled_rejects_all();
-    test_P6_auth_requires_valid_date();
-    test_P7_auth_requires_valid_signature();
-    test_P8_correct_signature_verifies();
-    test_P9_wrong_signature_fails();
-    test_P10_missing_metadata_fails();
-    test_P11_off_allows_all();
-    test_P12_audit_never_denies();
-    test_P13_enforce_blocks_denied();
-    test_P14_enforce_allows_permitted();
-    test_P15_can_provision_when_ready();
-    test_P16_authenticated_activation_succeeds();
-    test_P17_boundary_inclusive();
-    test_P18_beyond_boundary_invalid();
+    test_P1_active_key_cannot_be_reactivated();
+    test_P2_active_key_blocks_provisioning();
+    test_P3_keyid_hidden_before_activation();
+    test_P4_keyid_revealed_after_activation();
+    test_P5_disabled_fleet_rejects_everything();
+    test_P6_auth_rejects_invalid_date();
+    test_P7_auth_rejects_invalid_signature();
+    test_P8_correct_hmac_verifies();
+    test_P9_wrong_hmac_fails();
+    test_P10_missing_metadata_is_unauthorized();
+    test_P11_access_off_allows_without_logging();
+    test_P12_access_audit_never_denies();
+    test_P13_access_enforce_blocks_denials();
+    test_P14_access_enforce_allows_permitted();
+    test_P15_authorized_request_on_inactive_key_succeeds();
+    test_P16_authenticated_enrollment_succeeds();
+    test_P17_timestamp_at_boundary_accepted();
+    test_P18_timestamp_beyond_boundary_rejected();
     test_P19_vault_unavailable_is_internal_error();
-    test_P20_badrequest_distinct_from_unauthorized();
+    test_P20_invalid_request_is_bad_request();
     test_P21_activate_without_metadata_is_unauthorized();
     test_P22_activation_io_failure_is_internal_error();
     test_uuid_throws_on_malformed_input();

@@ -18,7 +18,8 @@ namespace {
 // unsigned length tag followed by the raw bytes. A parser reads the tag and
 // then exactly that many bytes, so no byte inside `field` can be misread as
 // a record boundary. This is what makes canonicalizePayload byte-injective
-// in the request (proven as P23_CanonicalizationInjective in SDEP.cry).
+// in the request (proven as P23_DistinctRequestsHaveDistinctCanonicalBytes
+// in SDEP.cry).
 void appendLengthPrefixed(std::string& out, std::string_view field) {
     const std::uint64_t n = static_cast<std::uint64_t>(field.size());
     char tag[8];
@@ -73,8 +74,10 @@ constexpr std::string_view kAuthHeader = "x-fleet-authorization";
 // record with ':' / '='. That encoding admitted the "header smuggling"
 // collision shape: a value containing "\nname:forged" parsed as an extra
 // record under a forged header name (the failure shape behind real-world
-// signature-confusion CVEs). Cryptol properties `P24_HeaderCanonInjective`
-// and `P25_QueryCanonInjective` in `cryptol/SDEP.cry` mechanise injectivity
+// signature-confusion CVEs). Cryptol properties
+// `P24_DistinctHeadersHaveDistinctCanonicalBytes` and
+// `P25_DistinctQueriesHaveDistinctCanonicalBytes` in `cryptol/SDEP.cry`
+// mechanise injectivity
 // of the length-prefixed encoding used here.
 
 std::string
@@ -154,7 +157,8 @@ std::string canonicalizePayload(const DeviceRequest& request) {
     // newline-smuggling collision that affects delimiter-based encoders
     // (the failure shape behind real-world signature-confusion CVEs such as
     // AWS SigV4 ambiguity and HTTP request smuggling). See
-    // cryptol/SDEP.cry §6 / property P23_CanonicalizationInjective for the
+    // cryptol/SDEP.cry §6 / property
+    // P23_DistinctRequestsHaveDistinctCanonicalBytes for the
     // mechanised proof.
     appendLengthPrefixed(out, request.method);
     appendLengthPrefixed(out, body_view);
@@ -163,7 +167,8 @@ std::string canonicalizePayload(const DeviceRequest& request) {
     appendLengthPrefixed(out, canonQuery);
     // Timestamp suffix: bound into the signed bytes so the verifier's
     // freshness check (against request.timestamp) cannot be decoupled from
-    // the signature. Mechanised as P29_TimestampBound in cryptol/SDEP.cry.
+    // the signature. Mechanised as P29_VerifierUsesRequestBoundTimestamp
+    // in cryptol/SDEP.cry.
     out.append(ts_view);
     return out;
 }

@@ -67,7 +67,7 @@ foreach ($line in $raw -split '\r?\n') {
     }
     elseif ($pendingCex -ne $null -and $line -match '^\s*\S') {
         # First non-blank line after "Counterexample" is the cex itself
-        # (e.g. "P23_VaultOkAlwaysProvisions True = False").
+        # (e.g. "P23_DistinctRequestsHaveDistinctCanonicalBytes True = False").
         if ($line -notmatch '^\(Total Elapsed') {
             $pendingCex = $line.Trim()
             $results.Add([pscustomobject]@{

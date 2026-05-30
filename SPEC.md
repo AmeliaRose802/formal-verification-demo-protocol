@@ -266,7 +266,8 @@ guaranteed to be valid UTF-8.
 > CVEs). The second gap let an attacker replay a stale signed request
 > with a fresh "current time" and pass `isValidRequestDate` despite the
 > signature being over old bytes. Cryptol properties
-> `P23_CanonicalizationInjective` and `P29_TimestampBound` in
+> `P23_DistinctRequestsHaveDistinctCanonicalBytes` and
+> `P29_VerifierUsesRequestBoundTimestamp` in
 > `cryptol/SDEP.cry` exhibit mechanised proofs that both gaps are
 > closed by the length-prefixed encoding and the timestamp suffix.
 
@@ -300,7 +301,8 @@ the same 8-byte big-endian tag used by `canonicalizePayload`. This makes
 each sub-canonicalizer byte-injective in its input map (no byte inside a
 name or value can be misread as a record boundary), closing the
 header / query smuggling collision shape mechanised as Cryptol properties
-`P24_HeaderCanonInjective` and `P25_QueryCanonInjective` in
+`P24_DistinctHeadersHaveDistinctCanonicalBytes` and
+`P25_DistinctQueriesHaveDistinctCanonicalBytes` in
 `cryptol/SDEP.cry`.
 
 ### 4.5 `enforceAccess`

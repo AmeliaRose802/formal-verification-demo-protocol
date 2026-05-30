@@ -251,7 +251,8 @@ guaranteed to be valid UTF-8.
 > newline embedded in `request.body` shifted the parse boundary into
 > `canonicalHeaders`, producing identical canonical bytes for distinct
 > requests (the failure shape behind AWS SigV4 ambiguity and HTTP request
-> smuggling CVEs). Cryptol property `P23_CanonicalizationInjective` in
+> smuggling CVEs). Cryptol property
+> `P23_DistinctRequestsHaveDistinctCanonicalBytes` in
 > `cryptol/SDEP.cry` exhibits a mechanised proof of injectivity for the
 > length-prefixed encoding.
 
