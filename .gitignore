@@ -37,3 +37,7 @@ Thumbs.db
 # Investigation scratch files (root-level temp output)
 /_*.txt
 /_*.md
+
+# DocFX build output
+_site/
+obj/

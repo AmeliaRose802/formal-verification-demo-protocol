@@ -1,0 +1,36 @@
+{
+  "build": {
+    "content": [
+      {
+        "files": [ "**/*.md", "**/toc.yml" ],
+        "src": "docs"
+      },
+      {
+        "files": [ "SPEC.md" ],
+        "src": "."
+      }
+    ],
+    "resource": [
+      {
+        "files": [ "proof_manifest.json" ],
+        "src": "."
+      }
+    ],
+    "globalMetadata": {
+      "_appName": "SDEP Formal Verification",
+      "_appTitle": "SDEP",
+      "_appFooter": "SDEP — auto-generated from Cryptol spec + SAW proofs",
+      "_enableSearch": true,
+      "_disableContribution": false,
+      "_gitContribute": {
+        "repo": "https://github.com/AmeliaRose802/formal-verification-demo-protocol",
+        "branch": "main"
+      }
+    },
+    "markdownEngineProperties": {
+      "markdigExtensions": [ "all" ]
+    },
+    "template": [ "default", "modern" ],
+    "dest": "_site"
+  }
+}
