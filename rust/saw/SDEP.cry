@@ -1,8 +1,9 @@
 // Secure Device Enrollment Protocol (SDEP) — Cryptol specification
 //
 // This module specifies the pure decision logic of SDEP and encodes the
-// 22 security properties (P1–P22) from spec.md as Cryptol `property`
-// declarations suitable for proof with SAW/Z3.
+// 22 security properties (P1–P22) as Cryptol `property` declarations
+// suitable for proof with SAW/Z3. The rendered docs site is the
+// human-readable form of the same content.
 
 module SDEP where
 

@@ -9,9 +9,9 @@
 // fixed without forgetting one. `prove_gaps.ps1` runs them and PASSES
 // when every property fails with a counterexample; if a future change
 // closes a gap, the corresponding property starts proving Q.E.D. and
-// the script flips the entry to "FIXED — close the gap row in SPEC.md".
+// the script flips the entry to "FIXED — close the gap row in the docs site".
 //
-// Mapping to spec.md §6 "Known Gaps":
+// Mapping to the "Known Gaps" section of the rendered docs site:
 //
 //   G30  Provision has no caller authentication           §6.1
 //   G31  Provision response code is an active-key oracle  §6.2

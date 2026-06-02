@@ -1,11 +1,11 @@
 # Prove every `property` declaration in SDEP_gaps.cry — and PASS the
 # script iff every property FAILS with a counterexample. Each property
-# encodes an attacker-visible gap (see spec.md §6); a counterexample is
-# the concrete attack.
+# encodes an attacker-visible gap (see the "Known Gaps" section of the
+# rendered docs site); a counterexample is the concrete attack.
 #
 # If a future change closes a gap, the corresponding property will start
 # proving Q.E.D.; this script flags that as an UNEXPECTED-PASS so the
-# regression list and spec.md can be updated in lock-step.
+# regression list and the docs site can be updated in lock-step.
 #
 # Usage:
 #   pwsh ./prove_gaps.ps1
@@ -103,7 +103,7 @@ Write-Host ("  {0} gaps confirmed (expected FAIL), {1} unexpected PASS (gap clos
 #   - exit 0 when every gap property has a counterexample (the gap regression
 #     list is intact).
 #   - exit 1 when any gap property proves Q.E.D. — the spec/impl was changed
-#     and the gap row should be moved to the "fixed" column in spec.md.
+#     and the gap row should be moved to the "fixed" column in the docs site.
 if ($unexpectedPass -gt 0) { exit 1 }
 if ($expectedFail -ne $props.Count) {
     Write-Host '  Parse error: expected counterexamples not collected for every property.' `

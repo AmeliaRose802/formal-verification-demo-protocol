@@ -1,4 +1,4 @@
-# Prove every `property` declaration in SDEP.cry with Cryptol/Z3 and
+# Prove every `property` declaration in the spec module with Cryptol/Z3 and
 # print a one-line PASS / FAIL summary per property.
 #
 # Usage:

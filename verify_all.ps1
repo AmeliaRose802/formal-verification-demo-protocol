@@ -16,7 +16,7 @@
 #       cryptol/SDEP_gaps.cry encodes an obligation the protocol does
 #       NOT meet — each must DISPROVE with a counterexample. A
 #       Q.E.D. there means the gap was silently closed and the
-#       spec.md §6 "Known Gaps" row must be updated.
+#       "Known Gaps" row in the rendered docs site must be updated.
 #
 # Layer 2 currently still references SDEP_rust.cry; the Rust↔property
 # chain will be unified in a follow-up.
@@ -218,7 +218,7 @@ if (-not $OnlySaw) {
 # encodes an attacker-visible obligation the protocol does NOT meet;
 # we PASS when each is disproved by a Z3 counterexample (= gap is real
 # and exhibited), and FAIL if any unexpectedly proves Q.E.D. (= gap was
-# silently closed; the spec.md §6 table needs an update).
+# silently closed; the "Known Gaps" row in the rendered docs needs an update).
 # ───────────────────────────────────────────────────────────────────
 if (-not $OnlySaw -and -not $SkipGaps) {
     Write-Banner 'Layer 4: Cryptol  —  attacker-visible gap regression'
