@@ -20,7 +20,7 @@
       "_appName": "SDEP Formal Verification",
       "_appTitle": "SDEP",
       "_appFooter": "SDEP — auto-generated from Cryptol spec + SAW proofs",
-      "_appLogoPath": "images/sat-pudding.png",
+      "_appLogoPath": "images/fabicon.png",
       "_appFaviconPath": "images/fabicon.png",
       "_enableSearch": true,
       "_disableContribution": false,
