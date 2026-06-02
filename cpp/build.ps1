@@ -5,7 +5,8 @@
 #   pwsh ./build.ps1 -NoRun     # build only
 [CmdletBinding()]
 param(
-    [string] $ClangPath = 'C:\Program Files\LLVM\bin\clang++.exe',
+    # Empty default — discovered from $env:CLANG_BIN or PATH below.
+    [string] $ClangPath = '',
     [string] $BuildDir  = 'build',
     [switch] $NoRun
 )
@@ -14,8 +15,19 @@ $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 Push-Location $here
 try {
-    if (-not (Test-Path -LiteralPath $ClangPath)) {
-        throw "clang++ not found at $ClangPath"
+    # Resolve clang++: explicit -ClangPath > $env:CLANG_BIN (a dir) > PATH.
+    $exeExt = if ($IsWindows -or $env:OS -eq 'Windows_NT') { '.exe' } else { '' }
+    if (-not $ClangPath) {
+        $envBin = [Environment]::GetEnvironmentVariable('CLANG_BIN')
+        if ($envBin -and (Test-Path (Join-Path $envBin ('clang++' + $exeExt)))) {
+            $ClangPath = Join-Path $envBin ('clang++' + $exeExt)
+        } else {
+            $cmd = Get-Command ('clang++' + $exeExt) -ErrorAction SilentlyContinue
+            if ($cmd) { $ClangPath = $cmd.Path }
+        }
+    }
+    if (-not $ClangPath -or -not (Test-Path -LiteralPath $ClangPath)) {
+        throw "clang++ not found. Set `$env:CLANG_BIN to a dir containing clang++, pass -ClangPath, or add clang++ to PATH."
     }
     New-Item -ItemType Directory -Force -Path $BuildDir | Out-Null
 

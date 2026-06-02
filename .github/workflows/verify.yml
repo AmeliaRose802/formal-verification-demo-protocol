@@ -41,6 +41,72 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # ── Fast lane: build + unit tests for both implementations ────────
+  # Runs in parallel with the much slower `verify` job below. No SAW,
+  # no LLVM 20 download — just the system C++ toolchain (gcc on Linux,
+  # MSVC on Windows) and Rust stable. Catches the kinds of regressions
+  # (compile errors, broken unit tests) that don't need formal proof
+  # to surface, and gives reviewers fast feedback before the proof
+  # job finishes.
+  build-test:
+    name: build + unit tests (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── Rust: build + test (default features, with std::collections etc.)
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry (build-test)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            rust/target
+          key: ${{ runner.os }}-build-test-cargo-${{ hashFiles('rust/Cargo.lock', 'rust/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-build-test-cargo-
+
+      - name: cargo build (lib)
+        working-directory: rust
+        run: cargo build --release --lib
+
+      - name: cargo test (lib unit tests)
+        working-directory: rust
+        # Scope: in-module #[cfg(test)] unit tests in src/lib.rs (~20 tests).
+        # Integration tests (tests/*.rs) and examples are intentionally
+        # excluded — they currently fail to compile against the live
+        # canonicalize_payload signature and should be fixed in a
+        # follow-up PR before being added back to the gate.
+        run: cargo test --release --lib
+
+      # ── C++: CMake configure + build + ctest ──────────────────────
+      # CMake auto-discovers the host compiler — gcc on Ubuntu runners,
+      # MSVC on Windows runners. The same CMakeLists.txt covers both;
+      # `-C Release` matters only for multi-config generators (MSVC).
+      - name: Configure C++ (cmake)
+        run: cmake -S cpp -B cpp/build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build C++ (cmake --build)
+        run: cmake --build cpp/build --config Release --parallel
+
+      - name: Run C++ tests (ctest)
+        run: ctest --test-dir cpp/build -C Release --output-on-failure
+
+  # ── Slow lane: full 4-layer SAW + Cryptol proof ───────────────────
   verify:
     name: verify (${{ matrix.os }})
     strategy:
