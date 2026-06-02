@@ -19,7 +19,8 @@
 ### Formal definition (Cryptol)
 
 ```haskell
-isValidSignature key req providedSig = hmacSha256 key req == providedSig
+isValidSignature key req providedSig =
+    hmacSha256 key req == providedSig
 ```
 
 Checks whether the signature is valid by comparing the computed and expected values.

@@ -1,67 +1,188 @@
 # Types
 
+### FleetMode
+2.1 Enumerations are encoded as small bit-vectors. Only the listed constructor values are considered "well-formed"; properties that range over an enum constrain the input with an `is<Enum>` predicate.
+
+| Name | Value | Description |
+|------|-------|-------------|
+| `FM_Disabled` | 0 | |
+| `FM_Enabled` | 1 | |
+
+### KeyVaultResult
+A 2-bit enumeration with 3 variants.
+
+| Name | Value | Description |
+|------|-------|-------------|
+| `KV_Ok` | 0 | |
+| `KV_NotFound` | 1 | |
+| `KV_IoError` | 2 | |
+
+Used by: [`provisionKey`](functions/provisionKey.md)
+
+### AuthResult
+A 2-bit enumeration with 3 variants.
+
+| Name | Value | Description |
+|------|-------|-------------|
+| `AR_Authenticated` | 0 | |
+| `AR_Unauthenticated` | 1 | |
+| `AR_VaultUnavailable` | 2 | |
+
+Used by: [`enrollDevice`](functions/enrollDevice.md)
+
+### ActivationResult
+A 2-bit enumeration with 3 variants.
+
+| Name | Value | Description |
+|------|-------|-------------|
+| `AC_Success` | 0 | |
+| `AC_AlreadyActive` | 1 | |
+| `AC_IoFailure` | 2 | |
+
+Used by: [`enrollDevice`](functions/enrollDevice.md)
+
+### ProvisionResult
+A 3-bit enumeration with 5 variants.
+
+| Name | Value | Description |
+|------|-------|-------------|
+| `PR_Succeeded` | 0 | |
+| `PR_Unauthorized` | 1 | |
+| `PR_BadRequest` | 2 | |
+| `PR_Disabled` | 3 | |
+| `PR_InternalError` | 4 | |
+
+Used by: [`provisionKey`](functions/provisionKey.md)
+
+### EnrollmentResult
+A 2-bit enumeration with 4 variants.
+
+| Name | Value | Description |
+|------|-------|-------------|
+| `ER_Succeeded` | 0 | |
+| `ER_Unauthorized` | 1 | |
+| `ER_Disabled` | 2 | |
+| `ER_InternalError` | 3 | |
+
+Used by: [`enrollDevice`](functions/enrollDevice.md)
+
+### AccessMode
+A 2-bit enumeration with 3 variants.
+
+| Name | Value | Description |
+|------|-------|-------------|
+| `AM_Off` | 0 | |
+| `AM_Audit` | 1 | |
+| `AM_Enforce` | 2 | |
+
+Used by: [`enforceAccess`](functions/enforceAccess.md)
+
+### AccessDecision
+A 2-bit enumeration with 3 variants.
+
+| Name | Value | Description |
+|------|-------|-------------|
+| `AD_Allow` | 0 | |
+| `AD_Deny` | 1 | |
+| `AD_NoRule` | 2 | |
+
+Used by: [`enforceAccess`](functions/enforceAccess.md)
+
+### UUID
+**Type:** `[128]` — `128`-bit value
+
+Well-formedness predicates for enum bit-vectors. 2.2 Structures used by getStatus.
+
+Used by: [`getStatus`](functions/getStatus.md)
+
+### OptUUID
+**Type:** `[(Bit, UUID)]` — `(Bit, UUID)`-bit value
+
+Option<UUID> is encoded as a (present?, value) pair.
+
+### EnrollmentStatus
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `fleetMode` | FleetMode | `FleetMode` value |
+| `hasKey` | Bit | Boolean flag |
+| `keyId` | OptUUID | `OptUUID` value |
+| `isActive` | Bit | Boolean flag |
+
+Used by: [`getStatus`](functions/getStatus.md)
+
+### Timestamp
+**Type:** `[64]` — `64`-bit value
+
+true iff requestTimestamp <= currentTime && currentTime - requestTimestamp <= windowSeconds Timestamps and windows are unbounded naturals in spec; we use 64-bit.
+
+Used by: [`isValidRequestDate`](functions/isValidRequestDate.md), [`verifierTimestamp_current`](functions/verifierTimestamp_current.md)
+
+### Window
+**Type:** `[64]` — `64`-bit value
+
+
+Used by: [`isValidRequestDate`](functions/isValidRequestDate.md)
+
 ### HmacKey
 **Type:** `[256]` — `256`-bit value
 
-256-bit HMAC-SHA256 signing key shared between client and verifier.
+4.3.2 isValidSignature — modelled abstractly with an uninterpreted HMAC. The Cryptol-level model treats HMAC-SHA256 as an opaque function from (key, payload) to a 256-bit tag, and constantTimeEquals as `==`.
 
 Used by: [`hmacSha256`](functions/hmacSha256.md), [`isValidSignature`](functions/isValidSignature.md)
 
 ### HmacTag
 **Type:** `[256]` — `256`-bit value
 
-256-bit HMAC-SHA256 authentication tag produced by `hmacSha256`.
 
 Used by: [`hmacSha256`](functions/hmacSha256.md), [`isValidSignature`](functions/isValidSignature.md)
 
 ### Request
 **Type:** `[256]` — `256`-bit value
 
-Abstract 256-bit handle for a canonicalized request payload. The HMAC properties only ever compare `Request` values for equality, so its internal structure is irrelevant at this layer.
 
 Used by: [`hmacSha256`](functions/hmacSha256.md), [`isValidSignature`](functions/isValidSignature.md)
 
-### FieldLen
+### FL
 **Type:** `[16]` — `16`-bit value
 
-Field length in bytes for the length-prefixed canonicalizer (bounded-model parameter; production uses `std::size_t` fields).
+The encoder now prepends each variable-length field with its byte length (a fixed-width unsigned length tag). A parser reads exactly the declared number of bytes for each field, so no byte inside any field can be mistaken for a boundary.
 
 Used by: [`canonNormalized`](functions/canonNormalized.md), [`canonLenPrefixed`](functions/canonLenPrefixed.md)
 
-### IndexWidth
+### IW
 **Type:** `[8]` — `8`-bit value
 
-Index/length width in bits. One byte holds any length up to FieldLen = 16, matching the 8-bit tag used by the bounded canonicalizer.
+Index/length width: one byte is more than enough for FL <= 127.
 
 Used by: [`canonNormalized`](functions/canonNormalized.md), [`canonLenPrefixed`](functions/canonLenPrefixed.md)
 
-### StructFieldLen
+### FLs
 **Type:** `[2]` — `2`-bit value
 
-Per-field byte bound for the structured bounded-model checking layer.
+The opaque `Request = [256]` is sufficient for HMAC algebra (P8, P9) but blocks any property that needs to look INSIDE the request. Bounded sizes for BMC: 2-byte fields, 2 headers per request.
 
 Used by: [`lpField`](functions/lpField.md), [`lpHeader`](functions/lpHeader.md), [`canonicalizeS`](functions/canonicalizeS.md)
 
-### MaxHeaders
+### Ns
 **Type:** `[2]` — `2`-bit value
 
-Maximum number of headers carried by a structured request in the bounded model. Two is enough to exhibit every interesting boundary-shifting bug between the header list and adjacent fields.
 
 Used by: [`canonicalizeS`](functions/canonicalizeS.md)
 
 ### Field
-A length-prefixed byte buffer: an explicit length `len` plus a fixed-size storage array `buf`. For `fieldNormalized` requests the trailing bytes of `buf` past `len` are required to be zero.
+A normalized (length, padded-buffer) field. Bytes beyond `len` are zero.
 
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `len` | [IndexWidth] | `IndexWidth`-bit value |
-| `buf` | [StructFieldLen][8] | Buffer of `StructFieldLen` bytes |
+| `len` | [IW] | `IW`-bit value |
+| `buf` | [FLs][8] | Buffer of `FLs` bytes |
 
 Used by: [`fieldNormalized`](functions/fieldNormalized.md), [`lpField`](functions/lpField.md)
 
 ### Header
-An HTTP-style header attached to a structured request: name, value, and an `isAuth` flag. The flag marks the Authorization header so the canonicalizer can exclude its value from the signed payload.
+One header is a (name, value) pair plus a flag marking it as the auth header (x-fleet-authorization) so the canonicalizer can exclude it.
 
 
 | Field | Type | Description |
@@ -72,17 +193,15 @@ An HTTP-style header attached to a structured request: name, value, and an `isAu
 
 Used by: [`lpHeader`](functions/lpHeader.md)
 
-### StructuredRequest
-Structural request shape used by the canonicalizer model: HTTP method, path, body, the request-bound timestamp, and a fixed-size vector of headers. This is the layer the P28+ properties reason about, in contrast with the opaque `Request = [256]` used by the abstract HMAC properties.
-
+### RequestS
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `method` | Field | `Field` value |
 | `path` | Field | `Field` value |
 | `body` | Field | `Field` value |
-| `timestamp` | [64] | `64`-bit value |
-| `hdrs` | [MaxHeaders]Header | Array of `MaxHeaders` `Header` values |
+| `timestamp` | Timestamp | `Timestamp` value |
+| `hdrs` | [Ns]Header | Array of `Ns` `Header` values |
 
 Used by: [`requestNormalized`](functions/requestNormalized.md), [`canonicalizeS`](functions/canonicalizeS.md), [`verifierTimestamp_current`](functions/verifierTimestamp_current.md)
 

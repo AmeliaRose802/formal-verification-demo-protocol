@@ -1,4 +1,4 @@
-- name: SDEP_cpp
+- name: SDEP
   href: index.md
 - name: Types
   href: types.md
@@ -16,11 +16,7 @@
     href: properties/protocol-liveness.md
   - name: Error Handling
     href: properties/error-handling.md
-  - name: Canonicalization byte-injectivity
-    href: properties/canonicalization-byte-injectivity.md
-  - name: enforceAccess matrix-coverage closures
-    href: properties/enforce-access-matrix-coverage-closures.md
-  - name: Structured-request properties
-    href: properties/structured-request-properties.md
-  - name: Intentional counterexamples
-    href: properties/intentional-counterexamples.md
+  - name: Auth-header exclusion
+    href: properties/auth-header-exclusion.md
+  - name: Timestamp binding
+    href: properties/timestamp-binding.md

@@ -3,14 +3,14 @@
 ### Signature
 
 **Parameters**
-- `r`: [StructuredRequest](../types.md#structuredrequest)
+- `r`: [RequestS](../types.md#requests)
 
 **Returns**
 - Bit
 
 <details><summary>Raw signature</summary>
 
-`StructuredRequest -> Bit`
+`RequestS -> Bit`
 
 </details>
 
@@ -28,5 +28,5 @@ requestNormalized r =
 Tests whether `r` is well-formed.
 
 ### Related Properties
-- [P28 — Auth Header Value Excluded From Canonicalization](../properties/structured-request-properties.md#p28--auth-header-value-excluded-from-canonicalization)
+- [P28 — Auth Header Value Excluded From Canonicalization](../properties/auth-header-exclusion.md#p28--auth-header-value-excluded-from-canonicalization)
 

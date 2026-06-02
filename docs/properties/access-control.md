@@ -9,37 +9,28 @@ P11: Access-off mode allows every decision and logs nothing.
 <details><summary>Formal property (Cryptol)</summary>
 
 ```haskell
-isAccessDecision_b decision ==>
-(allowedOf (enforceAccess AM_Off_b decision) == True) /\
-(loggedOf  (enforceAccess AM_Off_b decision) == False)
+isAccessDecision decision ==>
+enforceAccess AM_Off decision == (True, False)
 ```
 
 </details>
 
-> ⚠ **Implementation equivalence is incomplete.** This property holds against the Cryptol model. For the guarantee to carry over to the compiled code, every involved function must also have a SAW equivalence proof.
->
-> - ✗ equivalence proof **failed**: `allowedOf`, `enforceAccess`, `isAccessDecision_b`, `loggedOf`
-
-**Involved:** [`AM_Off_b`](../functions/AM_Off_b.md), [`allowedOf`](../functions/allowedOf.md), [`enforceAccess`](../functions/enforceAccess.md), [`isAccessDecision_b`](../functions/isAccessDecision_b.md), [`loggedOf`](../functions/loggedOf.md)
+**Involved:** [`AM_Off`](../types.md#accessmode), [`enforceAccess`](../functions/enforceAccess.md)
 
 ### P12 — Access Audit Never Denies
 
-P12: Access-audit mode never denies.
+P12: Access-audit mode never denies (regardless of the underlying decision).
 
 <details><summary>Formal property (Cryptol)</summary>
 
 ```haskell
-isAccessDecision_b decision ==>
-allowedOf (enforceAccess AM_Audit_b decision) == True
+isAccessDecision decision ==>
+(enforceAccess AM_Audit decision).0 == True
 ```
 
 </details>
 
-> ⚠ **Implementation equivalence is incomplete.** This property holds against the Cryptol model. For the guarantee to carry over to the compiled code, every involved function must also have a SAW equivalence proof.
->
-> - ✗ equivalence proof **failed**: `allowedOf`, `enforceAccess`, `isAccessDecision_b`
-
-**Involved:** [`AM_Audit_b`](../functions/AM_Audit_b.md), [`allowedOf`](../functions/allowedOf.md), [`enforceAccess`](../functions/enforceAccess.md), [`isAccessDecision_b`](../functions/isAccessDecision_b.md)
+**Involved:** [`AM_Audit`](../types.md#accessmode), [`enforceAccess`](../functions/enforceAccess.md)
 
 ### P13 — Access Enforce Blocks Denials
 
@@ -48,17 +39,12 @@ P13: Access-enforce mode blocks any explicitly denied request.
 <details><summary>Formal property (Cryptol)</summary>
 
 ```haskell
-(allowedOf (enforceAccess AM_Enforce_b AD_Deny_b) == False) /\
-(loggedOf  (enforceAccess AM_Enforce_b AD_Deny_b) == True)
+enforceAccess AM_Enforce AD_Deny == (False, True)
 ```
 
 </details>
 
-> ⚠ **Implementation equivalence is incomplete.** This property holds against the Cryptol model. For the guarantee to carry over to the compiled code, every involved function must also have a SAW equivalence proof.
->
-> - ✗ equivalence proof **failed**: `allowedOf`, `enforceAccess`, `loggedOf`
-
-**Involved:** [`AD_Deny_b`](../functions/AD_Deny_b.md), [`AM_Enforce_b`](../functions/AM_Enforce_b.md), [`allowedOf`](../functions/allowedOf.md), [`enforceAccess`](../functions/enforceAccess.md), [`loggedOf`](../functions/loggedOf.md)
+**Involved:** [`AD_Deny`](../types.md#accessdecision), [`AM_Enforce`](../types.md#accessmode), [`enforceAccess`](../functions/enforceAccess.md)
 
 ### P14 — Access Enforce Allows Permitted
 
@@ -67,15 +53,10 @@ P14: Access-enforce mode allows any explicitly permitted request.
 <details><summary>Formal property (Cryptol)</summary>
 
 ```haskell
-(allowedOf (enforceAccess AM_Enforce_b AD_Allow_b) == True) /\
-(loggedOf  (enforceAccess AM_Enforce_b AD_Allow_b) == False)
+enforceAccess AM_Enforce AD_Allow == (True, False)
 ```
 
 </details>
 
-> ⚠ **Implementation equivalence is incomplete.** This property holds against the Cryptol model. For the guarantee to carry over to the compiled code, every involved function must also have a SAW equivalence proof.
->
-> - ✗ equivalence proof **failed**: `allowedOf`, `enforceAccess`, `loggedOf`
-
-**Involved:** [`AD_Allow_b`](../functions/AD_Allow_b.md), [`AM_Enforce_b`](../functions/AM_Enforce_b.md), [`allowedOf`](../functions/allowedOf.md), [`enforceAccess`](../functions/enforceAccess.md), [`loggedOf`](../functions/loggedOf.md)
+**Involved:** [`AD_Allow`](../types.md#accessdecision), [`AM_Enforce`](../types.md#accessmode), [`enforceAccess`](../functions/enforceAccess.md)
 

@@ -10,12 +10,18 @@
       {
         "files": [ "proof_manifest.json" ],
         "src": "."
+      },
+      {
+        "files": [ "images/**" ],
+        "src": "docs"
       }
     ],
     "globalMetadata": {
       "_appName": "SDEP Formal Verification",
       "_appTitle": "SDEP",
       "_appFooter": "SDEP — auto-generated from Cryptol spec + SAW proofs",
+      "_appLogoPath": "images/sat-pudding.png",
+      "_appFaviconPath": "images/fabicon.png",
       "_enableSearch": true,
       "_disableContribution": false,
       "_gitContribute": {

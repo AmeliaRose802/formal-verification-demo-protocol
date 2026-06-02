@@ -9,14 +9,12 @@ P15: A valid, authorized provisioning request on an inactive key succeeds.
 <details><summary>Formal property (Cryptol)</summary>
 
 ```haskell
-provisionKey True True KV_Ok_b False == PR_Succeeded_b
+provisionKey True True KV_Ok False == PR_Succeeded
 ```
 
 </details>
 
-> ✓ **Implementation equivalence proven.** All 1 involved function(s) have a SAW equivalence proof against the C++/Rust implementation, so this property's guarantee transfers to the compiled code.
-
-**Involved:** [`KV_Ok_b`](../functions/KV_Ok_b.md), [`PR_Succeeded_b`](../functions/PR_Succeeded_b.md), [`provisionKey`](../functions/provisionKey.md)
+**Involved:** [`KV_Ok`](../types.md#keyvaultresult), [`PR_Succeeded`](../types.md#provisionresult), [`provisionKey`](../functions/provisionKey.md)
 
 ### P16 — Authenticated Enrollment Succeeds
 
@@ -25,33 +23,26 @@ P16: An authenticated enrollment with a successful activation succeeds.
 <details><summary>Formal property (Cryptol)</summary>
 
 ```haskell
-enrollDevice True True AR_Authenticated_b AC_Success_b == ER_Succeeded_b
+enrollDevice True True AR_Authenticated AC_Success == ER_Succeeded
 ```
 
 </details>
 
-> ✓ **Implementation equivalence proven.** All 1 involved function(s) have a SAW equivalence proof against the C++/Rust implementation, so this property's guarantee transfers to the compiled code.
-
-**Involved:** [`AC_Success_b`](../functions/AC_Success_b.md), [`AR_Authenticated_b`](../functions/AR_Authenticated_b.md), [`ER_Succeeded_b`](../functions/ER_Succeeded_b.md), [`enrollDevice`](../functions/enrollDevice.md)
+**Involved:** [`AC_Success`](../types.md#activationresult), [`AR_Authenticated`](../types.md#authresult), [`ER_Succeeded`](../types.md#enrollmentresult), [`enrollDevice`](../functions/enrollDevice.md)
 
 ### P17 — Timestamp At Boundary Accepted
 
 P17: A timestamp exactly at the window boundary is accepted.
-C++ uses std::int64_t with SIGNED comparison; preconditions guard
-against signed overflow on the (requestTs + window) calculation.
 
 <details><summary>Formal property (Cryptol)</summary>
 
 ```haskell
-(window    >=$ 0) ==>
-(requestTs >=$ 0) ==>
-(requestTs <=$ (0x7FFFFFFFFFFFFFFF - window)) ==>
+// Avoid 64-bit overflow when constructing currentTime.
+(requestTs <= (~ zero) - window) ==>
 isValidRequestDate requestTs (requestTs + window) window == True
 ```
 
 </details>
-
-> ✓ **Implementation equivalence proven.** All 1 involved function(s) have a SAW equivalence proof against the C++/Rust implementation, so this property's guarantee transfers to the compiled code.
 
 **Involved:** [`isValidRequestDate`](../functions/isValidRequestDate.md)
 
@@ -62,15 +53,12 @@ P18: A timestamp beyond the window boundary is rejected.
 <details><summary>Formal property (Cryptol)</summary>
 
 ```haskell
-(window >=$ 0) ==>
-(requestTs <=$ currentTime) ==>
-((currentTime - requestTs) >$ window) ==>
+(requestTs <= currentTime) ==>
+((currentTime - requestTs) > window) ==>
 isValidRequestDate requestTs currentTime window == False
 ```
 
 </details>
-
-> ✓ **Implementation equivalence proven.** All 1 involved function(s) have a SAW equivalence proof against the C++/Rust implementation, so this property's guarantee transfers to the compiled code.
 
 **Involved:** [`isValidRequestDate`](../functions/isValidRequestDate.md)
 

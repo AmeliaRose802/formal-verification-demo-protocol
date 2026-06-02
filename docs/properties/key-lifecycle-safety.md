@@ -6,25 +6,21 @@
 
 P1: An active key cannot be re-activated. Once the activation oracle
 reports the key is already active, [enrollDevice](../functions/enrollDevice.md) can never return Succeeded
-no matter what other inputs the request carries.
+no matter what other inputs the request carries. (Historical name:
+"Key Monotonicity".)
 
 <details><summary>Formal property (Cryptol)</summary>
 
 ```haskell
-isAuthResult_b authResult ==>
+isAuthResult authResult ==>
 keyAlreadyActive ==>
-enrollDevice fleetEnabled validMetadata authResult AC_AlreadyActive_b
-!= ER_Succeeded_b
+enrollDevice fleetEnabled validMetadata authResult AC_AlreadyActive
+!= ER_Succeeded
 ```
 
 </details>
 
-> ⚠ **Implementation equivalence is incomplete.** This property holds against the Cryptol model. For the guarantee to carry over to the compiled code, every involved function must also have a SAW equivalence proof.
->
-> - ✓ proven equivalent: `enrollDevice`
-> - ✗ equivalence proof **failed**: `isAuthResult_b`
-
-**Involved:** [`AC_AlreadyActive_b`](../functions/AC_AlreadyActive_b.md), [`ER_Succeeded_b`](../functions/ER_Succeeded_b.md), [`enrollDevice`](../functions/enrollDevice.md), [`isAuthResult_b`](../functions/isAuthResult_b.md)
+**Involved:** [`AC_AlreadyActive`](../types.md#activationresult), [`ER_Succeeded`](../types.md#enrollmentresult), [`enrollDevice`](../functions/enrollDevice.md)
 
 ### P2 — Active Key Blocks Provisioning
 
@@ -35,22 +31,17 @@ active returns Unauthorized.
 <details><summary>Formal property (Cryptol)</summary>
 
 ```haskell
-isKeyVaultResult_b vaultResult ==>
+isKeyVaultResult vaultResult ==>
 fleetEnabled ==>
 validRequest ==>
-vaultResult == KV_Ok_b ==>
+vaultResult == KV_Ok ==>
 provisionKey fleetEnabled validRequest vaultResult True
-== PR_Unauthorized_b
+== PR_Unauthorized
 ```
 
 </details>
 
-> ⚠ **Implementation equivalence is incomplete.** This property holds against the Cryptol model. For the guarantee to carry over to the compiled code, every involved function must also have a SAW equivalence proof.
->
-> - ✓ proven equivalent: `provisionKey`
-> - ✗ equivalence proof **failed**: `isKeyVaultResult_b`
-
-**Involved:** [`KV_Ok_b`](../functions/KV_Ok_b.md), [`PR_Unauthorized_b`](../functions/PR_Unauthorized_b.md), [`isKeyVaultResult_b`](../functions/isKeyVaultResult_b.md), [`provisionKey`](../functions/provisionKey.md)
+**Involved:** [`KV_Ok`](../types.md#keyvaultresult), [`PR_Unauthorized`](../types.md#provisionresult), [`provisionKey`](../functions/provisionKey.md)
 
 ### P3 — Key Id Hidden Before Activation
 
@@ -59,16 +50,12 @@ P3: Key ID is hidden before activation.
 <details><summary>Formal property (Cryptol)</summary>
 
 ```haskell
-statusEngagedByte (getStatus fleetEnabled hasKey False keyId preBytes) == 0
+(getStatus fleetEnabled hasKey False keyId).keyId == none
 ```
 
 </details>
 
-> ⚠ **Implementation equivalence is incomplete.** This property holds against the Cryptol model. For the guarantee to carry over to the compiled code, every involved function must also have a SAW equivalence proof.
->
-> - ✗ equivalence proof **failed**: `getStatus`, `statusEngagedByte`
-
-**Involved:** [`getStatus`](../functions/getStatus.md), [`statusEngagedByte`](../functions/statusEngagedByte.md)
+**Involved:** [`getStatus`](../functions/getStatus.md)
 
 ### P4 — Key Id Revealed After Activation
 
@@ -77,17 +64,12 @@ P4: Key ID is revealed after activation.
 <details><summary>Formal property (Cryptol)</summary>
 
 ```haskell
-(statusEngagedByte  (getStatus fleetEnabled hasKey True keyId preBytes) == 1) /\
-(statusPayloadBytes (getStatus fleetEnabled hasKey True keyId preBytes) == keyId)
+(getStatus fleetEnabled hasKey True keyId).keyId == some keyId
 ```
 
 </details>
 
-> ⚠ **Implementation equivalence is incomplete.** This property holds against the Cryptol model. For the guarantee to carry over to the compiled code, every involved function must also have a SAW equivalence proof.
->
-> - ✗ equivalence proof **failed**: `getStatus`, `statusEngagedByte`, `statusPayloadBytes`
-
-**Involved:** [`getStatus`](../functions/getStatus.md), [`statusEngagedByte`](../functions/statusEngagedByte.md), [`statusPayloadBytes`](../functions/statusPayloadBytes.md)
+**Involved:** [`getStatus`](../functions/getStatus.md)
 
 ### P5 — Disabled Fleet Rejects Everything
 
@@ -97,20 +79,15 @@ P5: A disabled fleet rejects every request — both [provisionKey](../functions/
 <details><summary>Formal property (Cryptol)</summary>
 
 ```haskell
-isKeyVaultResult_b vaultResult ==>
-isAuthResult_b authResult ==>
-isActivationResult_b activationResult ==>
-(provisionKey False validRequest vaultResult keyIsActive == PR_Disabled_b)
-/\ (enrollDevice False validMetadata authResult activationResult
-== ER_Disabled_b)
+isKeyVaultResult vaultResult ==>
+isAuthResult authResult ==>
+isActivationResult activationResult ==>
+(provisionKey False validRequest vaultResult keyIsActive == PR_Disabled)
+&& (enrollDevice False validMetadata authResult activationResult
+== ER_Disabled)
 ```
 
 </details>
 
-> ⚠ **Implementation equivalence is incomplete.** This property holds against the Cryptol model. For the guarantee to carry over to the compiled code, every involved function must also have a SAW equivalence proof.
->
-> - ✓ proven equivalent: `enrollDevice`, `provisionKey`
-> - ✗ equivalence proof **failed**: `isActivationResult_b`, `isAuthResult_b`, `isKeyVaultResult_b`
-
-**Involved:** [`ER_Disabled_b`](../functions/ER_Disabled_b.md), [`PR_Disabled_b`](../functions/PR_Disabled_b.md), [`enrollDevice`](../functions/enrollDevice.md), [`isActivationResult_b`](../functions/isActivationResult_b.md), [`isAuthResult_b`](../functions/isAuthResult_b.md), [`isKeyVaultResult_b`](../functions/isKeyVaultResult_b.md), [`provisionKey`](../functions/provisionKey.md)
+**Involved:** [`ER_Disabled`](../types.md#enrollmentresult), [`PR_Disabled`](../types.md#provisionresult), [`enrollDevice`](../functions/enrollDevice.md), [`provisionKey`](../functions/provisionKey.md)
 

@@ -1,18 +1,18 @@
-# `isValidRequestDate`  ✓
+# `isValidRequestDate`
 
 ### Signature
 
 **Parameters**
-- `requestTs`: [64]
-- `currentTime`: [64]
-- `windowSeconds`: [64]
+- `requestTs`: [Timestamp](../types.md#timestamp)
+- `currentTime`: [Timestamp](../types.md#timestamp)
+- `windowSeconds`: [Window](../types.md#window)
 
 **Returns**
 - Bit
 
 <details><summary>Raw signature</summary>
 
-`[64] -> [64] -> [64] -> Bit`
+`Timestamp -> Timestamp -> Window -> Bit`
 
 </details>
 
@@ -20,18 +20,11 @@
 
 ```haskell
 isValidRequestDate requestTs currentTime windowSeconds =
-  if (requestTs <$ 0) \/ (currentTime <$ 0) \/ (windowSeconds <$ 0)
-    then False
-    else (requestTs <=$ currentTime)
-      /\ ((currentTime - requestTs) <=$ windowSeconds)
+  (requestTs <= currentTime)
+  && ((currentTime - requestTs) <= windowSeconds)
 ```
 
-`std::int64_t` semantics. The implementation in cpp/include/sdep/auth.hpp
-first rejects negative timestamps / window (otherwise the subtraction
-`currentTime - requestTs` can wrap signed-overflow when requestTs is near
-INT64_MIN — found by SAW on 2026-05-30, see FINDINGS.md §1). The shim
-below mirrors that guard exactly so the SAW equivalence proof goes
-through for all i64 inputs.
+Checks whether the request date is valid: validates a bounded condition over `requestTs`, `currentTime`, and `windowSeconds`.
 
 ### Related Properties
 - [P17 — Timestamp At Boundary Accepted](../properties/protocol-liveness.md#p17--timestamp-at-boundary-accepted)

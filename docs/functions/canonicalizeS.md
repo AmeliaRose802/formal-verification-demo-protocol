@@ -1,16 +1,16 @@
-# `canonicalizeS`  ✗
+# `canonicalizeS`
 
 ### Signature
 
 **Parameters**
-- `r`: [StructuredRequest](../types.md#structuredrequest)
+- `r`: [RequestS](../types.md#requests)
 
 **Returns**
-- [3 * (1 + [StructFieldLen](../types.md#structfieldlen)) + [MaxHeaders](../types.md#maxheaders) * 2 * (1 + [StructFieldLen](../types.md#structfieldlen)) + 8][8]
+- [3 * (1 + [FLs](../types.md#fls)) + [Ns](../types.md#ns) * 2 * (1 + [FLs](../types.md#fls)) + 8][8]
 
 <details><summary>Raw signature</summary>
 
-`StructuredRequest -> [3 * (1 + StructFieldLen) + MaxHeaders * 2 * (1 + StructFieldLen) + 8][8]`
+`RequestS -> [3 * (1 + FLs) + Ns * 2 * (1 + FLs) + 8][8]`
 
 </details>
 
@@ -25,10 +25,10 @@ canonicalizeS r =
   # (split r.timestamp : [8][8])
 ```
 
-> **Verification failed:** saw-spec-gen failed
-
-Computes 3 * (1 + [StructFieldLen](../types.md#structfieldlen)) + [MaxHeaders](../types.md#maxheaders) * 2 * (1 + [StructFieldLen](../types.md#structfieldlen)) + 8 bytes from `r`.
+Concrete canonicalize: length-prefixed method, body, headers (with
+auth-header exclusion), path, then the 8-byte big-endian timestamp.
+Mirrors the production C++/Rust encoder shape.
 
 ### Related Properties
-- [P28 — Auth Header Value Excluded From Canonicalization](../properties/structured-request-properties.md#p28--auth-header-value-excluded-from-canonicalization)
+- [P28 — Auth Header Value Excluded From Canonicalization](../properties/auth-header-exclusion.md#p28--auth-header-value-excluded-from-canonicalization)
 
