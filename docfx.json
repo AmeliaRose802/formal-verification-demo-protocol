@@ -4,10 +4,6 @@
       {
         "files": [ "**/*.md", "**/toc.yml" ],
         "src": "docs"
-      },
-      {
-        "files": [ "spec.md" ],
-        "src": "cryptol"
       }
     ],
     "resource": [

@@ -4,7 +4,7 @@ A worked example of taking a small HTTP enrollment protocol from English specifi
 
 This repository exists as a **case study** for end-to-end formal verification of a real-world-shaped protocol. The protocol itself (SDEP) is intentionally compact so the proofs fit on one screen each, but it is rich enough to exhibit HMAC-based request signing, a key lifecycle with a "permanent activation" safety invariant, fleet-mode + per-endpoint access control, and length-prefixed byte canonicalization.
 
-The full English spec lives in [cryptol/spec.md](cryptol/spec.md). The rendered docs site (Cryptol model + per-function and per-property pages, with cross-references) is published from [docs/](docs/) via DocFX.
+The **rendered docs site** (Cryptol model + per-function and per-property pages, with cross-references and *Implementation equivalence* callouts) is the source of truth and is published from [docs/](docs/) via DocFX: <https://ameliarose802.github.io/formal-verification-demo-protocol/>
 
 ---
 
@@ -47,7 +47,6 @@ Prerequisites: [SAW](https://github.com/GaloisInc/saw-script) (1.5+), [Cryptol](
 verify_all.ps1                Four-layer verification driver
 docfx.json                    DocFX config — drives the published site
 cryptol/
-    spec.md                   Protocol spec (English, normative)
     SDEP.cry                  Cryptol spec module (types + properties)
     SDEP_gaps.cry             Negative properties (must counterexample)
     prove_all.ps1             Cryptol property-proving driver
@@ -66,12 +65,19 @@ docs/                         DocFX source (generated from Cryptol)
 
 ## Tooling
 
-The Cryptol → Markdown rendering and the SAW spec scaffolding are produced by two companion tools:
+**Verifiers and solvers** (the actual proof engines):
 
-- [pretty-specs](https://github.com/AmeliaRose802/pretty-specs) — renders Cryptol modules to DocFX-flavored Markdown with per-function and per-property cross-references.
-- [saw-spec-gen](https://github.com/AmeliaRose802/saw-spec-gen) — auto-generates SAW specs from clang AST and `mir-json`.
+- [SAW](https://github.com/GaloisInc/saw-script) (Software Analysis Workbench, Galois) — symbolic-execution-based verifier used by Layers 1 and 2 to prove the C++ and Rust implementations are observationally equivalent to their Cryptol shims.
+- [Cryptol](https://github.com/GaloisInc/cryptol) (Galois) — the specification language used for the protocol model and the property declarations discharged in Layers 3 and 4.
+- [Z3](https://github.com/Z3Prover/z3) (Microsoft Research) — SMT solver backend invoked by both SAW and Cryptol.
 
-The full doc-regeneration + verification pipeline (used by `pipeline.ps1` from `pretty-specs`) is what produces the contents of [docs/](docs/).
+**Doc and spec scaffolding** (companion tools written for this case study):
+
+- [crystal-cryptal](https://github.com/AmeliaRose802/crystal-cryptal) — Cryptol authoring / rendering toolkit used to keep the spec module and the published docs in sync.
+- [pretty-specs](https://github.com/AmeliaRose802/pretty-specs) — renders Cryptol modules to DocFX-flavored Markdown with per-function and per-property cross-references; emits the contents of [docs/](docs/).
+- [saw-spec-gen](https://github.com/AmeliaRose802/saw-spec-gen) — auto-generates SAW spec scaffolding from clang AST and `mir-json` so Layer 1 and Layer 2 specs stay aligned with the C++/Rust ABIs.
+
+The full doc-regeneration + verification pipeline (`pipeline.ps1` from `pretty-specs`) drives the verifiers above and rewrites [docs/](docs/) on every run; the GitHub Actions workflow at [.github/workflows/pages.yml](.github/workflows/pages.yml) then renders that into the published site.
 
 ---
 
