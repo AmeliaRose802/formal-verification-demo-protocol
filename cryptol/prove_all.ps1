@@ -8,7 +8,8 @@
 [CmdletBinding()]
 param(
     [string] $SpecFile   = (Join-Path $PSScriptRoot 'SDEP.cry'),
-    [string] $CryptolExe = 'C:\Users\ameliapayne\saw-1.5-windows-2022-X64-with-solvers\bin\cryptol.exe',
+    # Empty default — discovered from $env:CRYPTOL_EXE or PATH below.
+    [string] $CryptolExe = '',
     # Optional: emit a SAW-style log (one "Proving NAME ..." + verdict per
     # property) that pretty-specs' --adapt-saw-log can ingest to attach
     # badges in the rendered docs.
@@ -22,11 +23,12 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-# Resolve cryptol: explicit path > PATH lookup.
-if (-not (Test-Path $CryptolExe)) {
+# Resolve cryptol: explicit -CryptolExe > $env:CRYPTOL_EXE > PATH.
+if (-not $CryptolExe) { $CryptolExe = [Environment]::GetEnvironmentVariable('CRYPTOL_EXE') }
+if (-not $CryptolExe -or -not (Test-Path $CryptolExe)) {
     $found = Get-Command cryptol -ErrorAction SilentlyContinue
     if ($found) { $CryptolExe = $found.Path }
-    else { throw "cryptol not found. Pass -CryptolExe <path> or add it to PATH." }
+    else { throw "cryptol not found. Set `$env:CRYPTOL_EXE, pass -CryptolExe <path>, or add cryptol to PATH." }
 }
 if (-not (Test-Path $SpecFile)) { throw "Spec file not found: $SpecFile" }
 

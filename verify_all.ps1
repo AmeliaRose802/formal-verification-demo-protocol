@@ -41,6 +41,18 @@ param(
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 
+# Auto-source the toolchain env file written by scripts/ci-install.ps1
+# if the user hasn't already set the per-tool env vars in this shell.
+# Lets `pwsh ./verify_all.ps1` Just Work once you've run ci-install.ps1
+# locally, without needing to dot-source anything yourself. CI sets
+# the vars via GITHUB_ENV so this block is a no-op there.
+$userHome = if ($env:HOME) { $env:HOME } else { $env:USERPROFILE }
+$envFile  = Join-Path $userHome '.demo_protocol/env.ps1'
+if ((Test-Path $envFile) -and -not $env:SAW_EXE) {
+    . $envFile
+    Write-Host "Sourced toolchain env from $envFile" -ForegroundColor DarkGray
+}
+
 function Write-Banner($text, $color = 'Cyan') {
     Write-Host ''
     Write-Host ('═' * 64) -ForegroundColor $color

@@ -24,15 +24,63 @@
 param(
     [string[]] $Only,
     [switch]   $SkipBuild,
-    [string]   $ClangBin  = 'C:\Program Files\LLVM\bin',
-    [string]   $SawExe    = 'C:\Users\ameliapayne\saw-script\dist-newstyle\build\x86_64-windows\ghc-9.6.7\saw-1.5.0.99\x\saw\build\saw\saw.exe',
-    [string]   $SawSpecGen = 'C:\Users\ameliapayne\saw-spec-gen\target\release\saw-spec-gen.exe',
-    [string]   $SolverBin = 'C:\Users\ameliapayne\saw-1.5-windows-2022-X64-with-solvers\bin'
+    # Tool paths.  Empty defaults — discovered from env vars
+    # (CLANG_BIN, SAW_EXE, SAW_SPEC_GEN, SOLVER_BIN) or PATH below.
+    [string]   $ClangBin   = '',
+    [string]   $SawExe     = '',
+    [string]   $SawSpecGen = '',
+    [string]   $SolverBin  = ''
 )
 
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 Push-Location $here
+
+# Tool discovery: explicit -ParameterValue, then env var, then PATH.
+# Lets the same script work on a dev box (tools on PATH) and in CI
+# (env vars set by scripts/ci-install.ps1) without per-environment
+# plumbing.
+function Resolve-ToolDir {
+    param(
+        [string] $Current,    # current $ClangBin / $SolverBin value
+        [string] $EnvName,    # env var name to consult
+        [string] $Probe       # filename that must exist under the dir
+    )
+    $envVal = [Environment]::GetEnvironmentVariable($EnvName)
+    if ($envVal -and (Test-Path (Join-Path $envVal $Probe))) { return $envVal }
+    if ($Current -and (Test-Path (Join-Path $Current $Probe))) { return $Current }
+    $cmd = Get-Command ([System.IO.Path]::GetFileNameWithoutExtension($Probe)) -ErrorAction SilentlyContinue
+    if ($cmd) { return Split-Path -Parent $cmd.Path }
+    return $Current
+}
+function Resolve-ToolExe {
+    param(
+        [string] $Current,
+        [string] $EnvName,
+        [string] $BinName
+    )
+    $envVal = [Environment]::GetEnvironmentVariable($EnvName)
+    if ($envVal -and (Test-Path $envVal)) { return $envVal }
+    if ($Current -and (Test-Path $Current)) { return $Current }
+    $cmd = Get-Command $BinName -ErrorAction SilentlyContinue
+    if ($cmd) { return $cmd.Path }
+    return $Current
+}
+$exeExt = if ($IsWindows -or $env:OS -eq 'Windows_NT') { '.exe' } else { '' }
+$ClangBin   = Resolve-ToolDir -Current $ClangBin   -EnvName 'CLANG_BIN'  -Probe ('clang' + $exeExt)
+$SolverBin  = Resolve-ToolDir -Current $SolverBin  -EnvName 'SOLVER_BIN' -Probe ('z3'    + $exeExt)
+$SawExe     = Resolve-ToolExe -Current $SawExe     -EnvName 'SAW_EXE'      -BinName 'saw'
+$SawSpecGen = Resolve-ToolExe -Current $SawSpecGen -EnvName 'SAW_SPEC_GEN' -BinName 'saw-spec-gen'
+foreach ($t in @(
+    @{ Name='clang';        Path=(Join-Path $ClangBin ('clang' + $exeExt)) }
+    @{ Name='saw';          Path=$SawExe }
+    @{ Name='saw-spec-gen'; Path=$SawSpecGen }
+    @{ Name='z3 (solver)';  Path=(Join-Path $SolverBin ('z3' + $exeExt)) }
+)) {
+    if (-not (Test-Path $t.Path)) {
+        throw ("Required tool '{0}' not found at {1}. Set the corresponding env var (CLANG_BIN / SAW_EXE / SAW_SPEC_GEN / SOLVER_BIN) or pass -ClangBin/-SawExe/-SawSpecGen/-SolverBin." -f $t.Name, $t.Path)
+    }
+}
 
 # Targets: (cppName, cryptolName)
 $targets = @(
@@ -49,7 +97,7 @@ if ($Only) {
     if (-not $targets) { throw "No matching targets in $($Only -join ',')" }
 }
 
-$clang   = Join-Path $ClangBin 'clang.exe'
+$clang   = Join-Path $ClangBin ('clang' + $exeExt)
 $bc      = Join-Path $here 'verify_targets.bc'
 $ll      = Join-Path $here 'verify_targets.ll'
 $bcOpt   = Join-Path $here 'verify_targets_o1.bc'   # -O1 build, inlines STL
@@ -87,7 +135,7 @@ if (-not $SkipBuild) {
 }
 
 # Where SAW lives + solvers.
-$env:PATH = "$SolverBin;$env:PATH"
+$env:PATH = $SolverBin + [System.IO.Path]::PathSeparator + $env:PATH
 
 $results = @()
 foreach ($t in $targets) {

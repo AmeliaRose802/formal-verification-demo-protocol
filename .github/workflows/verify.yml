@@ -1,0 +1,127 @@
+name: Verify (SAW + Cryptol)
+
+# Runs the four-layer demo_protocol verification on every PR and on
+# pushes to main, on both Ubuntu and Windows runners.
+#
+# The 4 layers (see verify_all.ps1 for the full contract):
+#   1. SAW + Z3 — C++ decision functions ≡ Cryptol byte-width model
+#   2. SAW + Z3 — Rust decision functions ≡ Cryptol byte-width model
+#   3. Cryptol + Z3 — every `property` in cpp/saw/SDEP_cpp.cry holds
+#   4. Cryptol + Z3 — every gap in cryptol/SDEP_gaps.cry still produces
+#      a counterexample (= the documented attacker-visible gap is real)
+#
+# Toolchain (installed by scripts/ci-install.ps1, cached per-OS):
+#   LLVM 20.1.6, SAW 1.5 with bundled solvers, saw-spec-gen (latest),
+#   plus the in-workflow Rust stable toolchain.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'cpp/**'
+      - 'rust/**'
+      - 'cryptol/**'
+      - 'verify_all.ps1'
+      - 'scripts/ci-install.ps1'
+      - '.github/workflows/verify.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'cpp/**'
+      - 'rust/**'
+      - 'cryptol/**'
+      - 'verify_all.ps1'
+      - 'scripts/ci-install.ps1'
+      - '.github/workflows/verify.yml'
+  workflow_dispatch:
+
+concurrency:
+  # Cancel in-flight runs for the same PR/branch when a new commit lands.
+  group: verify-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: verify (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── Rust toolchain ───────────────────────────────────────────
+      # Needed for Layer 2 (cargo build --release --no-default-features
+      # of the sdep crate to LLVM bitcode). llvm-tools-preview ships
+      # the matching-version llvm-as / opt that rust/saw/run.ps1 uses
+      # to reassemble the patched LLVM IR — without it, the runtime
+      # system clang's LLVM rejects rustc's newer IR attributes.
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+
+      - name: Cache cargo registry (Rust layer)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            rust/target
+          key: ${{ runner.os }}-verify-cargo-${{ hashFiles('rust/Cargo.lock', 'rust/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-verify-cargo-
+
+      # ── SAW + LLVM + saw-spec-gen toolchain cache ─────────────────
+      # ci-install.ps1 stages everything under ~/.demo_protocol/, so
+      # caching that one tree fully memoises the (~1 GB combined)
+      # SAW + LLVM + saw-spec-gen downloads across runs. Key off the
+      # installer script — bumping a tool version in it invalidates
+      # the cache automatically.
+      - name: Restore toolchain cache
+        id: restore-toolchain
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.demo_protocol
+          key: ${{ runner.os }}-demo_protocol-toolchain-${{ hashFiles('scripts/ci-install.ps1') }}
+
+      - name: Install verification toolchain
+        shell: pwsh
+        run: pwsh -NoProfile -File scripts/ci-install.ps1 -WriteGithubPath
+
+      # Split restore/save so the (slow) tool install is still cached
+      # even when the verification step itself fails — otherwise
+      # actions/cache@v4 would skip the save on failure and every red
+      # PR run would re-download the SAW + LLVM bundles.
+      - name: Save toolchain cache
+        if: always() && steps.restore-toolchain.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.demo_protocol
+          key: ${{ steps.restore-toolchain.outputs.cache-primary-key }}
+
+      # ── The proof itself ──────────────────────────────────────────
+      - name: Run verify_all.ps1
+        shell: pwsh
+        run: pwsh -NoProfile -File verify_all.ps1
+
+      # ── Failure artefacts ─────────────────────────────────────────
+      # On a red run, surface the per-target SAW logs so reviewers
+      # don't have to re-run the proof locally to diagnose.
+      - name: Upload SAW verify_out on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verify_out-${{ matrix.os }}
+          path: |
+            verify_out/**
+            cpp/saw/out_*/saw_run.log
+            rust/saw/saw_run.log
+            rust/saw/sdep.ll
+            rust/saw/sdep_patched.ll
+          if-no-files-found: ignore
+          retention-days: 14

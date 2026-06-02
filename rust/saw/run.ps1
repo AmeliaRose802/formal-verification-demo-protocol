@@ -23,14 +23,72 @@
 param(
     [string[]] $Only,
     [switch]   $SkipBuild,
-    [string]   $SawExe    = 'C:\Users\ameliapayne\saw-script\dist-newstyle\build\x86_64-windows\ghc-9.6.7\saw-1.5.0.99\x\saw\build\saw\saw.exe',
-    [string]   $SawSpecGen = 'C:\Users\ameliapayne\saw-spec-gen\target\release\saw-spec-gen.exe',
-    [string]   $SolverBin = 'C:\Users\ameliapayne\saw-1.5-windows-2022-X64-with-solvers\bin'
+    # Tool paths.  Empty defaults — discovered from env vars
+    # (SAW_EXE, SAW_SPEC_GEN, SOLVER_BIN, RUSTUP_LLVM_BIN) or PATH below.
+    [string]   $SawExe         = '',
+    [string]   $SawSpecGen     = '',
+    [string]   $SolverBin      = '',
+    [string]   $RustupLlvmBin  = ''
 )
 
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 Push-Location $here
+
+# Tool discovery: explicit -ParameterValue, then env var, then PATH.
+# Identical pattern to cpp/saw/run.ps1 — keeps local dev and CI green
+# without any per-environment plumbing.
+function Resolve-ToolDir {
+    param([string]$Current, [string]$EnvName, [string]$Probe)
+    $envVal = [Environment]::GetEnvironmentVariable($EnvName)
+    if ($envVal -and (Test-Path (Join-Path $envVal $Probe))) { return $envVal }
+    if ($Current -and (Test-Path (Join-Path $Current $Probe))) { return $Current }
+    $cmd = Get-Command ([System.IO.Path]::GetFileNameWithoutExtension($Probe)) -ErrorAction SilentlyContinue
+    if ($cmd) { return Split-Path -Parent $cmd.Path }
+    return $Current
+}
+function Resolve-ToolExe {
+    param([string]$Current, [string]$EnvName, [string]$BinName)
+    $envVal = [Environment]::GetEnvironmentVariable($EnvName)
+    if ($envVal -and (Test-Path $envVal)) { return $envVal }
+    if ($Current -and (Test-Path $Current)) { return $Current }
+    $cmd = Get-Command $BinName -ErrorAction SilentlyContinue
+    if ($cmd) { return $cmd.Path }
+    return $Current
+}
+$exeExt = if ($IsWindows -or $env:OS -eq 'Windows_NT') { '.exe' } else { '' }
+$SolverBin     = Resolve-ToolDir -Current $SolverBin     -EnvName 'SOLVER_BIN'      -Probe ('z3'      + $exeExt)
+$SawExe        = Resolve-ToolExe -Current $SawExe        -EnvName 'SAW_EXE'         -BinName 'saw'
+$SawSpecGen    = Resolve-ToolExe -Current $SawSpecGen    -EnvName 'SAW_SPEC_GEN'    -BinName 'saw-spec-gen'
+# rustup's matching-version llvm-as/opt live under
+#   <sysroot>/lib/rustlib/<target-triple>/bin/
+# after `rustup component add llvm-tools-preview`.  Discover via
+# `rustc --print sysroot` so the script works on any active toolchain.
+if (-not $RustupLlvmBin) {
+    $RustupLlvmBin = [Environment]::GetEnvironmentVariable('RUSTUP_LLVM_BIN')
+}
+if (-not $RustupLlvmBin -or -not (Test-Path (Join-Path $RustupLlvmBin ('llvm-as' + $exeExt)))) {
+    $rustc = Get-Command rustc -ErrorAction SilentlyContinue
+    if ($rustc) {
+        $sysroot = (& $rustc.Path --print sysroot).Trim()
+        $rustlibBin = Get-ChildItem (Join-Path $sysroot 'lib/rustlib') -Directory -ErrorAction SilentlyContinue `
+            | ForEach-Object { Join-Path $_.FullName 'bin' } `
+            | Where-Object { Test-Path (Join-Path $_ ('llvm-as' + $exeExt)) } `
+            | Select-Object -First 1
+        if ($rustlibBin) { $RustupLlvmBin = $rustlibBin }
+    }
+}
+foreach ($t in @(
+    @{ Name='saw';          Path=$SawExe }
+    @{ Name='saw-spec-gen'; Path=$SawSpecGen }
+    @{ Name='z3 (solver)';  Path=(Join-Path $SolverBin ('z3' + $exeExt)) }
+    @{ Name='rustup llvm-as'; Path=(Join-Path $RustupLlvmBin ('llvm-as' + $exeExt)) }
+    @{ Name='rustup opt';     Path=(Join-Path $RustupLlvmBin ('opt'     + $exeExt)) }
+)) {
+    if (-not $t.Path -or -not (Test-Path $t.Path)) {
+        throw ("Required tool '{0}' not found at '{1}'. Set the corresponding env var (SAW_EXE / SAW_SPEC_GEN / SOLVER_BIN / RUSTUP_LLVM_BIN), pass the matching -ParameterValue, or run scripts/ci-install.ps1. For rustup tools: rustup component add llvm-tools-preview" -f $t.Name, $t.Path)
+    }
+}
 
 try {
     # ------------------------------------------------------------------
@@ -78,12 +136,8 @@ try {
         --output .\sdep_patched.ll 2>&1 | Out-Host
     if ($LASTEXITCODE) { throw "patch-llvm-ir failed" }
 
-    $rustupBin = 'C:\Users\ameliapayne\.rustup\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\x86_64-pc-windows-msvc\bin'
-    $llvmAs = Join-Path $rustupBin 'llvm-as.exe'
-    $llvmOpt = Join-Path $rustupBin 'opt.exe'
-    if (-not (Test-Path $llvmAs) -or -not (Test-Path $llvmOpt)) {
-        throw "rustup llvm-tools missing — run: rustup component add llvm-tools-preview"
-    }
+    $llvmAs  = Join-Path $RustupLlvmBin ('llvm-as' + $exeExt)
+    $llvmOpt = Join-Path $RustupLlvmBin ('opt'     + $exeExt)
     & $llvmAs .\sdep_patched.ll -o .\sdep_full.bc
     if ($LASTEXITCODE) { throw "llvm-as failed" }
     Write-Host '  bitcode reassembled' -ForegroundColor DarkGray
@@ -176,7 +230,7 @@ try {
     # ------------------------------------------------------------------
     # 6. Run SAW.
     # ------------------------------------------------------------------
-    $env:PATH = "$SolverBin;$env:PATH"
+    $env:PATH = $SolverBin + [System.IO.Path]::PathSeparator + $env:PATH
     Write-Host '─── running SAW' -ForegroundColor Cyan
     $log = & $SawExe .\verify.saw 2>&1 | Out-String
     $log | Set-Content saw_run.log

@@ -14,15 +14,17 @@
 [CmdletBinding()]
 param(
     [string] $SpecFile   = (Join-Path $PSScriptRoot 'SDEP_gaps.cry'),
-    [string] $CryptolExe = 'C:\Users\ameliapayne\saw-1.5-windows-2022-X64-with-solvers\bin\cryptol.exe'
+    # Empty default — discovered from $env:CRYPTOL_EXE or PATH below.
+    [string] $CryptolExe = ''
 )
 
 $ErrorActionPreference = 'Stop'
 
-if (-not (Test-Path $CryptolExe)) {
+if (-not $CryptolExe) { $CryptolExe = [Environment]::GetEnvironmentVariable('CRYPTOL_EXE') }
+if (-not $CryptolExe -or -not (Test-Path $CryptolExe)) {
     $found = Get-Command cryptol -ErrorAction SilentlyContinue
     if ($found) { $CryptolExe = $found.Path }
-    else { throw "cryptol not found. Pass -CryptolExe <path> or add it to PATH." }
+    else { throw "cryptol not found. Set `$env:CRYPTOL_EXE, pass -CryptolExe <path>, or add cryptol to PATH." }
 }
 if (-not (Test-Path $SpecFile)) { throw "Gap spec file not found: $SpecFile" }
 
