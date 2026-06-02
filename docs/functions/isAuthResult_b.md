@@ -1,4 +1,4 @@
-# `isAuthResult_b`
+# `isAuthResult_b`  ✗
 
 ### Signature
 
@@ -19,6 +19,8 @@
 ```haskell
 isAuthResult_b r = r <= AR_VaultUnavailable_b
 ```
+
+> **Verification failed:** saw-spec-gen failed
 
 Checks whether the auth result b is valid for the given inputs.
 

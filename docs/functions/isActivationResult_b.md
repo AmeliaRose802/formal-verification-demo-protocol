@@ -1,4 +1,4 @@
-# `isActivationResult_b`
+# `isActivationResult_b`  ✗
 
 ### Signature
 
@@ -19,6 +19,8 @@
 ```haskell
 isActivationResult_b r = r <= AC_IoFailure_b
 ```
+
+> **Verification failed:** saw-spec-gen failed
 
 Checks whether the activation result b is valid for the given inputs.
 

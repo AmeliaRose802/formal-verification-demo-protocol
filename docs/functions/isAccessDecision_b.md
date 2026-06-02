@@ -1,4 +1,4 @@
-# `isAccessDecision_b`
+# `isAccessDecision_b`  ✗
 
 ### Signature
 
@@ -19,6 +19,8 @@
 ```haskell
 isAccessDecision_b d = d <= AD_NoRule_b
 ```
+
+> **Verification failed:** saw-spec-gen failed
 
 Checks whether the access decision b is valid for the given inputs.
 

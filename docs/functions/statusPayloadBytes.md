@@ -1,4 +1,4 @@
-# `statusPayloadBytes`
+# `statusPayloadBytes`  ✗
 
 ### Signature
 
@@ -19,6 +19,8 @@
 ```haskell
 statusPayloadBytes s = take`{16} (drop`{2} s)
 ```
+
+> **Verification failed:** saw-spec-gen failed
 
 Computes 16 bytes from `s`.
 

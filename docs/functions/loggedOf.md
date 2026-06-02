@@ -1,4 +1,4 @@
-# `loggedOf`
+# `loggedOf`  ✗
 
 ### Signature
 
@@ -19,6 +19,8 @@
 ```haskell
 loggedOf  r = (r && 0x0100) != 0
 ```
+
+> **Verification failed:** saw-spec-gen failed
 
 Tests whether `r` is well-formed.
 

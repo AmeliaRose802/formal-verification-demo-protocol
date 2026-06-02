@@ -1,4 +1,4 @@
-# `statusEngagedByte`
+# `statusEngagedByte`  ✗
 
 ### Signature
 
@@ -19,6 +19,8 @@
 ```haskell
 statusEngagedByte  s = s @ 18
 ```
+
+> **Verification failed:** saw-spec-gen failed
 
 [getStatus](getStatus.md) result extractors
 EnrollmentStatus byte layout (see [getStatus](getStatus.md) above):

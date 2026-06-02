@@ -1,4 +1,4 @@
-# `isAccessMode_b`
+# `isAccessMode_b`  ✗
 
 ### Signature
 
@@ -19,6 +19,8 @@
 ```haskell
 isAccessMode_b m = m <= AM_Enforce_b
 ```
+
+> **Verification failed:** saw-spec-gen failed
 
 Checks whether the access mode b is valid for the given inputs.
 

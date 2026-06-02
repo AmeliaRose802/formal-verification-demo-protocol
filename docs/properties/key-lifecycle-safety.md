@@ -19,6 +19,11 @@ enrollDevice fleetEnabled validMetadata authResult AC_AlreadyActive_b
 
 </details>
 
+> ⚠ **Implementation equivalence is incomplete.** This property holds against the Cryptol model. For the guarantee to carry over to the compiled code, every involved function must also have a SAW equivalence proof.
+>
+> - ✓ proven equivalent: `enrollDevice`
+> - ✗ equivalence proof **failed**: `isAuthResult_b`
+
 **Involved:** [`AC_AlreadyActive_b`](../functions/AC_AlreadyActive_b.md), [`ER_Succeeded_b`](../functions/ER_Succeeded_b.md), [`enrollDevice`](../functions/enrollDevice.md), [`isAuthResult_b`](../functions/isAuthResult_b.md)
 
 ### P2 — Active Key Blocks Provisioning
@@ -40,6 +45,11 @@ provisionKey fleetEnabled validRequest vaultResult True
 
 </details>
 
+> ⚠ **Implementation equivalence is incomplete.** This property holds against the Cryptol model. For the guarantee to carry over to the compiled code, every involved function must also have a SAW equivalence proof.
+>
+> - ✓ proven equivalent: `provisionKey`
+> - ✗ equivalence proof **failed**: `isKeyVaultResult_b`
+
 **Involved:** [`KV_Ok_b`](../functions/KV_Ok_b.md), [`PR_Unauthorized_b`](../functions/PR_Unauthorized_b.md), [`isKeyVaultResult_b`](../functions/isKeyVaultResult_b.md), [`provisionKey`](../functions/provisionKey.md)
 
 ### P3 — Key Id Hidden Before Activation
@@ -53,6 +63,10 @@ statusEngagedByte (getStatus fleetEnabled hasKey False keyId preBytes) == 0
 ```
 
 </details>
+
+> ⚠ **Implementation equivalence is incomplete.** This property holds against the Cryptol model. For the guarantee to carry over to the compiled code, every involved function must also have a SAW equivalence proof.
+>
+> - ✗ equivalence proof **failed**: `getStatus`, `statusEngagedByte`
 
 **Involved:** [`getStatus`](../functions/getStatus.md), [`statusEngagedByte`](../functions/statusEngagedByte.md)
 
@@ -68,6 +82,10 @@ P4: Key ID is revealed after activation.
 ```
 
 </details>
+
+> ⚠ **Implementation equivalence is incomplete.** This property holds against the Cryptol model. For the guarantee to carry over to the compiled code, every involved function must also have a SAW equivalence proof.
+>
+> - ✗ equivalence proof **failed**: `getStatus`, `statusEngagedByte`, `statusPayloadBytes`
 
 **Involved:** [`getStatus`](../functions/getStatus.md), [`statusEngagedByte`](../functions/statusEngagedByte.md), [`statusPayloadBytes`](../functions/statusPayloadBytes.md)
 
@@ -88,6 +106,11 @@ isActivationResult_b activationResult ==>
 ```
 
 </details>
+
+> ⚠ **Implementation equivalence is incomplete.** This property holds against the Cryptol model. For the guarantee to carry over to the compiled code, every involved function must also have a SAW equivalence proof.
+>
+> - ✓ proven equivalent: `enrollDevice`, `provisionKey`
+> - ✗ equivalence proof **failed**: `isActivationResult_b`, `isAuthResult_b`, `isKeyVaultResult_b`
 
 **Involved:** [`ER_Disabled_b`](../functions/ER_Disabled_b.md), [`PR_Disabled_b`](../functions/PR_Disabled_b.md), [`enrollDevice`](../functions/enrollDevice.md), [`isActivationResult_b`](../functions/isActivationResult_b.md), [`isAuthResult_b`](../functions/isAuthResult_b.md), [`isKeyVaultResult_b`](../functions/isKeyVaultResult_b.md), [`provisionKey`](../functions/provisionKey.md)
 

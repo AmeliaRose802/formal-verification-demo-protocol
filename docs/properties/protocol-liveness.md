@@ -14,6 +14,8 @@ provisionKey True True KV_Ok_b False == PR_Succeeded_b
 
 </details>
 
+> ✓ **Implementation equivalence proven.** All 1 involved function(s) have a SAW equivalence proof against the C++/Rust implementation, so this property's guarantee transfers to the compiled code.
+
 **Involved:** [`KV_Ok_b`](../functions/KV_Ok_b.md), [`PR_Succeeded_b`](../functions/PR_Succeeded_b.md), [`provisionKey`](../functions/provisionKey.md)
 
 ### P16 — Authenticated Enrollment Succeeds
@@ -27,6 +29,8 @@ enrollDevice True True AR_Authenticated_b AC_Success_b == ER_Succeeded_b
 ```
 
 </details>
+
+> ✓ **Implementation equivalence proven.** All 1 involved function(s) have a SAW equivalence proof against the C++/Rust implementation, so this property's guarantee transfers to the compiled code.
 
 **Involved:** [`AC_Success_b`](../functions/AC_Success_b.md), [`AR_Authenticated_b`](../functions/AR_Authenticated_b.md), [`ER_Succeeded_b`](../functions/ER_Succeeded_b.md), [`enrollDevice`](../functions/enrollDevice.md)
 
@@ -47,6 +51,8 @@ isValidRequestDate requestTs (requestTs + window) window == True
 
 </details>
 
+> ✓ **Implementation equivalence proven.** All 1 involved function(s) have a SAW equivalence proof against the C++/Rust implementation, so this property's guarantee transfers to the compiled code.
+
 **Involved:** [`isValidRequestDate`](../functions/isValidRequestDate.md)
 
 ### P18 — Timestamp Beyond Boundary Rejected
@@ -63,6 +69,8 @@ isValidRequestDate requestTs currentTime window == False
 ```
 
 </details>
+
+> ✓ **Implementation equivalence proven.** All 1 involved function(s) have a SAW equivalence proof against the C++/Rust implementation, so this property's guarantee transfers to the compiled code.
 
 **Involved:** [`isValidRequestDate`](../functions/isValidRequestDate.md)
 

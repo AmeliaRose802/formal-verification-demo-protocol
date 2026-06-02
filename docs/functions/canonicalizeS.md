@@ -1,4 +1,4 @@
-# `canonicalizeS`
+# `canonicalizeS`  ✗
 
 ### Signature
 
@@ -24,6 +24,8 @@ canonicalizeS r =
   # lpField r.path
   # (split r.timestamp : [8][8])
 ```
+
+> **Verification failed:** saw-spec-gen failed
 
 Computes 3 * (1 + [StructFieldLen](../types.md#structfieldlen)) + [MaxHeaders](../types.md#maxheaders) * 2 * (1 + [StructFieldLen](../types.md#structfieldlen)) + 8 bytes from `r`.
 

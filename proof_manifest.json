@@ -1,0 +1,131 @@
+{
+  "functions": {
+    "ER_Disabled_b": {
+      "overall": {
+        "reason": "saw-spec-gen failed",
+        "status": "failed"
+      }
+    },
+    "FM_Disabled_b": {
+      "overall": {
+        "reason": "saw-spec-gen failed",
+        "status": "failed"
+      }
+    },
+    "PR_Disabled_b": {
+      "overall": {
+        "reason": "saw-spec-gen failed",
+        "status": "failed"
+      }
+    },
+    "allowedOf": {
+      "overall": {
+        "reason": "saw-spec-gen failed",
+        "status": "failed"
+      }
+    },
+    "authenticate": {
+      "overall": {
+        "solver": "z3",
+        "status": "proven"
+      }
+    },
+    "canonicalizeS": {
+      "overall": {
+        "reason": "saw-spec-gen failed",
+        "status": "failed"
+      }
+    },
+    "canonicalize_lp_post": {
+      "overall": {
+        "reason": "saw-spec-gen failed",
+        "status": "failed"
+      }
+    },
+    "canonicalize_lp_ret": {
+      "overall": {
+        "reason": "saw-spec-gen failed",
+        "status": "failed"
+      }
+    },
+    "enforceAccess": {
+      "overall": {
+        "solver": "z3",
+        "status": "proven"
+      }
+    },
+    "enrollDevice": {
+      "overall": {
+        "solver": "z3",
+        "status": "proven"
+      }
+    },
+    "getStatus": {
+      "overall": {
+        "reason": "verify script exited with code 2",
+        "status": "failed"
+      }
+    },
+    "isAccessDecision_b": {
+      "overall": {
+        "reason": "saw-spec-gen failed",
+        "status": "failed"
+      }
+    },
+    "isAccessMode_b": {
+      "overall": {
+        "reason": "saw-spec-gen failed",
+        "status": "failed"
+      }
+    },
+    "isActivationResult_b": {
+      "overall": {
+        "reason": "saw-spec-gen failed",
+        "status": "failed"
+      }
+    },
+    "isAuthResult_b": {
+      "overall": {
+        "reason": "saw-spec-gen failed",
+        "status": "failed"
+      }
+    },
+    "isKeyVaultResult_b": {
+      "overall": {
+        "reason": "saw-spec-gen failed",
+        "status": "failed"
+      }
+    },
+    "isValidRequestDate": {
+      "overall": {
+        "solver": "z3",
+        "status": "proven"
+      }
+    },
+    "loggedOf": {
+      "overall": {
+        "reason": "saw-spec-gen failed",
+        "status": "failed"
+      }
+    },
+    "provisionKey": {
+      "overall": {
+        "solver": "z3",
+        "status": "proven"
+      }
+    },
+    "statusEngagedByte": {
+      "overall": {
+        "reason": "saw-spec-gen failed",
+        "status": "failed"
+      }
+    },
+    "statusPayloadBytes": {
+      "overall": {
+        "reason": "saw-spec-gen failed",
+        "status": "failed"
+      }
+    }
+  },
+  "properties": {}
+}

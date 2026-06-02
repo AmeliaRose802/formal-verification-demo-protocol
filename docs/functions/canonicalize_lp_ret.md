@@ -1,4 +1,4 @@
-# `canonicalize_lp_ret`
+# `canonicalize_lp_ret`  ✗
 
 ### Signature
 
@@ -20,6 +20,8 @@
 ```haskell
 canonicalize_lp_ret nm nb = (zext nm) + (zext nb) + 2
 ```
+
+> **Verification failed:** saw-spec-gen failed
 
 Return value of canonicalize_lp: total bytes written = 2 + nm + nb.
 

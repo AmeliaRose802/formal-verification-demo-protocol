@@ -1,4 +1,4 @@
-# `canonicalize_lp_post`
+# `canonicalize_lp_post`  ✗
 
 ### Signature
 
@@ -32,6 +32,8 @@ canonicalize_lp_post nm m nb b preOut =
        | (i >= nm + 2) /\ (i < nm + nb + 2)  then b @ ((i - nm - 2) % 4)
       else                                        preOut @ i
 ```
+
+> **Verification failed:** saw-spec-gen failed
 
 Length-prefixed canonicalization writes
 
