@@ -28,6 +28,16 @@ on:
       - 'Dockerfile'
       - 'scripts/ci-install.ps1'
       - '.github/workflows/publish-ci-image.yml'
+  # Also build (and push) the image from PR branches that touch the
+  # Dockerfile / installer so the verify-linux job in the same PR can
+  # pull a matching :latest. Without this the first time a PR introduces
+  # this workflow the verify job has nothing to pull.
+  pull_request:
+    branches: [main]
+    paths:
+      - 'Dockerfile'
+      - 'scripts/ci-install.ps1'
+      - '.github/workflows/publish-ci-image.yml'
   workflow_dispatch:
 
 permissions:

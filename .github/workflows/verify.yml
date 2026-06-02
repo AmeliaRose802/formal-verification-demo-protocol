@@ -106,6 +106,49 @@ jobs:
       - name: Run C++ tests (ctest)
         run: ctest --test-dir cpp/build -C Release --output-on-failure
 
+  # ── Wait for the pre-baked toolchain image to be available ────────
+  # The image is published by .github/workflows/publish-ci-image.yml,
+  # which fires on the same PR push when the Dockerfile / installer
+  # changes. verify-linux runs `container: ghcr.io/.../latest` which
+  # pulls before any step runs, so we can't wait *inside* that job —
+  # if `:latest` doesn't exist yet the runner fails at image-pull.
+  # This job blocks verify-linux until the registry has a usable tag,
+  # giving the publish workflow time to finish. On PRs that don't
+  # change the image, `:latest` is already there and this returns
+  # almost immediately.
+  wait-for-image:
+    name: wait for CI image
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Poll GHCR for ghcr.io/.../formal-verification-demo-protocol-ci:latest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          owner_lower="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
+          repo_lower="$(basename '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
+          image="ghcr.io/${owner_lower}/${repo_lower}-ci:latest"
+          echo "Polling for ${image}..."
+          # Use the Docker Registry HTTP API directly; gh CLI / docker
+          # pull would also work but the manifest endpoint is the
+          # cheapest readiness probe and works against private packages
+          # with GITHUB_TOKEN.
+          token="$(echo -n "${{ github.actor }}:${GH_TOKEN}" | base64 -w0)"
+          for i in $(seq 1 60); do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' \
+              -H "Authorization: Bearer ${token}" \
+              -H "Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.v2+json" \
+              "https://ghcr.io/v2/${owner_lower}/${repo_lower}-ci/manifests/latest" || echo 000)
+            if [ "${code}" = "200" ]; then
+              echo "Image ready (HTTP ${code}) after $((i*15))s."
+              exit 0
+            fi
+            echo "  [$i/60] not ready (HTTP ${code}), sleeping 15s..."
+            sleep 15
+          done
+          echo "::error::CI image never became ready. Check the 'Publish CI image' workflow."
+          exit 1
+
   # ── Slow lane (Linux): full 4-layer SAW + Cryptol proof, in container ─
   # Runs inside the pre-baked image published by publish-ci-image.yml.
   # The image already contains LLVM 20.1.6, SAW 1.5, PowerShell 7,
@@ -117,6 +160,7 @@ jobs:
   verify-linux:
     name: verify (ubuntu-22.04, container)
     runs-on: ubuntu-22.04
+    needs: wait-for-image
     timeout-minutes: 60
     container:
       image: ghcr.io/ameliarose802/formal-verification-demo-protocol-ci:latest
