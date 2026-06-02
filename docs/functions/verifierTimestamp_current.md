@@ -3,36 +3,26 @@
 ### Signature
 
 **Parameters**
-- `r`: [RequestS](../SDEP/types.md#requests)
-- `_`: [Timestamp](../SDEP/types.md#timestamp)
+- `r`: [StructuredRequest](../types.md#structuredrequest)
+- `_`: [64]
 
 **Returns**
-- [Timestamp](../SDEP/types.md#timestamp)
+- [64]
 
 <details><summary>Raw signature</summary>
 
-`RequestS -> Timestamp -> Timestamp`
+`StructuredRequest -> [64] -> [64]`
 
 </details>
 
-The timestamp the verifier validates must equal the timestamp inside the
-signed request — otherwise an attacker can replay a stale signed request
-with a fresh "current time" supplied by the caller and pass the freshness
-check despite the signature being over old bytes.
-The implementation now binds the timestamp into the request: it is a
-field of `DeviceRequest`, is included in the canonical signed bytes by
-`canonicalizePayload`, and is the only value `handle_activate` passes
-to `[isValidRequestDate](../SDEP/functions/isValidRequestDate.md)`. The Cryptol model below mirrors that: the
-verifier extracts `r.timestamp` and the caller-supplied parameter (if
-any) is unused — a pure transport-layer artefact.
+### Formal definition (Cryptol)
 
-### Related Properties
-- [P29 — Verifier Uses Request Bound Timestamp](../SDEP/properties/timestamp-binding.md#p29--verifier-uses-request-bound-timestamp)
-
-<details><summary>Formal definition (Cryptol)</summary>
-
-```cryptol
+```haskell
 verifierTimestamp_current r _ = r.timestamp
 ```
 
-</details>
+Computes 64 bits from `r` and `_`.
+
+### Related Properties
+- [P29 — Verifier Uses Request Bound Timestamp](../properties/structured-request-properties.md#p29--verifier-uses-request-bound-timestamp)
+

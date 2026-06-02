@@ -14,14 +14,14 @@ namespace sdep {
 
 inline constexpr std::int64_t kDefaultDateWindowSeconds = 900; // 15 minutes
 
-// §4.3.1
-[[nodiscard]] constexpr bool
+// §4.3.1 — bounded freshness check on a wire-supplied request timestamp.
+//
+// See cpp/src/decision.cpp for the security-relevant signed-overflow
+// rationale; the SAW proof of this function is what fixed that.
+[[nodiscard]] bool
 isValidRequestDate(std::int64_t requestTimestamp,
                    std::int64_t currentTime,
-                   std::int64_t windowSeconds = kDefaultDateWindowSeconds) noexcept {
-    return requestTimestamp <= currentTime
-        && (currentTime - requestTimestamp) <= windowSeconds;
-}
+                   std::int64_t windowSeconds = kDefaultDateWindowSeconds) noexcept;
 
 // §4.3.2 — HMAC-SHA256 + constant-time compare.
 [[nodiscard]] bool
@@ -34,10 +34,8 @@ isValidSignature(std::span<const std::uint8_t> key,
 isValidClaims(std::string_view claimsJson,
               const std::vector<std::string>& requiredClaims);
 
-// §4.3
-[[nodiscard]] constexpr bool
-authenticate(bool dateValid, bool signatureValid, bool claimsValid) noexcept {
-    return dateValid && signatureValid && claimsValid;
-}
+// §4.3 — composite authentication decision.
+[[nodiscard]] bool
+authenticate(bool dateValid, bool signatureValid, bool claimsValid) noexcept;
 
 } // namespace sdep

@@ -20,6 +20,7 @@ try {
     New-Item -ItemType Directory -Force -Path $BuildDir | Out-Null
 
     $sources = @(
+        'src/decision.cpp',     # Pure decision logic verified by SAW.
         'src/hmac.cpp',
         'src/canonical.cpp',
         'src/auth.cpp',

@@ -25,33 +25,20 @@ namespace sdep {
 //
 // Writes the byte stream
 //
-//     out[0]            = nm
-//     out[1..1+nm)      = m[0..nm)
-//     out[1+nm]         = nb
-//     out[2+nm..2+nm+nb) = b[0..nb)
+//     out[0]              = nm
+//     out[1..1+nm)        = m[0..nm)
+//     out[1+nm]           = nb
+//     out[2+nm..2+nm+nb)  = b[0..nb)
 //
-// (total 2 + nm + nb bytes) into `out`. Caller must size `out` to at least
-// 2 + nm + nb bytes. Bytes past index 2+nm+nb in `out` are not touched.
-// Returns the number of bytes written.
-[[nodiscard]] inline std::size_t
+// (total 2 + nm + nb bytes) into `out`. Caller must size `out` to at
+// least 2 + nm + nb bytes. Bytes past index 2+nm+nb in `out` are not
+// touched. Returns the number of bytes written.
+//
+// Body lives in cpp/src/decision.cpp; SAW verifies that bitcode TU
+// directly against the canonicalize_lp_post Cryptol model in SDEP_cpp.cry.
+[[nodiscard]] std::size_t
 canonicalize_lp(std::uint8_t* out,
                 const std::uint8_t* m, std::uint8_t nm,
-                const std::uint8_t* b, std::uint8_t nb) noexcept
-{
-    std::size_t pos = 0;
-    out[pos] = nm;
-    ++pos;
-    for (std::uint8_t i = 0; i < nm; ++i) {
-        out[pos] = m[i];
-        ++pos;
-    }
-    out[pos] = nb;
-    ++pos;
-    for (std::uint8_t i = 0; i < nb; ++i) {
-        out[pos] = b[i];
-        ++pos;
-    }
-    return pos;
-}
+                const std::uint8_t* b, std::uint8_t nb) noexcept;
 
 } // namespace sdep

@@ -8,7 +8,16 @@
 [CmdletBinding()]
 param(
     [string] $SpecFile   = (Join-Path $PSScriptRoot 'SDEP.cry'),
-    [string] $CryptolExe = 'C:\Users\ameliapayne\saw-1.5-windows-2022-X64-with-solvers\bin\cryptol.exe'
+    [string] $CryptolExe = 'C:\Users\ameliapayne\saw-1.5-windows-2022-X64-with-solvers\bin\cryptol.exe',
+    # Optional: emit a SAW-style log (one "Proving NAME ..." + verdict per
+    # property) that pretty-specs' --adapt-saw-log can ingest to attach
+    # badges in the rendered docs.
+    [string] $SawLogFile = '',
+    # When set, treat counterexamples as informational (still printed in red,
+    # still recorded as FAIL in the SAW log) but don't make the script exit 1.
+    # Used by spec files that include intentional-counterexample demos so the
+    # overall verification pipeline stays green.
+    [switch] $AllowFailures
 )
 
 $ErrorActionPreference = 'Stop'
@@ -96,4 +105,22 @@ $fail = ($results | Where-Object Verdict -eq 'FAIL').Count
 Write-Host ''
 Write-Host "  $pass passed, $fail failed (of $($results.Count) checked)" -ForegroundColor Cyan
 
-if ($fail -gt 0) { exit 1 }
+# Optional pretty-specs-friendly SAW-style log.  pretty-specs's
+# --adapt-saw-log expects "Proving <name> ..." followed by either
+# "Q.E.D." (proven) or "Counterexample" (failed).
+if ($SawLogFile) {
+    $logLines = @()
+    foreach ($r in $results) {
+        $logLines += "Proving $($r.Property) ..."
+        if ($r.Verdict -eq 'PASS') {
+            $logLines += 'Q.E.D.'
+        } else {
+            $logLines += 'Counterexample'
+            if ($r.Detail) { $logLines += "  $($r.Detail)" }
+        }
+    }
+    Set-Content -Path $SawLogFile -Value ($logLines -join "`n") -Encoding ASCII
+    Write-Host "  wrote SAW-style log to $SawLogFile" -ForegroundColor DarkGray
+}
+
+if ($fail -gt 0 -and -not $AllowFailures) { exit 1 }

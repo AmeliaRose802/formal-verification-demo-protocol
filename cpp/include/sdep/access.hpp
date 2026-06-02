@@ -1,29 +1,15 @@
 // SPDX-License-Identifier: MIT
 // SDEP — Access enforcement (§4.5).
+//
+// Body lives in cpp/src/decision.cpp alongside the other pure decision
+// targets so the SAW pipeline can verify one bitcode TU directly.
 #pragma once
 
 #include "sdep/types.hpp"
 
 namespace sdep {
 
-[[nodiscard]] constexpr EnforceOutcome
-enforceAccess(AccessMode mode, AccessDecision decision) noexcept {
-    switch (mode) {
-        case AccessMode::Off:
-            return {true, false};
-        case AccessMode::Audit:
-            return (decision == AccessDecision::Deny)
-                ? EnforceOutcome{true, true}
-                : EnforceOutcome{true, false};
-        case AccessMode::Enforce:
-            switch (decision) {
-                case AccessDecision::Allow:  return {true,  false};
-                case AccessDecision::Deny:   return {false, true};
-                case AccessDecision::NoRule: return {true,  false};
-            }
-            return {true, false}; // unreachable, defensive
-    }
-    return {true, false}; // unreachable
-}
+[[nodiscard]] EnforceOutcome
+enforceAccess(AccessMode mode, AccessDecision decision) noexcept;
 
 } // namespace sdep

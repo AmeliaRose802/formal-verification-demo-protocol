@@ -3,37 +3,32 @@
 ### Signature
 
 **Parameters**
-- `nm`: [[IW](../SDEP/types.md#iw)]
-- `m`: [[FL](../SDEP/types.md#fl)][8]
-- `nb`: [[IW](../SDEP/types.md#iw)]
-- `b`: [[FL](../SDEP/types.md#fl)][8]
+- `nm`: [[IndexWidth](../types.md#indexwidth)]
+- `m`: [[FieldLen](../types.md#fieldlen)][8]
+- `nb`: [[IndexWidth](../types.md#indexwidth)]
+- `b`: [[FieldLen](../types.md#fieldlen)][8]
 
 **Returns**
-- [2 * [FL](../SDEP/types.md#fl) + 2][8]
+- [2 * [FieldLen](../types.md#fieldlen) + 2][8]
 
 <details><summary>Raw signature</summary>
 
-`[IW] -> [FL][8] -> [IW] -> [FL][8] -> [2 * FL + 2][8]`
+`[IndexWidth] -> [FieldLen][8] -> [IndexWidth] -> [FieldLen][8] -> [2 * FieldLen + 2][8]`
 
 </details>
 
-Length-prefixed canonicalization. Each variable-length field is preceded
-by its length tag: a parser reads the tag, then exactly that many bytes,
-then the next tag, then exactly that many bytes. No byte inside any field
-can be misread as a boundary, so the encoding is structurally injective.
-The Cryptol bound uses an 8-bit length tag (sufficient for [FL](../SDEP/types.md#fl) <= 255);
-production uses a 64-bit big-endian tag (sufficient for any std::size_t /
-usize field). The injectivity argument is identical for both widths.
+### Formal definition (Cryptol)
 
-### Related Properties
-- [P23 — Distinct Requests Have Distinct Canonical Bytes](../SDEP/properties/error-handling.md#p23--distinct-requests-have-distinct-canonical-bytes)
-- [P24 — Distinct Headers Have Distinct Canonical Bytes](../SDEP/properties/error-handling.md#p24--distinct-headers-have-distinct-canonical-bytes)
-- [P25 — Distinct Queries Have Distinct Canonical Bytes](../SDEP/properties/error-handling.md#p25--distinct-queries-have-distinct-canonical-bytes)
-
-<details><summary>Formal definition (Cryptol)</summary>
-
-```cryptol
+```haskell
 canonLenPrefixed nm m nb b = [nm] # m # [nb] # b
 ```
 
-</details>
+Bounded model writes a one-byte length tag followed by the [FieldLen](../types.md#fieldlen)-byte
+field buffer. Production uses a 64-bit big-endian tag, but the
+injectivity argument that [P23](../properties/canonicalization-byte-injectivity.md#p23--distinct-requests-have-distinct-canonical-bytes)-[P25](../properties/canonicalization-byte-injectivity.md#p25--distinct-queries-have-distinct-canonical-bytes) rely on is identical at any width.
+
+### Related Properties
+- [P23 — Distinct Requests Have Distinct Canonical Bytes](../properties/canonicalization-byte-injectivity.md#p23--distinct-requests-have-distinct-canonical-bytes)
+- [P24 — Distinct Headers Have Distinct Canonical Bytes](../properties/canonicalization-byte-injectivity.md#p24--distinct-headers-have-distinct-canonical-bytes)
+- [P25 — Distinct Queries Have Distinct Canonical Bytes](../properties/canonicalization-byte-injectivity.md#p25--distinct-queries-have-distinct-canonical-bytes)
+

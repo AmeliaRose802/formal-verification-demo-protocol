@@ -6,8 +6,8 @@
         "src": "docs"
       },
       {
-        "files": [ "SPEC.md" ],
-        "src": "."
+        "files": [ "spec.md" ],
+        "src": "cryptol"
       }
     ],
     "resource": [
@@ -26,9 +26,6 @@
         "repo": "https://github.com/AmeliaRose802/formal-verification-demo-protocol",
         "branch": "main"
       }
-    },
-    "markdownEngineProperties": {
-      "markdigExtensions": [ "all" ]
     },
     "template": [ "default", "modern" ],
     "dest": "_site"

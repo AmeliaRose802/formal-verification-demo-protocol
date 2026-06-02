@@ -1,29 +1,22 @@
-# `canonicalizeS`
+# `canonicalizeS`  ✗
 
 ### Signature
 
 **Parameters**
-- `r`: [RequestS](../SDEP/types.md#requests)
+- `r`: [StructuredRequest](../types.md#structuredrequest)
 
 **Returns**
-- [3 * (1 + [FLs](../SDEP/types.md#fls)) + [Ns](../SDEP/types.md#ns) * 2 * (1 + [FLs](../SDEP/types.md#fls)) + 8][8]
+- [3 * (1 + [StructFieldLen](../types.md#structfieldlen)) + [MaxHeaders](../types.md#maxheaders) * 2 * (1 + [StructFieldLen](../types.md#structfieldlen)) + 8][8]
 
 <details><summary>Raw signature</summary>
 
-`RequestS -> [3 * (1 + FLs) + Ns * 2 * (1 + FLs) + 8][8]`
+`StructuredRequest -> [3 * (1 + StructFieldLen) + MaxHeaders * 2 * (1 + StructFieldLen) + 8][8]`
 
 </details>
 
-Concrete canonicalize: length-prefixed method, body, headers (with
-auth-header exclusion), path, then the 8-byte big-endian timestamp.
-Mirrors the production C++/Rust encoder shape.
+### Formal definition (Cryptol)
 
-### Related Properties
-- [P28 — Auth Header Value Excluded From Canonicalization](../SDEP/properties/auth-header-exclusion.md#p28--auth-header-value-excluded-from-canonicalization)
-
-<details><summary>Formal definition (Cryptol)</summary>
-
-```cryptol
+```haskell
 canonicalizeS r =
     lpField r.method
   # lpField r.body
@@ -32,4 +25,10 @@ canonicalizeS r =
   # (split r.timestamp : [8][8])
 ```
 
-</details>
+> **Verification failed:** saw-spec-gen failed
+
+Computes 3 * (1 + [StructFieldLen](../types.md#structfieldlen)) + [MaxHeaders](../types.md#maxheaders) * 2 * (1 + [StructFieldLen](../types.md#structfieldlen)) + 8 bytes from `r`.
+
+### Related Properties
+- [P28 — Auth Header Value Excluded From Canonicalization](../properties/structured-request-properties.md#p28--auth-header-value-excluded-from-canonicalization)
+

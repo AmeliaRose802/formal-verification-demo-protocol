@@ -3,23 +3,22 @@
 ### Signature
 
 **Parameters**
-- `f`: [Field](../SDEP/types.md#field)
+- `f`: [Field](../types.md#field)
 
 **Returns**
-- [1 + [FLs](../SDEP/types.md#fls)][8]
+- [1 + [StructFieldLen](../types.md#structfieldlen)][8]
 
 <details><summary>Raw signature</summary>
 
-`Field -> [1 + FLs][8]`
+`Field -> [1 + StructFieldLen][8]`
 
 </details>
 
-Length-prefix a [Field](../SDEP/types.md#field) as [len-byte] # buf.
+### Formal definition (Cryptol)
 
-<details><summary>Formal definition (Cryptol)</summary>
-
-```cryptol
+```haskell
 lpField f = [f.len] # f.buf
 ```
 
-</details>
+Computes 1 + [StructFieldLen](../types.md#structfieldlen) bytes from `f`.
+

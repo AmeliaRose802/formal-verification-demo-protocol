@@ -3,6 +3,11 @@
 //
 // These are the functions targeted by the SAW/Z3 verification: they take
 // pre-resolved inputs (booleans + enum tags) and return a result. No I/O.
+//
+// Bodies live in cpp/src/decision.cpp so a single LLVM symbol per
+// function is emitted — that is the symbol SAW verifies. Production
+// builds inline these calls through LTO when profitable; inlining is
+// observationally equivalent so it preserves the proof.
 #pragma once
 
 #include "sdep/request.hpp"
@@ -11,56 +16,24 @@
 namespace sdep {
 
 // §4.1
-[[nodiscard]] constexpr ProvisionResult
+[[nodiscard]] ProvisionResult
 provisionKey(bool fleetEnabled,
              bool validRequest,
              KeyVaultResult vaultResult,
-             bool keyIsActive) noexcept {
-    if (!fleetEnabled)                  return ProvisionResult::Disabled;
-    if (!validRequest)                  return ProvisionResult::BadRequest;
-    if (vaultResult != KeyVaultResult::Ok)
-                                        return ProvisionResult::InternalError;
-    if (keyIsActive)                    return ProvisionResult::Unauthorized;
-    return ProvisionResult::Succeeded;
-}
+             bool keyIsActive) noexcept;
 
 // §4.2
-[[nodiscard]] constexpr EnrollmentResult
+[[nodiscard]] EnrollmentResult
 enrollDevice(bool fleetEnabled,
              bool validMetadata,
              AuthResult authResult,
-             ActivationResult activationResult) noexcept {
-    if (!fleetEnabled)  return EnrollmentResult::Disabled;
-    if (!validMetadata) return EnrollmentResult::Unauthorized;
-
-    switch (authResult) {
-        case AuthResult::Authenticated:
-            switch (activationResult) {
-                case ActivationResult::Success:       return EnrollmentResult::Succeeded;
-                case ActivationResult::AlreadyActive: return EnrollmentResult::Unauthorized;
-                case ActivationResult::IoFailure:     return EnrollmentResult::InternalError;
-            }
-            return EnrollmentResult::InternalError; // unreachable, defensive
-        case AuthResult::VaultUnavailable:
-            return EnrollmentResult::InternalError;
-        case AuthResult::Unauthenticated:
-            return EnrollmentResult::Unauthorized;
-    }
-    return EnrollmentResult::Unauthorized; // unreachable
-}
+             ActivationResult activationResult) noexcept;
 
 // §4.6
-[[nodiscard]] constexpr EnrollmentStatus
+[[nodiscard]] EnrollmentStatus
 getStatus(bool fleetEnabled,
           bool hasKey,
           bool keyIsActive,
-          const Uuid& keyId) noexcept {
-    return EnrollmentStatus{
-        .fleetMode = fleetEnabled ? FleetMode::Enabled : FleetMode::Disabled,
-        .hasKey    = hasKey,
-        .keyId     = keyIsActive ? std::optional<Uuid>{keyId} : std::nullopt,
-        .isActive  = keyIsActive,
-    };
-}
+          const Uuid& keyId) noexcept;
 
 } // namespace sdep

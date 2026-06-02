@@ -6,7 +6,7 @@ on:
     paths:
       - 'docs/**'
       - 'docfx.json'
-      - 'SPEC.md'
+      - 'cryptol/spec.md'
       - 'proof_manifest.json'
       - '.github/workflows/pages.yml'
   workflow_dispatch:

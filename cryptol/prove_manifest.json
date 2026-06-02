@@ -1,0 +1,121 @@
+{
+  "functions": {},
+  "properties": {
+    "P10_MissingMetadataIsUnauthorized": {
+      "solver": "saw",
+      "status": "proven"
+    },
+    "P11_AccessOffAllowsWithoutLogging": {
+      "solver": "saw",
+      "status": "proven"
+    },
+    "P12_AccessAuditNeverDenies": {
+      "solver": "saw",
+      "status": "proven"
+    },
+    "P13_AccessEnforceBlocksDenials": {
+      "solver": "saw",
+      "status": "proven"
+    },
+    "P14_AccessEnforceAllowsPermitted": {
+      "solver": "saw",
+      "status": "proven"
+    },
+    "P15_AuthorizedRequestOnInactiveKeySucceeds": {
+      "solver": "saw",
+      "status": "proven"
+    },
+    "P16_AuthenticatedEnrollmentSucceeds": {
+      "solver": "saw",
+      "status": "proven"
+    },
+    "P17_TimestampAtBoundaryAccepted": {
+      "solver": "saw",
+      "status": "proven"
+    },
+    "P18_TimestampBeyondBoundaryRejected": {
+      "solver": "saw",
+      "status": "proven"
+    },
+    "P19_VaultUnavailableIsInternalError": {
+      "solver": "saw",
+      "status": "proven"
+    },
+    "P1_ActiveKeyCannotBeReactivated": {
+      "solver": "saw",
+      "status": "proven"
+    },
+    "P20_InvalidRequestIsBadRequest": {
+      "solver": "saw",
+      "status": "proven"
+    },
+    "P21_ActivateWithoutMetadataIsUnauthorized": {
+      "solver": "saw",
+      "status": "proven"
+    },
+    "P22_ActivationIoFailureIsInternalError": {
+      "solver": "saw",
+      "status": "proven"
+    },
+    "P23_DistinctRequestsHaveDistinctCanonicalBytes": {
+      "solver": "saw",
+      "status": "proven"
+    },
+    "P24_DistinctHeadersHaveDistinctCanonicalBytes": {
+      "solver": "saw",
+      "status": "proven"
+    },
+    "P25_DistinctQueriesHaveDistinctCanonicalBytes": {
+      "solver": "saw",
+      "status": "proven"
+    },
+    "P26_EnforceWithoutRuleAllowsSilently": {
+      "solver": "saw",
+      "status": "proven"
+    },
+    "P27_AuditLogsOnlyOnDenial": {
+      "solver": "saw",
+      "status": "proven"
+    },
+    "P28_AuthHeaderValueExcludedFromCanonicalization": {
+      "solver": "saw",
+      "status": "proven"
+    },
+    "P29_VerifierUsesRequestBoundTimestamp": {
+      "solver": "saw",
+      "status": "proven"
+    },
+    "P2_ActiveKeyBlocksProvisioning": {
+      "solver": "saw",
+      "status": "proven"
+    },
+    "P3_KeyIdHiddenBeforeActivation": {
+      "solver": "saw",
+      "status": "proven"
+    },
+    "P4_KeyIdRevealedAfterActivation": {
+      "solver": "saw",
+      "status": "proven"
+    },
+    "P5_DisabledFleetRejectsEverything": {
+      "solver": "saw",
+      "status": "proven"
+    },
+    "P6_AuthRejectsInvalidDate": {
+      "solver": "saw",
+      "status": "proven"
+    },
+    "P7_AuthRejectsInvalidSignature": {
+      "solver": "saw",
+      "status": "proven"
+    },
+    "P8_CorrectHmacVerifies": {
+      "solver": "saw",
+      "status": "proven"
+    },
+    "P9_WrongHmacFails": {
+      "solver": "saw",
+      "status": "proven"
+    }
+  }
+}

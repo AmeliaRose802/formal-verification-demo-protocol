@@ -3,11 +3,11 @@
 ### Signature
 
 **Parameters**
-- `k`: [HmacKey](../SDEP/types.md#hmackey)
-- `r`: [Request](../SDEP/types.md#request)
+- `k`: [HmacKey](../types.md#hmackey)
+- `r`: [Request](../types.md#request)
 
 **Returns**
-- [HmacTag](../SDEP/types.md#hmactag)
+- [HmacTag](../types.md#hmactag)
 
 <details><summary>Raw signature</summary>
 
@@ -15,16 +15,17 @@
 
 </details>
 
-Uninterpreted in proofs (SAW can treat this as a Cryptol primitive).
+### Formal definition (Cryptol)
 
-### Related Properties
-- [P8 — Correct Hmac Verifies](../SDEP/properties/authentication-security.md#p8--correct-hmac-verifies)
-- [P9 — Wrong Hmac Fails](../SDEP/properties/authentication-security.md#p9--wrong-hmac-fails)
-
-<details><summary>Formal definition (Cryptol)</summary>
-
-```cryptol
-hmacSha256 k r = k ^ r ^ (r <<< 1)   // placeholder; specs only use equality
+```haskell
+hmacSha256 k r = k ^ r ^ (r <<< 1)   // placeholder; only equality matters
 ```
 
-</details>
+Specs only use equality of HMAC outputs; the placeholder body is
+opaque to the solver, which models `hmacSha256` as an uninterpreted
+pure function for proof purposes.
+
+### Related Properties
+- [P8 — Correct Hmac Verifies](../properties/authentication-security.md#p8--correct-hmac-verifies)
+- [P9 — Wrong Hmac Fails](../properties/authentication-security.md#p9--wrong-hmac-fails)
+

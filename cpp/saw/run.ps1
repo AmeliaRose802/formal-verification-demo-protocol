@@ -1,17 +1,17 @@
 # SDEP — SAW verification driver.
 #
-# Proves each pure decision function in cpp/include/sdep/*.hpp is
+# Proves each pure decision function in cpp/src/decision.cpp is
 # behaviorally equivalent to its byte-width Cryptol model in
 # SDEP_cpp.cry — which is in turn structurally identical to the
 # bit-width spec in cryptol/SDEP.cry.
 #
 # Pipeline per function:
-#   1. (Once) compile verify_targets.cpp at -O0 / -fno-inline.  The
-#      header-only `inline constexpr` decision functions are emitted
-#      as `linkonce_odr` bodies because verify_targets.cpp takes their
-#      address through `[[gnu::used]] volatile` globals.  The real
-#      mangled C++ symbol is what SAW dispatches on — no shims, no
-#      `extern "C"` wrappers.
+#   1. (Once) compile the production source cpp/src/decision.cpp at
+#      -O0 / -fno-inline so each decision function emits a standalone
+#      LLVM symbol — the same source the production library builds
+#      from, just at a verification-friendly optimisation level. No
+#      verification-only TU, no ODR-emission hacks: SAW reasons about
+#      the bytes the production binary executes (modulo opt level).
 #   2. (Once) dump the clang AST and filter it to user-code only.
 #   3. For each function: run `saw-spec-gen gen-verify` to produce a
 #      verify.saw script, then run SAW.
@@ -36,12 +36,12 @@ Push-Location $here
 
 # Targets: (cppName, cryptolName)
 $targets = @(
-    @{ Cpp = 'authenticate';        Cry = 'authenticate_cpp'        }
-    @{ Cpp = 'isValidRequestDate';  Cry = 'isValidRequestDate_cpp'  }
-    @{ Cpp = 'provisionKey';        Cry = 'provisionKey_cpp'        }
-    @{ Cpp = 'enrollDevice';        Cry = 'enrollDevice_cpp'        }
-    @{ Cpp = 'enforceAccess';       Cry = 'enforceAccess_cpp'       }
-    @{ Cpp = 'getStatus';           Cry = 'getStatus_cpp'           }
+    @{ Cpp = 'authenticate';        Cry = 'authenticate'            }
+    @{ Cpp = 'isValidRequestDate';  Cry = 'isValidRequestDate'      }
+    @{ Cpp = 'provisionKey';        Cry = 'provisionKey'            }
+    @{ Cpp = 'enrollDevice';        Cry = 'enrollDevice'            }
+    @{ Cpp = 'enforceAccess';       Cry = 'enforceAccess'           }
+    @{ Cpp = 'getStatus';           Cry = 'getStatus'               }
     @{ Cpp = 'canonicalize_lp';     Cry = 'canonicalize_lp_post'    }
 )
 if ($Only) {
@@ -55,11 +55,11 @@ $ll      = Join-Path $here 'verify_targets.ll'
 $bcOpt   = Join-Path $here 'verify_targets_o1.bc'   # -O1 build, inlines STL
 $llOpt   = Join-Path $here 'verify_targets_o1.ll'
 $ast     = Join-Path $here 'verify_targets_ast.json'
-$srcAbs  = (Resolve-Path '.\verify_targets.cpp').Path
+$srcAbs  = (Resolve-Path '..\src\decision.cpp').Path
 $incAbs  = (Resolve-Path '..\include').Path
 
 if (-not $SkipBuild) {
-    Write-Host '─── compile verify_targets.cpp → bitcode + IR (-O0)' -ForegroundColor Cyan
+    Write-Host '─── compile cpp/src/decision.cpp → bitcode + IR (-O0)' -ForegroundColor Cyan
     & $clang -c -emit-llvm -O0 -fno-inline -fno-rtti -fexceptions `
         -target x86_64-pc-windows-msvc -std=c++20 -I $incAbs $srcAbs -o $bc
     if ($LASTEXITCODE) { throw "clang bc failed" }
@@ -67,14 +67,11 @@ if (-not $SkipBuild) {
         -target x86_64-pc-windows-msvc -std=c++20 -I $incAbs $srcAbs -o $ll
     if ($LASTEXITCODE) { throw "clang ll failed" }
 
-    Write-Host '─── compile verify_targets.cpp → bitcode + IR (-O1, STL-inlined)' -ForegroundColor Cyan
+    Write-Host '─── compile cpp/src/decision.cpp → bitcode + IR (-O1, STL-inlined)' -ForegroundColor Cyan
     # -O1 build is needed for functions that return aggregates through
     # std::optional / std::variant / other STL types whose constructors
     # are messy at -O0.  At -O1 the constructor bodies fold into plain
-    # byte stores, which SAW can simulate directly.  The header-only
-    # `inline constexpr` decision functions still survive as
-    # `linkonce_odr` because verify_targets.cpp takes their addresses
-    # via `[[gnu::used]] volatile` globals.
+    # byte stores, which SAW can simulate directly.
     & $clang -c -emit-llvm -O1 -fno-rtti -fexceptions `
         -target x86_64-pc-windows-msvc -std=c++20 -I $incAbs $srcAbs -o $bcOpt
     if ($LASTEXITCODE) { throw "clang -O1 bc failed" }
@@ -203,6 +200,32 @@ foreach ($t in $targets) {
                    elseif ($log -match 'error|Error')      { 'ERROR' }
                    else                                    { 'UNKNOWN' }
         $results += [PSCustomObject]@{ Fn=$cppName; Verdict=$verdict }
+
+        # Emit result.json in the schema pretty-specs `--adapt-saw-results`
+        # expects, so badges can be rendered into the docs without rerunning
+        # SAW from inside the pretty-specs pipeline.  We index by the
+        # *Cryptol* name (cryName, e.g. `authenticate`) so it lines up
+        # with the function inventory pretty-specs extracts from SDEP_cpp.cry.
+        $resultJson = [ordered]@{
+            schema_version = '1'
+            side           = 'cpp'
+            function       = $cppName
+            cryptol_fn     = $cryName
+            verdict        = $verdict
+            counterexample = @()
+            expected       = $null
+            actual         = $null
+            solver         = 'z3'
+            time_secs      = $null
+            impl_file      = 'verify_targets.cpp'
+        }
+        if ($verdict -ne 'VERIFIED') {
+            $reasonLines = ($log -split "`r?`n") | Where-Object {
+                $_ -match 'Counterexample|error|Error|cannot|failed'
+            } | Select-Object -First 3
+            $resultJson.reason = ($reasonLines -join '; ').Trim()
+        }
+        $resultJson | ConvertTo-Json -Depth 6 | Set-Content 'result.json'
     } finally { Pop-Location }
 }
 

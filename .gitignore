@@ -37,6 +37,9 @@ rust/saw/*.log
 /verify_out_log.txt
 /verify_*_log.txt
 
+# Catch-all for build/run logs anywhere in the tree
+*.log
+
 # Editor / IDE
 .vscode/
 .idea/

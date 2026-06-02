@@ -13,6 +13,7 @@ else()
 endif()
 
 add_library(sdep STATIC
+    src/decision.cpp        # All pure decision functions verified by SAW.
     src/hmac.cpp
     src/canonical.cpp
     src/auth.cpp

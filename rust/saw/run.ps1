@@ -70,10 +70,12 @@ try {
     #    rustc's newer attributes like `dead_on_unwind`.
     # ------------------------------------------------------------------
     Write-Host '─── patching LLVM IR (poison → undef) + reassembling' -ForegroundColor Cyan
+    # NOTE: saw-spec-gen recently dropped the per-pass CLI flags; the
+    # poison→undef + strip-msvc-eh transforms are now always-on. See its
+    # `patch-llvm-ir --help`.
     & $SawSpecGen patch-llvm-ir `
         --input  .\sdep.ll `
-        --output .\sdep_patched.ll `
-        --poison-to-undef 2>&1 | Out-Host
+        --output .\sdep_patched.ll 2>&1 | Out-Host
     if ($LASTEXITCODE) { throw "patch-llvm-ir failed" }
 
     $rustupBin = 'C:\Users\ameliapayne\.rustup\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\x86_64-pc-windows-msvc\bin'

@@ -9,7 +9,7 @@ std::optional<EnrollmentKey> KeyStore::provision(EnrollmentKey newKey) {
     if (key_.has_value() && key_->isActive) {
         return std::nullopt;
     }
-    // TOFU lock (SPEC.md §6.0 A2): refuse to overwrite an existing
+    // TOFU lock (cryptol/spec.md §6.0 A2): refuse to overwrite an existing
     // provisional key. The device provisions exactly once per epoch
     // and any subsequent provision attempt — from the device or
     // anyone else — must wait for activation or an admin reset that
