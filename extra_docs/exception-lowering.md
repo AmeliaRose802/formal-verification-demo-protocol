@@ -6,15 +6,13 @@ The implementation discussed here comes from the companion project [llvm-excepti
 
 ## Why Lower Exceptions
 
-Raw LLVM exception constructs (`invoke`, `landingpad`, `catchswitch`, funclets, personality handlers) are difficult to model directly in many symbolic-execution workflows.
+SAW does not currently natively support verifying code with exceptions, which is a problem because pretty much all production C++ has exceptions (think you're safe? Don't forget that even making a new string can throw on out of memory).
 
-The lowering pass rewrites EH into explicit flag-and-branch logic:
+To work around this, saw-spec-gen bakes in an exception lowering pass which converts exception operators into normal control flow. This approach lets you reason about the flow of programs that throw and catch exceptions.
 
-- throw sites set module globals describing in-flight exception state,
-- former `invoke` sites become `call` plus an `.ehcheck` branch,
-- catch dispatch becomes typed `icmp` branching over canonicalized type descriptors.
+However, like many quick and dirty, good enough hacks has some downsides and gaps as well. When you verify lowered code, you are not verifying your real production code and there is no true guarantee they will be equalivent.
 
-This produces IR that is much closer to ordinary CFG reasoning.
+These tools also don't yet handle catching and throwing dervived class exceptions, stackunwinding, or nested exceptions. 
 
 ## Non-Lowered IR Example
 
@@ -66,77 +64,6 @@ define dso_local i32 @add_one(i32 noundef %0) #0 {
   br i1 %exclow.err, label %13, label %25
 ```
 
-## Source-Level Lowering Mechanics
-
-In `llvm-exception-lower/ExceptionLowerPass.cpp`, key transformations include:
-
-1. Synthesizing module-level error-state globals.
-
-```cpp
-constexpr StringRef kInFlightFlagName   = "__exclow_error_flag";
-constexpr StringRef kThrownTypeInfoName = "__exclow_error_typeinfo";
-constexpr StringRef kThrownValuePtrName = "__exclow_error_value";
-```
-
-2. Rewriting `invoke` into `call` plus an `.ehcheck` block that branches on the in-flight flag.
-
-```cpp
-Value *InFlight = EHBuilder.CreateLoad(Type::getInt1Ty(Ctx),
-                                       State.inFlightFlag, kErrFlagLabel);
-EHBuilder.CreateCondBr(InFlight, UnwindDest, NormalDest);
-```
-
-3. Lowering typed catch dispatch to direct type comparisons.
-
-```cpp
-%exclow.match = icmp eq ptr %exclow.ti, @"__exclow.td.<type-tag>"
-```
-
-4. Stripping funclet operand bundles after funclet lowering, since those bundles are dead/no-longer-valid in the lowered shape.
-
-## SAW Harness Integration in saw-spec-gen
-
-Lowered EH introduces globals that are not visible in Clang AST extraction, so SAW harness generation must add them explicitly.
-
-In `saw-spec-gen/src/transform/eh_globals.rs`, `inject_exclow_globals` detects lowered IR and inserts:
-
-- `__exclow_error_flag` (`TypeInfo::Bool`, initialized to `0`),
-- `__exclow_error_typeinfo` (`ptr`),
-- `__exclow_error_value` (`ptr`).
-
-The comment in that source captures why zero-initializing the flag matters: `.ehcheck` branches on it, so leaving it unconstrained would permit spurious exception paths in non-throwing executions.
-
-## Where Overrides Enter
-
-Exception lowering itself is a control-flow rewrite, not an override. Overrides are still needed at verification boundaries:
-
-- virtual calls modeled by havoc contracts,
-- external/foreign calls modeled via assume-specs,
-- instrumentation intrinsics such as `llvm.var.annotation.p0.p0` modeled by no-op overrides.
-
-Representative no-op override emitted by `verify_script_steps.rs`:
-
-```saw
-let var_annotation_spec = do {
-    p1 <- llvm_fresh_pointer (llvm_int 8);
-    p2 <- llvm_fresh_pointer (llvm_int 8);
-    p3 <- llvm_fresh_pointer (llvm_int 8);
-    line <- llvm_fresh_var "line" (llvm_int 32);
-    p4 <- llvm_fresh_pointer (llvm_int 8);
-    llvm_execute_func [p1, p2, p3, llvm_term line, p4];
-};
-ov_var_annotation <- llvm_unsafe_assume_spec m "llvm.var.annotation.p0.p0" var_annotation_spec;
-```
-
-## Practical Boundary Statement
-
-For lowered exception paths, the strongest defensible claim is:
-
-- the verification script reasons over the lowered CFG semantics,
-- plus any explicit override assumptions included in the harness,
-- under the stated preconditions and memory model.
-
-It does not automatically prove properties about code outside that modeled boundary.
 
 ## Reproducing the Snippets
 

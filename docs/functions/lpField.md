@@ -6,11 +6,11 @@
 - `f`: [Field](../types.md#field)
 
 **Returns**
-- [1 + [FLs](../types.md#fls)][8]
+- [1 + [StructFieldLen](../types.md#structfieldlen)][8]
 
 <details><summary>Raw signature</summary>
 
-`Field -> [1 + FLs][8]`
+`Field -> [1 + StructFieldLen][8]`
 
 </details>
 
@@ -20,5 +20,5 @@
 lpField f = [f.len] # f.buf
 ```
 
-Length-prefix a [Field](../types.md#field) as [len-byte] # buf.
+Computes 1 + [StructFieldLen](../types.md#structfieldlen) bytes from `f`.
 

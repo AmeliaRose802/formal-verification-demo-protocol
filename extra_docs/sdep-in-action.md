@@ -1,12 +1,10 @@
 # SDEP in Action
 
-This page shows how the verification pipeline applies to the Secure Device Enrollment Protocol (SDEP).
-
 ## The Specification (Cryptol)
 
-We begin with behavioral rules expressed in [Cryptol](https://cryptol.net/), a domain-specific language for executable specifications and bit-precise properties.
+One of the advantages of using formal veirifcaiton with SAW is that once you have proven that your code is equlivent to a design specificaiton you can take things a step further and prove that your design holds certain properties.
 
-The following excerpt from `SDEP.cry` defines `P1_ActiveKeyCannotBeReactivated`:
+For example `P1_ActiveKeyCannotBeReactivated` states that if authentication is valid and the key is already active, then `enrollDevice` with `AC_AlreadyActive` must not return `ER_Succeeded`.
 
 ```cryptol
 property P1_ActiveKeyCannotBeReactivated fleetEnabled validMetadata authResult keyAlreadyActive =
@@ -15,32 +13,8 @@ property P1_ActiveKeyCannotBeReactivated fleetEnabled validMetadata authResult k
       enrollDevice fleetEnabled validMetadata authResult AC_AlreadyActive
         != ER_Succeeded
 ```
-
-This is a declarative correctness constraint, not runtime application code. It states that if authentication is valid and the key is already active, then `enrollDevice` with `AC_AlreadyActive` must not return `ER_Succeeded`.
-
-## Another Example: Provisioning Safety
-
-This property constrains provisioning behavior for active devices:
-
-```cryptol
-property P2_ActiveKeyBlocksProvisioning fleetEnabled validRequest vaultResult =
-  isKeyVaultResult vaultResult ==>
-    fleetEnabled ==>
-      validRequest ==>
-        vaultResult == KV_Ok ==>
-          provisionKey fleetEnabled validRequest vaultResult True == PR_Unauthorized
-```
-
-## The Verification Loop
-
-The pipeline is straightforward:
-
-1. [pretty-specs](https://github.com/AmeliaRose802/pretty-specs) extracts functions and properties from Cryptol modules.
-2. [saw-spec-gen](https://github.com/AmeliaRose802/saw-spec-gen) maps those properties to concrete C++/Rust targets.
-3. Generated SAW harnesses connect [LLVM bitcode](https://llvm.org/docs/BitCodeFormat.html) or Rust [MIR](https://rustc-dev-guide.rust-lang.org/mir/index.html) to specification-level predicates.
-4. [SAW](https://saw.galois.com/) and [Z3](https://github.com/Z3Prover/z3) discharge the resulting proof obligations.
-
-If verification fails, the tooling reports a counterexample showing an input configuration that violates the property. This feedback loop is useful for diagnosing implementation bugs and specification mismatches.
+ 
+Practically this means that we cannot enroll devices twice. Using SAW gives us this additional proof for free.  
 
 ## Protocol Properties vs Implementation Equivalence
 
@@ -71,9 +45,24 @@ Out of scope unless separately modeled and verified:
 - External subsystems (network transport, storage, runtime environment).
 - Any behavior behind explicitly trusted assumptions, if assumptions are used.
 
-## Concrete Example of the Distinction
+## Bounded Loops
 
-- A protocol property states a rule such as: an already-active key cannot be re-enrolled successfully.
-- An equivalence proof shows that the compiled `enrollDevice` function returns exactly what `enrollDevice` in Cryptol returns for all modeled inputs.
+SAW works by symbolically executing code all the way to the end, then handing the resulting formula to Z3. That is great for straight-line decision logic, but it runs into trouble the moment a loop can run an unbounded number of times. If the trip count depends on a symbolic value, there is no single formula to hand off — the symbolic executor would have to unroll the loop forever.
 
-Together, these establish that the implementation enforces that rule under the modeled preconditions and proof boundaries.
+Some of the SDEP functions do have loops. The request canonicalization helpers (the length-prefixed encoders like `canonicalize_lp` and `canonLenPrefixed`) walk over input bytes field by field. To verify them we bound the input so the loop has a fixed, finite trip count. Concretely we fix a maximum length `MAX_LEN = K`, and SAW unrolls the loop `K` times into ordinary straight-line code that Z3 can reason about.
+
+The trade-off is that the proof only covers inputs up to that bound. A proof at `MAX_LEN = 16` says nothing about a 17-byte input. So we pick a bound that covers the real protocol's field sizes and treat anything beyond it as out of scope.
+
+The bound also has a real cost. Each extra byte multiplies the work the solver has to do, and the proof time grows fast:
+
+| `MAX_LEN` | Approx. Z3 time |
+| --------- | --------------- |
+| 4         | seconds         |
+| 8         | ~10 seconds     |
+| 12        | ~2 minutes      |
+| 16        | ~13 minutes     |
+| 32        | times out (>25 min) |
+
+A small modeling choice can swing this dramatically. Writing the index arithmetic as a Cryptol modulo (`(i - 1) % 16`) instead of a bit-extract (`drop`\``{4} (i - 1)`) makes Z3 well over ten times faster, because the solver handles the modulo form far more cheaply.
+
+So bounded loops are the practical answer here: we get a real, machine-checked proof of the canonicalization logic, at the price of fixing a maximum input size and accepting that the proof time climbs steeply as that size grows.

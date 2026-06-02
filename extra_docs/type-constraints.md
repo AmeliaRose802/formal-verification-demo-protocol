@@ -1,85 +1,29 @@
 # Type Constraint Generation
 
-This page explains how `saw-spec-gen` derives and emits type constraints, and how those constraints appear in generated SAW scripts.
+Most engeneers don't relize that their languages type system is actually a form of proof. When we write a definition like 
 
-## Why Type Constraints Are Needed
-
-Machine representations often admit more bit patterns than the source-level type allows.
-
-Examples:
-
-- `enum class E : u8 { A, B, C }` occupies 8 bits, but only values `0..2` are valid.
-- `Option<T>`/`Result<T, E>` tags are modeled as small discriminants.
-- Struct fields that are enums inherit enum constraints recursively.
-
-Without these constraints, SAW explores impossible states and may produce spurious counterexamples.
-
-## Constraint Derivation Pipeline
-
-At a high level:
-
-1. Parse source types and annotations (`TypeInfo`, SAL, mutability).
-2. Derive `SpecConstraint` objects (`constraints/derive.rs`).
-3. Attach parameter preconditions (`ParamConstraint.preconditions`) and return postconditions (`ReturnConstraint.value_constraints`).
-4. Emit constraints into generated SAW/MIR scripts.
-
-Key files in `saw-spec-gen`:
-
-- `src/constraints/types.rs`
-- `src/constraints/value_clauses.rs`
-- `src/constraints/derive.rs`
-- `src/parsers/clang_ast/sal.rs`
-- `src/emit/saw_emit/verify_script_steps.rs`
-
-## Value-Set Constraints (`value_clauses`)
-
-`src/constraints/value_clauses.rs` generates Cryptol expressions for inhabited-value restrictions.
-
-Representative behavior:
-
-- scalar full-domain types (`Bool`, ints, pointers, raw byte arrays) => no clause,
-- enums => `var <= max_variant`,
-- options/results => tag constraint,
-- structs => recurse into constrained fields.
-
-Example snippet from that module:
-
-```rust
-TypeInfo::Enum { variants, discriminant_bits, .. } if !variants.is_empty() => {
-    let max = variants.len() as u64 - 1;
-    out.push(format!("{var_name} <= ({max} : [{bits}])", bits = discriminant_bits));
-}
+```cpp
+unsigned short foo()
 ```
 
-These expressions are wrapped as:
+we are asserting a claim enforced by the compiler that foo will only ever return a `unsigned sort`. The compiler simply will not allow it to return float or a long or anything else.
 
-- `llvm_precond {{ ... }}` for parameters,
-- `llvm_postcond {{ ... }}` for return values.
+Saw-spec-gen piggy backs on this built in verification to constrain the search space that SAW and Z3 must deal with when proving things.
 
-## SAL-Driven Constraints
+## Turning Types Into Preconditions
 
-`src/parsers/clang_ast/sal.rs` parses SAL `AnnotateAttr` forms into internal annotations such as:
+When saw-spec-gen reads a function signature, it turns each parameter's type into a constraint that tells SAW which values are actually possible. The idea is simple: the fewer values SAW has to consider, the smaller the search space Z3 has to chew through and the faster it will exit.
 
-- `_In_reads_(N)` => `Annotation::InReads(N)`
-- `_Out_writes_(N)` => `Annotation::OutWrites(N)`
-- `_In_reads_(paramName)` => `Annotation::InReadsParam(paramName)`
-- `_Out_writes_(paramName)` => `Annotation::OutWritesParam(paramName)`
+### Rules
 
-In `derive.rs`, parameter-reference forms are bounded with a default max length (`DEFAULT_PARAMREF_MAX_LEN = 16`) and a generated precondition such as:
+- Full-domain scalars (`Bool`, plain ints, pointers, raw bytes) get no extra clause — every bit pattern is already legal.
+- Enums get a range bound, like `var <= max_variant`, because only the named variants are valid.
+- Options and results get a tag constraint.
+- Structs recurse into their fields.
 
-```text
-llvm_precond {{ (buf_len : [64]) <= 16 }}
-```
+### Enum example 
 
-This keeps symbolic buffers finite while preserving an explicit bound in the proof contract.
-
-## FreshVar vs Pointer Constraints
-
-In `derive.rs`, type constraints from `value_clauses` are emitted for `FreshVar` parameters directly.
-
-That means enum-like scalar parameters often get explicit range preconditions.
-
-Generated example from this repository (`cpp/saw/out_enrollDevice/verify.saw`):
+For an enum parameter, that shows up in the generated script as a fresh variable plus a range precondition. Here is the real output for `enrollDevice`:
 
 ```saw
 authResult <- llvm_fresh_var "authResult" (llvm_int 8);
@@ -88,13 +32,24 @@ activationResult <- llvm_fresh_var "activationResult" (llvm_int 8);
 llvm_precond {{ activationResult <= (2 : [8]) }};
 ```
 
-For pointer parameters, generated scripts rely on allocation shape and points-to constraints, plus SAL-derived comments/bounds when available.
+Without that `<= 2` bound, SAW would happily explore all 256 byte values for an enum that only has three variants — and any "bug" it found in the other 253 would be meaningless.
 
-## Unsized Buffer Guardrails
+> [!WARNING]
+> Enum based type constrains assumes you wrote well behaved C++. The language technically lets you cast any value, in range or not, into an enum, so a malformed input could carry an out-of-range tag. Don't do this! Most static analysis tools flag this.
 
-If a pointer-like parameter lacks size annotations, `derive.rs` emits explicit TODO comments warning that a one-element allocation may be wrong for buffer semantics.
+## Bounding Buffers With SAL
 
-Generated example (`cpp/saw/out_getStatus/verify.saw`):
+Scalars are easy because they have a fixed size. Pointers are not — a `_In_reads_` buffer could be any length. To keep the symbolic buffer finite, saw-spec-gen reads SAL annotations like `_In_reads_(n)` and `_Out_writes_(n)` and turns them into an explicit length bound, defaulting to a max of 16 when the size is given by another parameter:
+
+```text
+llvm_precond {{ (buf_len : [64]) <= 16 }}
+```
+
+That bound is the same trick as a [bounded loop](sdep-in-action.md) — it keeps the proof finite and writes the assumption down in plain sight instead of hiding it.
+
+## When There Is No Annotation
+
+If a pointer has no size annotation at all, saw-spec-gen does not guess. It allocates a single element and leaves a loud TODO in the generated script for you to fill in:
 
 ```saw
 // TODO[saw-spec-gen]: pointer parameter `keyId` has no size annotation.
@@ -102,24 +57,12 @@ Generated example (`cpp/saw/out_getStatus/verify.saw`):
 //   The auto-spec allocates a single element, which is almost certainly wrong
 ```
 
-This is an intentional “loud failure mode” to avoid silently unsound assumptions.
+## The Catch
 
-## Emission into SAW and MIR
+These constraints are only as good as the types and annotations they come from. The usual things to watch for:
 
-For LLVM-mode scripts, `verify_script_steps.rs` emits precondition lines as-is from the derived list.
+- pointer buffers with no SAL,
+- enums with non-contiguous discriminants that the bound doesn't fully capture,
+- aliasing or deep pointer shapes that a signature alone can't express.
 
-For MIR-mode scripts, `mir_spec.rs` maps `llvm_precond`/`llvm_postcond` to `mir_precond`/`mir_postcond`.
-
-So the same derived constraints drive both backends with backend-specific wrappers.
-
-## Practical Boundaries
-
-Type constraints improve precision, but they are still only as strong as extracted type information and annotations.
-
-Common limitations to watch:
-
-- missing SAL on pointer buffers,
-- enums with non-contiguous explicit discriminants (unless fully captured),
-- aliasing or deep pointer-shape assumptions not expressible from signatures alone.
-
-For high-assurance targets, review generated preconditions directly in each `verify.saw` and tighten them where needed.
+The same derived constraints feed both the LLVM (`llvm_precond`) and Rust MIR (`mir_precond`) backends, so the bounds you read in one `verify.saw` are the bounds that actually held during the proof. For anything high-assurance, read those preconditions and tighten them by hand where the auto-generated ones are too loose.

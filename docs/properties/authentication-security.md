@@ -4,8 +4,7 @@
 
 ### P6 — Auth Rejects Invalid Date
 
-P6: Authentication rejects any request with an invalid date, regardless of
-the other checks.
+P6: Authentication rejects any request with an invalid date.
 
 <details><summary>Formal property (Cryptol)</summary>
 
@@ -19,8 +18,7 @@ authenticate False sigValid claimsValid == False
 
 ### P7 — Auth Rejects Invalid Signature
 
-P7: Authentication rejects any request with an invalid signature,
-regardless of the other checks.
+P7: Authentication rejects any request with an invalid signature.
 
 <details><summary>Formal property (Cryptol)</summary>
 
@@ -34,8 +32,7 @@ authenticate dateValid False claimsValid == False
 
 ### P8 — Correct Hmac Verifies
 
-P8: A correct HMAC always verifies. Computing the HMAC with the right key
-and feeding the result back into [isValidSignature](../functions/isValidSignature.md) succeeds.
+P8: A correct HMAC always verifies.
 
 <details><summary>Formal property (Cryptol)</summary>
 
@@ -49,8 +46,7 @@ isValidSignature k r (hmacSha256 k r) == True
 
 ### P9 — Wrong Hmac Fails
 
-P9: A wrong HMAC always fails to verify. Any tag that is not the canonical
-HMAC of (k, r) is rejected.
+P9: A wrong HMAC always fails to verify.
 
 <details><summary>Formal property (Cryptol)</summary>
 
@@ -65,20 +61,19 @@ HMAC of (k, r) is rejected.
 ### P10 — Missing Metadata Is Unauthorized
 
 P10: An enrollment with missing metadata returns Unauthorized when the
-fleet is enabled. (When the fleet is disabled, [enrollDevice](../functions/enrollDevice.md) short-circuits
-to [ER_Disabled](../types.md#enrollmentresult) before the metadata check; that case is covered by [P5](key-lifecycle-safety.md#p5--disabled-fleet-rejects-everything).)
+fleet is enabled.
 
 <details><summary>Formal property (Cryptol)</summary>
 
 ```haskell
 fleetEnabled ==>
-isAuthResult authResult ==>
-isActivationResult activationResult ==>
+isAuthResult_b authResult ==>
+isActivationResult_b activationResult ==>
 enrollDevice fleetEnabled False authResult activationResult
-== ER_Unauthorized
+== ER_Unauthorized_b
 ```
 
 </details>
 
-**Involved:** [`ER_Disabled`](../types.md#enrollmentresult), [`ER_Unauthorized`](../types.md#enrollmentresult), [`enrollDevice`](../functions/enrollDevice.md)
+**Involved:** [`ER_Unauthorized_b`](../functions/ER_Unauthorized_b.md), [`enrollDevice`](../functions/enrollDevice.md), [`isActivationResult_b`](../functions/isActivationResult_b.md), [`isAuthResult_b`](../functions/isAuthResult_b.md)
 

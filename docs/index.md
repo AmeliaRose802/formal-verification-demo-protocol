@@ -1,9 +1,9 @@
 ---
-uid: SDEP
-title: SDEP
+uid: SDEP_cpp
+title: SDEP_cpp
 ---
 
-# SDEP
+# SDEP_cpp
 
 ## How verification works here
 
@@ -23,22 +23,34 @@ All type definitions: [types.md](types.md)
 
 | Function | Status | Description |
 |----------|--------|-------------|
-| [provisionKey](functions/provisionKey.md) | — | Evaluates 5 conditions on `fleetEnabled`, `validRequest`, `vaultResult`, and `keyIsActive` in priority order, returning the first applicable `ProvisionResult`. Defaults to `PR_Succeeded` when no prior condition matches. |
-| [enrollDevice](functions/enrollDevice.md) | — | Evaluates 7 conditions on `fleetEnabled`, `validMetadata`, `authResult`, and `activationResult` in priority order, returning the first applicable `EnrollmentResult`. Defaults to `ER_Unauthorized` when no prior condition matches. |
-| [authenticate](functions/authenticate.md) | — | Returns `True` only when all of `dateValid`, `signatureValid`, and `claimsValid` are true. |
-| [isValidRequestDate](functions/isValidRequestDate.md) | — | Checks whether the request date is valid: validates a bounded condition over `requestTs`, `currentTime`, and `windowSeconds`. |
-| [hmacSha256](functions/hmacSha256.md) | — | Uninterpreted in proofs (SAW can treat this as a Cryptol primitive). |
+| [provisionKey](functions/provisionKey.md) | — | Evaluates 4 conditions on `fleetEnabled`, `validRequest`, `vaultResult`, and `keyIsActive` in priority order, returning the first applicable 8 bits. Defaults to `PR_Succeeded_b` when no prior condition matches. |
+| [enrollDevice](functions/enrollDevice.md) | — | The C++ body uses `switch` on AuthResult and ActivationResult.  Any enum value outside the declared set falls through to the defensive `return Unauthorized` after the outer switch.  We mirror that here. |
+| [authenticate](functions/authenticate.md) | — | Evaluates a boolean condition over `dateValid`, `signatureValid`, and `claimsValid`. |
+| [isValidRequestDate](functions/isValidRequestDate.md) | — | `std::int64_t` semantics. The implementation in cpp/include/sdep/auth.hpp first rejects negative timestamps / window (otherwise the subtraction `currentTime - requestTs` can wrap signed-overflow when requestTs is near INT64_MIN — found by SAW on 2026-05-30, see FINDINGS.md §1). The shim below mirrors that guard exactly so the SAW equivalence proof goes through for all i64 inputs. |
+| [packOutcome](functions/packOutcome.md) | — | Computes 16 bits from `allowed` and `logged`. |
+| [enforceAccess](functions/enforceAccess.md) | — | Evaluates 8 conditions on `mode` and `decision` in priority order, returning the first applicable 16 bits. Defaults to `packOutcome True  False` when no prior condition matches. |
+| [getStatus](functions/getStatus.md) | — | Computes `// pre-call bytes of the optional storage (havoc)     [20][8]` from `fleetEnabled`, `hasKey`, `keyIsActive`, `keyId`, and `preBytes`. |
+| [canonicalize_lp_post](functions/canonicalize_lp_post.md) | — | Length-prefixed canonicalization writes |
+| [canonicalize_lp_ret](functions/canonicalize_lp_ret.md) | — | Return value of canonicalize_lp: total bytes written = 2 + nm + nb. |
+| [isKeyVaultResult_b](functions/isKeyVaultResult_b.md) | — | Well-formedness predicates over ABI-width enum reps C++ enums are `enum class : std::uint8_t` so the LLVM ABI parameter is i8.  Symbolic execution explores all 256 values; valid program states only ever produce values in the declared range.  These predicates assert that range for use as preconditions in properties. |
+| [isAuthResult_b](functions/isAuthResult_b.md) | — | Checks whether the auth result b is valid for the given inputs. |
+| [isActivationResult_b](functions/isActivationResult_b.md) | — | Checks whether the activation result b is valid for the given inputs. |
+| [isAccessMode_b](functions/isAccessMode_b.md) | — | Checks whether the access mode b is valid for the given inputs. |
+| [isAccessDecision_b](functions/isAccessDecision_b.md) | — | Checks whether the access decision b is valid for the given inputs. |
+| [allowedOf](functions/allowedOf.md) | — | enforceAccess result extractors enforceAccess packs the EnforceOutcome struct into one i16 with little-endian byte order: low byte = allowed (0 or 1), high byte = logged (0 or 1). These helpers project the i16 back to Bits. |
+| [loggedOf](functions/loggedOf.md) | — | Tests whether `r` is well-formed. |
+| [statusEngagedByte](functions/statusEngagedByte.md) | — | Computes 8 bits from `s`. |
+| [statusPayloadBytes](functions/statusPayloadBytes.md) | — | Computes 16 bytes from `s`. |
+| [hmacSha256](functions/hmacSha256.md) | — | Specs only use equality of HMAC outputs; the placeholder body is opaque to the solver, which models `hmacSha256` as an uninterpreted pure function for proof purposes. |
 | [isValidSignature](functions/isValidSignature.md) | — | Checks whether the signature is valid by comparing the computed and expected values. |
-| [enforceAccess](functions/enforceAccess.md) | — | Evaluates 6 conditions on `mode` and `decision` in priority order, returning the first applicable a tuple. Defaults to `(True, False)` when no prior condition matches. |
-| [getStatus](functions/getStatus.md) | — | Constructs `EnrollmentStatus` from the given inputs. |
-| [canonNormalized](functions/canonNormalized.md) | — | A field is normalized iff bytes at indices >= n are zero. This is the invariant the C++ / Rust code maintains implicitly (it only reads the first n bytes); making it explicit keeps logically-distinct requests distinct as Cryptol values, so any collision the solver finds is a *real* one. |
-| [canonLenPrefixed](functions/canonLenPrefixed.md) | — | Length-prefixed canonicalization. Each variable-length field is preceded by its length tag: a parser reads the tag, then exactly that many bytes, then the next tag, then exactly that many bytes. No byte inside any field can be misread as a boundary, so the encoding is structurally injective. |
+| [canonNormalized](functions/canonNormalized.md) | — | Compares computed and provided values over `n` and `b`, returning `True` on match. |
+| [canonLenPrefixed](functions/canonLenPrefixed.md) | — | Bounded model writes a one-byte length tag followed by the FieldLen-byte field buffer. Production uses a 64-bit big-endian tag, but the injectivity argument that P23-P25 rely on is identical at any width. |
 | [fieldNormalized](functions/fieldNormalized.md) | — | Compares computed and provided values over `f`, returning `True` on match. |
 | [requestNormalized](functions/requestNormalized.md) | — | Tests whether `r` is well-formed. |
-| [lpField](functions/lpField.md) | — | Length-prefix a Field as [len-byte] # buf. |
-| [lpHeader](functions/lpHeader.md) | — | Length-prefix a header pair OR emit a constant-size all-zero placeholder if it is the auth header. Fixed output size keeps canonicalizeS Cryptol- statable; the placeholder content is irrelevant because the encoder elides auth headers regardless of their value. |
-| [canonicalizeS](functions/canonicalizeS.md) | — | Concrete canonicalize: length-prefixed method, body, headers (with auth-header exclusion), path, then the 8-byte big-endian timestamp. |
-| [verifierTimestamp_current](functions/verifierTimestamp_current.md) | — | The timestamp the verifier validates must equal the timestamp inside the signed request — otherwise an attacker can replay a stale signed request with a fresh "current time" supplied by the caller and pass the freshness check despite the signature being over old bytes. |
+| [lpField](functions/lpField.md) | — | Computes 1 + StructFieldLen bytes from `f`. |
+| [lpHeader](functions/lpHeader.md) | — | Computes 2 * (1 + StructFieldLen) bytes from `h`. |
+| [canonicalizeS](functions/canonicalizeS.md) | — | Computes 3 * (1 + StructFieldLen) + MaxHeaders * 2 * (1 + StructFieldLen) + 8 bytes from `r`. |
+| [verifierTimestamp_current](functions/verifierTimestamp_current.md) | — | Computes 64 bits from `r` and `_`. |
 
 Per-function detail pages: [functions](functions/index.md)
 
@@ -50,7 +62,9 @@ Per-function detail pages: [functions](functions/index.md)
 | [Authentication Security](properties/authentication-security.md) | P6–P10 |
 | [Access Control](properties/access-control.md) | P11–P14 |
 | [Protocol Liveness](properties/protocol-liveness.md) | P15–P18 |
-| [Error Handling](properties/error-handling.md) | P19–P27 |
-| [Auth-header exclusion](properties/auth-header-exclusion.md) | P28 |
-| [Timestamp binding](properties/timestamp-binding.md) | P29 |
+| [Error Handling](properties/error-handling.md) | P19–P22 |
+| [Canonicalization byte-injectivity](properties/canonicalization-byte-injectivity.md) | P23–P25 |
+| [enforceAccess matrix-coverage closures](properties/enforce-access-matrix-coverage-closures.md) | P26–P27 |
+| [Structured-request properties](properties/structured-request-properties.md) | P28–P29 |
+| [Intentional counterexamples](properties/intentional-counterexamples.md) | P30–P32 |
 

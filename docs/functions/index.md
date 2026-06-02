@@ -1,5 +1,5 @@
 ---
-uid: SDEP.functions
+uid: SDEP_cpp.functions
 title: Functions
 ---
 
@@ -15,10 +15,22 @@ See the [home page](../index.md#functions) for the full Function · Status · De
 - [enrollDevice](enrollDevice.md)
 - [authenticate](authenticate.md)
 - [isValidRequestDate](isValidRequestDate.md)
-- [hmacSha256](hmacSha256.md)
-- [isValidSignature](isValidSignature.md)
+- [packOutcome](packOutcome.md)
 - [enforceAccess](enforceAccess.md)
 - [getStatus](getStatus.md)
+- [canonicalize_lp_post](canonicalize_lp_post.md)
+- [canonicalize_lp_ret](canonicalize_lp_ret.md)
+- [isKeyVaultResult_b](isKeyVaultResult_b.md)
+- [isAuthResult_b](isAuthResult_b.md)
+- [isActivationResult_b](isActivationResult_b.md)
+- [isAccessMode_b](isAccessMode_b.md)
+- [isAccessDecision_b](isAccessDecision_b.md)
+- [allowedOf](allowedOf.md)
+- [loggedOf](loggedOf.md)
+- [statusEngagedByte](statusEngagedByte.md)
+- [statusPayloadBytes](statusPayloadBytes.md)
+- [hmacSha256](hmacSha256.md)
+- [isValidSignature](isValidSignature.md)
 - [canonNormalized](canonNormalized.md)
 - [canonLenPrefixed](canonLenPrefixed.md)
 - [fieldNormalized](fieldNormalized.md)

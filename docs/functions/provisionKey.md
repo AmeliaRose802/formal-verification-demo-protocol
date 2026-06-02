@@ -5,15 +5,15 @@
 **Parameters**
 - `fleetEnabled`: Bit
 - `validRequest`: Bit
-- `vaultResult`: [KeyVaultResult](../types.md#keyvaultresult)
+- `vaultResult`: [8]
 - `keyIsActive`: Bit
 
 **Returns**
-- [ProvisionResult](../types.md#provisionresult)
+- [8]
 
 <details><summary>Raw signature</summary>
 
-`Bit -> Bit -> KeyVaultResult -> Bit -> ProvisionResult`
+`Bit -> Bit -> [8] -> Bit -> [8]`
 
 </details>
 
@@ -21,27 +21,39 @@
 
 ```haskell
 provisionKey fleetEnabled validRequest vaultResult keyIsActive =
-  if ~ fleetEnabled        then PR_Disabled
-   | ~ validRequest        then PR_BadRequest
-   | vaultResult != KV_Ok  then PR_InternalError
-   | keyIsActive           then PR_Unauthorized
-  else                          PR_Succeeded
+  if ~fleetEnabled         then PR_Disabled_b
+   | ~validRequest         then PR_BadRequest_b
+   | vaultResult != KV_Ok_b
+                           then PR_InternalError_b
+   | keyIsActive           then PR_Unauthorized_b
+  else                          PR_Succeeded_b
 ```
 
-Evaluates 5 conditions on `fleetEnabled`, `validRequest`, `vaultResult`, and `keyIsActive` in priority order, returning the first applicable `ProvisionResult`. Defaults to `PR_Succeeded` when no prior condition matches.
+C++ body:
+
+```text
+  if (!fleetEnabled)                  return Disabled;
+  if (!validRequest)                  return BadRequest;
+  if (vaultResult != KeyVaultResult::Ok)
+                                      return InternalError;
+  if (keyIsActive)                    return Unauthorized;
+  return Succeeded;
+```
+
+This handles ALL 256 possible i8 values of vaultResult uniformly:
+anything that is not KV_Ok (0) is treated as InternalError, exactly
+matching the C++ `!=` check.  No precondition is needed.
 
 ```mermaid
 flowchart TD
   Start(["provisionKey"])
-  Start --> C0{"~ fleetEnabled"}
-  C0 -->|Yes| R0("PR_Disabled")
-  C0 -->|No| C1{"~ validRequest"}
-  C1 -->|Yes| R1("PR_BadRequest")
-  C1 -->|No| C2{"vaultResult != KV_Ok"}
-  C2 -->|Yes| R2("PR_InternalError")
-  C2 -->|No| C3{"keyIsActive"}
-  C3 -->|Yes| R3("PR_Unauthorized")
-  C3 -->|No| R4("PR_Succeeded")
+  Start --> C0{"~fleetEnabled"}
+  C0 -->|Yes| R0("PR_Disabled_b")
+  C0 -->|No| C1{"~validRequest"}
+  C1 -->|Yes| R1("PR_BadRequest_b")
+  C1 -->|No| C2{"keyIsActive"}
+  C2 -->|Yes| R2("PR_Unauthorized_b")
+  C2 -->|No| R3("PR_Succeeded_b")
   classDef default fill:#e8f4fd,stroke:#2196F3,stroke-width:2px,color:#1565C0
   style Start fill:#1565C0,stroke:#0D47A1,color:#fff,stroke-width:2px
 ```
