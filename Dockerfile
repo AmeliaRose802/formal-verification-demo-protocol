@@ -8,7 +8,7 @@
 #   - PowerShell 7.6.2 (verify_all.ps1 and per-language run.ps1 are pwsh)
 #   - Rust stable with `llvm-tools-preview` (matching-version llvm-as for
 #     the Rust pipeline's bitcode-reassembly step)
-#   - saw-spec-gen (built from source; pinned by SAW_SPEC_GEN_TAG)
+#   - saw-spec-gen (prebuilt release tarball; pinned by SAW_SPEC_GEN_TAG)
 #
 # Tools are dropped at the same paths ci-install.ps1 uses
 # ($HOME/.demo_protocol/{llvm,saw,bin}) so the layout is identical to a
@@ -22,9 +22,12 @@
 # Bump SAW_VERSION / LLVM_VERSION / PWSH_VERSION here when scripts/ci-install.ps1
 # pins are bumped, then re-run the publish workflow.
 
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 
 ARG SAW_VERSION=1.5
+# Which prebuilt SAW variant to pull. SAW publishes one tarball per
+# Ubuntu LTS; keep this aligned with the FROM line above.
+ARG SAW_UBUNTU_VERSION=24.04
 ARG LLVM_VERSION=20.1.6
 ARG PWSH_VERSION=7.6.2
 ARG RUST_TOOLCHAIN=stable
@@ -36,14 +39,19 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 # System deps: curl/tar/xz for tarball installs, build-essential for
 # native cargo deps + the cpp/ build-test job's gcc smoke build,
-# libtinfo5/libncurses5 for the LLVM 20 binaries (clang dynamically
-# links libtinfo.so.5), libicu70 + libssl3 for the PowerShell tarball.
+# libtinfo6/libncurses6 for the LLVM 20 binaries, libicu74 + libssl3
+# for the PowerShell tarball. The LLVM 20.1.6 upstream tarball is
+# built on ubuntu-22.04 and dynamically links libtinfo.so.5, which
+# ubuntu:24.04 no longer ships — we add a compat symlink to libtinfo.so.6
+# so clang/llvm-as/opt can load. (The two ABIs are compatible for the
+# terminal-capability calls clang actually makes.)
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       ca-certificates curl wget tar gzip xz-utils unzip \
       git pkg-config build-essential cmake \
-      zlib1g libtinfo5 libncurses5 \
-      libicu70 libssl3 libssl-dev \
+      zlib1g libtinfo6 libncurses6 \
+      libicu74 libssl3 libssl-dev \
+ && ln -sf /usr/lib/x86_64-linux-gnu/libtinfo.so.6 /usr/lib/x86_64-linux-gnu/libtinfo.so.5 \
  && rm -rf /var/lib/apt/lists/*
 
 # ── LLVM 20.1.6 (same asset scripts/ci-install.ps1 downloads) ─────────
@@ -54,10 +62,10 @@ RUN mkdir -p /root/.demo_protocol/llvm \
  && rm /tmp/llvm.tar.xz \
  && /root/.demo_protocol/llvm/bin/clang --version
 
-# ── SAW 1.5 with bundled solvers (ubuntu-22.04 build) ─────────────────
+# ── SAW 1.5 with bundled solvers (variant matched to base image) ──────
 RUN mkdir -p /root/.demo_protocol/saw \
  && curl -fsSL -o /tmp/saw.tar.gz \
-      "https://github.com/GaloisInc/saw-script/releases/download/v${SAW_VERSION}/saw-${SAW_VERSION}-ubuntu-22.04-X64-with-solvers.tar.gz" \
+      "https://github.com/GaloisInc/saw-script/releases/download/v${SAW_VERSION}/saw-${SAW_VERSION}-ubuntu-${SAW_UBUNTU_VERSION}-X64-with-solvers.tar.gz" \
  && tar -xzf /tmp/saw.tar.gz -C /root/.demo_protocol/saw --strip-components=1 \
  && rm /tmp/saw.tar.gz \
  && /root/.demo_protocol/saw/bin/saw --version \
@@ -86,33 +94,27 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
  && /usr/local/cargo/bin/rustc --version \
  && ls /usr/local/rustup/toolchains/*/lib/rustlib/x86_64-unknown-linux-gnu/bin/llvm-as
 
-# ── saw-spec-gen (built from source) ──────────────────────────────────
+# ── saw-spec-gen (prebuilt release tarball) ───────────────────────────
 # Both per-language run.ps1 scripts read $env:SAW_SPEC_GEN to find this
-# binary. We'd prefer to download a release tarball, but the official
-# v0.1.0 binaries are built against GLIBC 2.39 (ubuntu 24.04) and our
-# base image is ubuntu:22.04 (GLIBC 2.35). Until the release workflow
-# upstream is fixed to build on ubuntu-22.04, we build from git inside
-# this image — the Rust toolchain is already installed in the previous
-# layer, and the resulting binary is baked in so the verify job pays
-# nothing for it.
+# binary. We download the official release tarball from GitHub:
+#   https://github.com/AmeliaRose802/saw-spec-gen/releases/tag/${SAW_SPEC_GEN_TAG}
+# The tarball contains a single binary at archive root (no parent dir),
+# so we extract straight into /root/.demo_protocol/bin/. The v0.1.0
+# Linux binary is built against GLIBC 2.39, which ubuntu:24.04 ships.
 #
-# SAW_SPEC_GEN_TAG controls which git ref to build:
-#   - "latest"  → origin's default branch (HEAD)
-#   - anything else (e.g. "v0.1.0") → that tag
+# SAW_SPEC_GEN_TAG controls which release to pull:
+#   - "latest"  → resolves via releases/latest/download/...
+#   - anything else (e.g. "v0.1.0") → that specific tag
 RUN mkdir -p /root/.demo_protocol/bin \
  && if [ "${SAW_SPEC_GEN_TAG}" = "latest" ]; then \
-        ref_args=""; \
+        ssg_url="https://github.com/AmeliaRose802/saw-spec-gen/releases/latest/download/saw-spec-gen-linux-x86_64.tar.gz"; \
     else \
-        ref_args="--tag ${SAW_SPEC_GEN_TAG}"; \
+        ssg_url="https://github.com/AmeliaRose802/saw-spec-gen/releases/download/${SAW_SPEC_GEN_TAG}/saw-spec-gen-linux-x86_64.tar.gz"; \
     fi \
- && cargo install \
-        --git https://github.com/AmeliaRose802/saw-spec-gen.git \
-        ${ref_args} \
-        --root /tmp/ssg-install \
-        saw-spec-gen \
- && cp /tmp/ssg-install/bin/saw-spec-gen /root/.demo_protocol/bin/saw-spec-gen \
+ && curl -fsSL -o /tmp/ssg.tar.gz "${ssg_url}" \
+ && tar -xzf /tmp/ssg.tar.gz -C /root/.demo_protocol/bin \
  && chmod +x /root/.demo_protocol/bin/saw-spec-gen \
- && rm -rf /tmp/ssg-install \
+ && rm /tmp/ssg.tar.gz \
  && /root/.demo_protocol/bin/saw-spec-gen --version
 
 # ── Env vars matching scripts/ci-install.ps1's GITHUB_ENV output ──────
