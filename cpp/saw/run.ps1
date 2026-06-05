@@ -146,20 +146,48 @@ $incAbs  = (Resolve-Path '..\include').Path
 # (pulled by cpp/include/sdep/types.hpp) fails to resolve.
 #
 # The standalone LLVM tarball we install on Linux
-# (LLVM-${VERSION}-Linux-X64.tar.xz) ships libc++ headers at
-# `include/c++/v1/`. Those headers are ABI-portable at the
-# template/typedef level we use (cstdint typedefs, std::array,
-# std::optional shape) and let clang produce the bitcode SAW needs
-# without us having to install a real MSVC SDK in the container.
+# (LLVM-${VERSION}-Linux-X64.tar.xz) ships libc++ headers in the
+# per-target layout introduced in LLVM 17+:
+#
+#   include/c++/v1/                                  — generic headers
+#                                                      (cstdint, optional, …)
+#   include/<host-triple>/c++/v1/__config_site       — build-config header
+#
+# The generic `__config` does `#include <__config_site>`, so the
+# per-target dir must be on the include search path BEFORE the
+# generic one or clang fails with "'__config_site' file not found".
+#
+# We don't pass `-stdlib=libc++`: when targeting *-windows-msvc clang's
+# driver ignores it (emits "argument unused during compilation") and
+# refuses to add the libc++ paths automatically. So we feed both
+# include dirs by hand with `-isystem` — that's what actually wires
+# the headers in for IR generation.
 $linuxClangExtras = @()
 if (-not ($IsWindows -or $env:OS -eq 'Windows_NT')) {
-    $libcxxInc = Join-Path $ClangBin '..' | Join-Path -ChildPath 'include' | Join-Path -ChildPath 'c++' | Join-Path -ChildPath 'v1'
-    $resolved  = Resolve-Path $libcxxInc -ErrorAction SilentlyContinue
-    if ($resolved) {
-        $linuxClangExtras = @('-stdlib=libc++', '-isystem', $resolved.Path)
-        Write-Host ("  (linux) added libc++ headers: {0}" -f $resolved.Path) -ForegroundColor DarkGray
+    $llvmRoot = (Resolve-Path (Join-Path $ClangBin '..')).Path
+    $libcxxGeneric = Join-Path $llvmRoot 'include/c++/v1'
+
+    # Locate the per-target subdir holding __config_site. The triple
+    # is normally x86_64-unknown-linux-gnu but we glob to stay robust
+    # against tarball variants (e.g. x86_64-pc-linux-gnu).
+    $perTargetConfig = Get-ChildItem -Path (Join-Path $llvmRoot 'include') `
+        -Directory -ErrorAction SilentlyContinue |
+        ForEach-Object { Join-Path $_.FullName 'c++/v1/__config_site' } |
+        Where-Object { Test-Path $_ } |
+        Select-Object -First 1
+    $libcxxPerTarget = if ($perTargetConfig) { Split-Path -Parent $perTargetConfig } else { $null }
+
+    if ($libcxxPerTarget) {
+        $linuxClangExtras += @('-isystem', $libcxxPerTarget)
+        Write-Host ("  (linux) added per-target libc++ headers: {0}" -f $libcxxPerTarget) -ForegroundColor DarkGray
     } else {
-        Write-Warning ("libc++ headers not found at {0} — clang may fail to find <cstdint> when targeting x86_64-pc-windows-msvc on Linux." -f $libcxxInc)
+        Write-Warning ("Per-target libc++ headers (containing __config_site) not found under {0}/include/<triple>/c++/v1 — clang may fail with '__config_site file not found'." -f $llvmRoot)
+    }
+    if (Test-Path $libcxxGeneric) {
+        $linuxClangExtras += @('-isystem', $libcxxGeneric)
+        Write-Host ("  (linux) added generic libc++ headers:    {0}" -f $libcxxGeneric) -ForegroundColor DarkGray
+    } else {
+        Write-Warning ("libc++ headers not found at {0} — clang may fail to find <cstdint> when targeting x86_64-pc-windows-msvc on Linux." -f $libcxxGeneric)
     }
 }
 
