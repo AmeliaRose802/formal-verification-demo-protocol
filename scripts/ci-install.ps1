@@ -72,6 +72,21 @@ $userHome    = if ($env:HOME) { $env:HOME } else { $env:USERPROFILE }
 $installRoot = Join-Path $userHome '.demo_protocol'
 New-Item -ItemType Directory -Path $installRoot -Force | Out-Null
 
+# On Windows, exclude the install tree from Defender real-time scanning.
+# Extracting the LLVM/SAW tarballs writes thousands of files; AV scanning
+# each one as it lands is the single biggest cause of the multi-minute
+# (sometimes ~hour) cold install on hosted windows runners. Best-effort:
+# hosted runners run elevated so this succeeds; a non-admin local dev just
+# gets a warning and the slower path.
+if ($platform -eq 'Windows') {
+    try {
+        Add-MpPreference -ExclusionPath $installRoot -ErrorAction Stop
+        Write-Host "  Defender exclusion added for $installRoot" -ForegroundColor DarkGreen
+    } catch {
+        Write-Host "  (Defender exclusion not applied: $($_.Exception.Message))" -ForegroundColor DarkYellow
+    }
+}
+
 function Write-Step([string]$msg) {
     Write-Host ''
     Write-Host '═══════════════════════════════════════════════════════' -ForegroundColor Cyan
@@ -84,7 +99,15 @@ function Get-DownloadedArchive {
     param(
         [Parameter(Mandatory)][string] $Url,
         [Parameter(Mandatory)][string] $DestDir,
-        [switch] $Tarball
+        [switch] $Tarball,
+        # When set (tarballs only), extract just these archive members
+        # instead of the whole thing. Massively reduces disk writes +
+        # AV scanning when the archive ships gigabytes we never use.
+        [string[]] $IncludeMembers,
+        # Passed through to tar --strip-components. Lets selective
+        # extraction land members directly at $DestDir without the
+        # leading top-level archive directory.
+        [int] $StripComponents = 0
     )
     if ((Test-Path -LiteralPath $DestDir) -and -not $Force) {
         # Heuristic: if the dir exists AND is non-empty, treat as cached.
@@ -111,8 +134,11 @@ function Get-DownloadedArchive {
         $tarExe = if ($platform -eq 'Windows') {
             Join-Path $env:SystemRoot 'System32\tar.exe'
         } else { 'tar' }
+        $tarArgs = @('-xf', $tmp)
+        if ($StripComponents -gt 0) { $tarArgs += "--strip-components=$StripComponents" }
+        if ($IncludeMembers)        { $tarArgs += $IncludeMembers }
         Push-Location $DestDir
-        try { & $tarExe -xf $tmp } finally { Pop-Location }
+        try { & $tarExe @tarArgs } finally { Pop-Location }
     } else {
         Expand-Archive -LiteralPath $tmp -DestinationPath $DestDir -Force
     }
@@ -127,14 +153,19 @@ if (-not (Test-Path -LiteralPath (Join-Path $llvmRoot ('bin/clang' + $exe))) -or
     switch ($platform) {
         'Windows' {
             $url = "https://github.com/llvm/llvm-project/releases/download/llvmorg-$LlvmVersion/clang+llvm-$LlvmVersion-x86_64-pc-windows-msvc.tar.xz"
-            $stage = Join-Path $installRoot 'llvm-stage'
-            if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }
-            Get-DownloadedArchive -Url $url -DestDir $stage -Tarball
-            # Tarball extracts to clang+llvm-<ver>-<triple>/ — flatten.
-            $inner = Get-ChildItem -LiteralPath $stage -Directory | Select-Object -First 1
+            $topDir = "clang+llvm-$LlvmVersion-x86_64-pc-windows-msvc"
             if (Test-Path $llvmRoot) { Remove-Item -Recurse -Force $llvmRoot }
-            Move-Item -LiteralPath $inner.FullName -Destination $llvmRoot
-            Remove-Item -Recurse -Force $stage
+            # Only extract what verify_all.ps1 actually uses: the
+            # executables (bin/: clang, opt, llvm-as, llvm-link, ...) and
+            # clang's builtin headers (lib/clang/<ver>/include). The full
+            # tarball unpacks to ~5 GB dominated by LLVM/Clang static .lib
+            # archives we never link against — writing + AV-scanning those
+            # is what made the cold Windows install take ~an hour and blow
+            # the job timeout before the cache could be saved. --strip-
+            # components=1 drops the leading "$topDir/" so members land at
+            # $llvmRoot/bin and $llvmRoot/lib/clang directly.
+            Get-DownloadedArchive -Url $url -DestDir $llvmRoot -Tarball `
+                -StripComponents 1 -IncludeMembers "$topDir/bin", "$topDir/lib/clang"
         }
         'Linux' {
             $url = "https://github.com/llvm/llvm-project/releases/download/llvmorg-$LlvmVersion/LLVM-$LlvmVersion-Linux-X64.tar.xz"
