@@ -20,7 +20,7 @@
 statusPayloadBytes s = take`{16} (drop`{2} s)
 ```
 
-> **Verification failed:** saw-spec-gen failed
+> **Not yet verified.**
 
 Computes 16 bytes from `s`.
 

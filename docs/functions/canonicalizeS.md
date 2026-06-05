@@ -25,7 +25,7 @@ canonicalizeS r =
   # (split r.timestamp : [8][8])
 ```
 
-> **Verification failed:** saw-spec-gen failed
+> **Not yet verified.**
 
 Computes 3 * (1 + [StructFieldLen](../types.md#structfieldlen)) + [MaxHeaders](../types.md#maxheaders) * 2 * (1 + [StructFieldLen](../types.md#structfieldlen)) + 8 bytes from `r`.
 

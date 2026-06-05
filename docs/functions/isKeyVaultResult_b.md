@@ -20,7 +20,7 @@
 isKeyVaultResult_b r = r <= KV_IoError_b
 ```
 
-> **Verification failed:** saw-spec-gen failed
+> **Not yet verified.**
 
 Well-formedness predicates over ABI-width enum reps
 C++ enums are `enum class : std::uint8_t` so the LLVM ABI parameter

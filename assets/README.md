@@ -21,7 +21,7 @@ update `_appLogoPath` / `_appFaviconPath` to match.
 # From the repo root
 & C:\Users\ameliapayne\pretty-specs\pipeline.ps1 `
     -Spec cryptol\SDEP.cry `
-    -Impl cpp\saw\verify_targets.cpp -ImplLang cpp `
+    -Impl cpp\src\decision.cpp -ImplLang cpp `
     -CxxIncludeDirs cpp\include -CxxStandard c++20 `
     -ExtraClangFlags '-fexceptions','-fno-inline' `
     -PrettySpecs C:\Users\ameliapayne\pretty-specs\target\release\pretty-specs.exe `
@@ -33,3 +33,10 @@ update `_appLogoPath` / `_appFaviconPath` to match.
 ```
 
 `-Logo` and `-Favicon` are optional — omit them for a plain build.
+
+The pipeline driver passes `-SpecOnlyOnMissing` to `saw-spec-gen gen-verify` by
+default so that private Cryptol-only helpers (e.g. `packPad`, `derivePin`, the
+ABI extractor lemmas, etc.) — which by design have no separate C++
+implementation symbol — show up in the rendered docs as "not attempted /
+spec-only helper" rather than as red `error` entries. Pass
+`-SpecOnlyOnMissing:$false` to restore the old strict-error behaviour.

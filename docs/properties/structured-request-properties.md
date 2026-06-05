@@ -21,8 +21,7 @@ canonicalizeS { r | hdrs = [ if h.isAuth then { h | value = v2 } else h
 
 > ⚠ **Implementation equivalence is incomplete.** This property holds against the Cryptol model. For the guarantee to carry over to the compiled code, every involved function must also have a SAW equivalence proof.
 >
-> - ✗ equivalence proof **failed**: `canonicalizeS`
-> - ✗ equivalence proof **not yet attempted**: `fieldNormalized`, `requestNormalized`
+> - ✗ equivalence proof **not yet attempted**: `canonicalizeS`, `fieldNormalized`, `requestNormalized`
 
 **Involved:** [`canonicalizeS`](../functions/canonicalizeS.md), [`fieldNormalized`](../functions/fieldNormalized.md), [`requestNormalized`](../functions/requestNormalized.md)
 

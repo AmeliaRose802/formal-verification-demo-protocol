@@ -6,7 +6,7 @@
 FM_Disabled_b        = 0 : [8]
 ```
 
-> **Verification failed:** saw-spec-gen failed
+> **Not yet verified.**
 
 Enum byte constants (must match enum-class declaration order in
 cpp/include/sdep/types.hpp).

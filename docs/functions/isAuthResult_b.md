@@ -20,7 +20,7 @@
 isAuthResult_b r = r <= AR_VaultUnavailable_b
 ```
 
-> **Verification failed:** saw-spec-gen failed
+> **Not yet verified.**
 
 Checks whether the auth result b is valid for the given inputs.
 

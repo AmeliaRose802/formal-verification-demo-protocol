@@ -118,8 +118,9 @@ isValidRequestDate(std::int64_t requestTimestamp,
 // (total 2 + nm + nb bytes) into `out`. Caller must size `out` to at
 // least 2 + nm + nb bytes. Returns the number of bytes written.
 //
-// Verified in cpp/saw/custom/canonicalize_lp.saw against the
-// canonicalize_lp_post Cryptol model in SDEP_cpp.cry.
+// Verified by auto-generated SAW spec under cpp/saw/out_canonicalize_lp/
+// (produced by saw-spec-gen gen-verify) against the canonicalize_lp_post
+// Cryptol model in SDEP_cpp.cry.
 std::size_t
 canonicalize_lp(std::uint8_t* out,
                 const std::uint8_t* m, std::uint8_t nm,

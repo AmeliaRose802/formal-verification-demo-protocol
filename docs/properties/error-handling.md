@@ -19,7 +19,7 @@ enrollDevice True True AR_VaultUnavailable_b activationResult
 > ⚠ **Implementation equivalence is incomplete.** This property holds against the Cryptol model. For the guarantee to carry over to the compiled code, every involved function must also have a SAW equivalence proof.
 >
 > - ✓ proven equivalent: `enrollDevice`
-> - ✗ equivalence proof **failed**: `isActivationResult_b`
+> - ✗ equivalence proof **not yet attempted**: `isActivationResult_b`
 
 **Involved:** [`AR_VaultUnavailable_b`](../functions/AR_VaultUnavailable_b.md), [`ER_InternalError_b`](../functions/ER_InternalError_b.md), [`enrollDevice`](../functions/enrollDevice.md), [`isActivationResult_b`](../functions/isActivationResult_b.md)
 
@@ -39,7 +39,7 @@ provisionKey True False vaultResult keyIsActive == PR_BadRequest_b
 > ⚠ **Implementation equivalence is incomplete.** This property holds against the Cryptol model. For the guarantee to carry over to the compiled code, every involved function must also have a SAW equivalence proof.
 >
 > - ✓ proven equivalent: `provisionKey`
-> - ✗ equivalence proof **failed**: `isKeyVaultResult_b`
+> - ✗ equivalence proof **not yet attempted**: `isKeyVaultResult_b`
 
 **Involved:** [`PR_BadRequest_b`](../functions/PR_BadRequest_b.md), [`isKeyVaultResult_b`](../functions/isKeyVaultResult_b.md), [`provisionKey`](../functions/provisionKey.md)
 
@@ -60,7 +60,7 @@ enrollDevice True False authResult activationResult == ER_Unauthorized_b
 > ⚠ **Implementation equivalence is incomplete.** This property holds against the Cryptol model. For the guarantee to carry over to the compiled code, every involved function must also have a SAW equivalence proof.
 >
 > - ✓ proven equivalent: `enrollDevice`
-> - ✗ equivalence proof **failed**: `isActivationResult_b`, `isAuthResult_b`
+> - ✗ equivalence proof **not yet attempted**: `isActivationResult_b`, `isAuthResult_b`
 
 **Involved:** [`ER_Unauthorized_b`](../functions/ER_Unauthorized_b.md), [`enrollDevice`](../functions/enrollDevice.md), [`isActivationResult_b`](../functions/isActivationResult_b.md), [`isAuthResult_b`](../functions/isAuthResult_b.md)
 
@@ -83,7 +83,7 @@ enrollDevice True True AR_Authenticated_b activationResult
 > ⚠ **Implementation equivalence is incomplete.** This property holds against the Cryptol model. For the guarantee to carry over to the compiled code, every involved function must also have a SAW equivalence proof.
 >
 > - ✓ proven equivalent: `enrollDevice`
-> - ✗ equivalence proof **failed**: `isActivationResult_b`
+> - ✗ equivalence proof **not yet attempted**: `isActivationResult_b`
 
 **Involved:** [`AC_AlreadyActive_b`](../functions/AC_AlreadyActive_b.md), [`AC_Success_b`](../functions/AC_Success_b.md), [`AR_Authenticated_b`](../functions/AR_Authenticated_b.md), [`ER_InternalError_b`](../functions/ER_InternalError_b.md), [`enrollDevice`](../functions/enrollDevice.md), [`isActivationResult_b`](../functions/isActivationResult_b.md)
 

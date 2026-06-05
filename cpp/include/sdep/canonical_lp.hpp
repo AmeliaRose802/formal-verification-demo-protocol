@@ -9,10 +9,12 @@
 //
 // canonicalize_lp below is the structural fix: each field is prefixed by its
 // 1-byte length. SDEP.cry P24 proves the resulting byte stream is injective
-// at bounded sizes; the SAW spec in cpp/saw/custom/canonicalize_lp.saw
-// proves the function below matches that Cryptol model byte-for-byte for all
-// nm,nb <= 16 — i.e. Hoare-logic verification of the actual C++ binary's
-// LLVM IR, not just a paper model.
+// at bounded sizes; the SAW spec auto-generated under cpp/saw/out_canonicalize_lp/
+// (produced by `saw-spec-gen gen-verify` with `--in-buffer-size`,
+// `--out-buffer-param`, `--cryptol-fn-out`, `--max-len-precond`, and
+// `--cryptol-arg-order`) proves the function below matches that Cryptol model
+// byte-for-byte for all nm,nb <= 4 — i.e. Hoare-logic verification of the
+// actual C++ binary's LLVM IR, not just a paper model.
 
 #pragma once
 

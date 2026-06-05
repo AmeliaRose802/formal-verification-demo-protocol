@@ -3,7 +3,10 @@
 ### Signature
 
 **Parameters**
+- `_`: [10][8]
+- `_`: [4][8]
 - `nm`: [8]
+- `_`: [4][8]
 - `nb`: [8]
 
 **Returns**
@@ -11,17 +14,19 @@
 
 <details><summary>Raw signature</summary>
 
-`[8] -> [8] -> [64]`
+`[10][8] -> [4][8] -> [8] -> [4][8] -> [8] -> [64]`
 
 </details>
 
 ### Formal definition (Cryptol)
 
 ```haskell
-canonicalize_lp_ret nm nb = (zext nm) + (zext nb) + 2
+canonicalize_lp_ret _ _ nm _ nb = (zext nm) + (zext nb) + 2
 ```
 
-> **Verification failed:** saw-spec-gen failed
+> **Not yet verified.**
 
 Return value of canonicalize_lp: total bytes written = 2 + nm + nb.
+Takes the full C arg list and ignores the buffers so the tool can do
+a verbatim 1:1 arg mapping (no --cryptol-arg-order flag needed).
 

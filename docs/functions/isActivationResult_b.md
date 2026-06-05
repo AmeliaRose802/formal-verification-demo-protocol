@@ -20,7 +20,7 @@
 isActivationResult_b r = r <= AC_IoFailure_b
 ```
 
-> **Verification failed:** saw-spec-gen failed
+> **Not yet verified.**
 
 Checks whether the activation result b is valid for the given inputs.
 

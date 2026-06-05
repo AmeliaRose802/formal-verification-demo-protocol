@@ -82,7 +82,7 @@ enrollDevice fleetEnabled False authResult activationResult
 > ⚠ **Implementation equivalence is incomplete.** This property holds against the Cryptol model. For the guarantee to carry over to the compiled code, every involved function must also have a SAW equivalence proof.
 >
 > - ✓ proven equivalent: `enrollDevice`
-> - ✗ equivalence proof **failed**: `isActivationResult_b`, `isAuthResult_b`
+> - ✗ equivalence proof **not yet attempted**: `isActivationResult_b`, `isAuthResult_b`
 
 **Involved:** [`ER_Unauthorized_b`](../functions/ER_Unauthorized_b.md), [`enrollDevice`](../functions/enrollDevice.md), [`isActivationResult_b`](../functions/isActivationResult_b.md), [`isAuthResult_b`](../functions/isAuthResult_b.md)
 

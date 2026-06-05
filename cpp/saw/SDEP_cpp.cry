@@ -241,25 +241,34 @@ getStatus fleetEnabled hasKey keyIsActive keyId preBytes =
 //     out[2+nm..2+nm+nb) = b[0..nb)
 //
 // to `out`, leaving bytes at positions >= 2+nm+nb unchanged. The SAW spec
-// (cpp/saw/custom/canonicalize_lp.saw) runs at MAX_LEN = 4 — the smallest
-// bound that still exercises the loop induction. It composes with P24
-// (FieldLen = 16) up to min(4, 16) = 4: SAW proves the C++ implements the
-// byte layout for nm,nb <= 4, and P24 proves that byte layout is injective
-// at any FieldLen >= 4. Wall-clock SMT timings on commodity hardware (Z3 4.x):
-// MAX_LEN=4 ~ seconds (current), MAX_LEN=8 ~ 10s, MAX_LEN=12 ~ 2 min,
-// MAX_LEN=16 ~ 13 min. To lift the bound entirely use `llvm_invariant`.
+// (auto-generated under cpp/saw/out_canonicalize_lp/ via saw-spec-gen
+// gen-verify with --max-len-precond nm=4 / nb=4) runs at MAX_LEN = 4 —
+// the smallest bound that still exercises the loop induction. It composes
+// with P24 (FieldLen = 16) up to min(4, 16) = 4: SAW proves the C++
+// implements the byte layout for nm,nb <= 4, and P24 proves that byte
+// layout is injective at any FieldLen >= 4. Wall-clock SMT timings on
+// commodity hardware (Z3 4.x): MAX_LEN=4 ~ seconds (current),
+// MAX_LEN=8 ~ 10s, MAX_LEN=12 ~ 2 min, MAX_LEN=16 ~ 13 min. To lift the
+// bound entirely use `llvm_invariant`.
 //
 // To change MAX_LEN: change the [N][8] / [2*N+2][8] sizes below, the
 // modulo constants in `byteAt`, and the matching literals in the SAW spec.
+//
+// Both Cryptol fns take the C arg list verbatim — (out, m, nm, b, nb) —
+// so saw-spec-gen's default 1:1 mapping works with no --cryptol-arg-order
+// override.  `canonicalize_lp_ret` ignores the buffer args (its result
+// depends only on the two lengths); `canonicalize_lp_post` interprets
+// the incoming `out` as the *pre-state* of the buffer (i.e. the bytes
+// past 2+nm+nb that the C function must leave untouched).
 
 canonicalize_lp_post :
-    [8] ->          // nm (length of m, <=MAX_LEN)
-    [4][8] ->       // m  (input buffer, contents only read at indices [0,nm))
-    [8] ->          // nb (length of b, <=MAX_LEN)
-    [4][8] ->       // b  (input buffer, contents only read at indices [0,nb))
-    [10][8] ->      // pre-state of the output buffer (= 2 + 2*MAX_LEN bytes)
+    [10][8] ->      // out (pre-state of the output buffer, 2 + 2*MAX_LEN bytes)
+    [4][8] ->       // m   (input buffer, contents only read at indices [0,nm))
+    [8] ->          // nm  (length of m, <=MAX_LEN)
+    [4][8] ->       // b   (input buffer, contents only read at indices [0,nb))
+    [8] ->          // nb  (length of b, <=MAX_LEN)
     [10][8]
-canonicalize_lp_post nm m nb b preOut =
+canonicalize_lp_post out m nm b nb =
     [ byteAt i | i <- ([0 .. 9] : [10][8]) ]
   where
     byteAt : [8] -> [8]
@@ -268,11 +277,13 @@ canonicalize_lp_post nm m nb b preOut =
        | (i >= 1)      /\ (i <= nm)          then m @ ((i - 1) % 4)
        |  i == nm + 1                        then nb
        | (i >= nm + 2) /\ (i < nm + nb + 2)  then b @ ((i - nm - 2) % 4)
-      else                                        preOut @ i
+      else                                        out @ i
 
 // Return value of canonicalize_lp: total bytes written = 2 + nm + nb.
-canonicalize_lp_ret : [8] -> [8] -> [64]
-canonicalize_lp_ret nm nb = (zext nm) + (zext nb) + 2
+// Takes the full C arg list and ignores the buffers so the tool can do
+// a verbatim 1:1 arg mapping (no --cryptol-arg-order flag needed).
+canonicalize_lp_ret : [10][8] -> [4][8] -> [8] -> [4][8] -> [8] -> [64]
+canonicalize_lp_ret _ _ nm _ nb = (zext nm) + (zext nb) + 2
 
 ////////////////////////////////////////////////////////////////////////
 // Well-formedness predicates over ABI-width enum reps

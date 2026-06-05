@@ -12,3 +12,5 @@
   href: exception-lowering.md
 - name: SDEP in Action
   href: sdep-in-action.md
+- name: Regenerate & Publish
+  href: regenerate-and-publish.md

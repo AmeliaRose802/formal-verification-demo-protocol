@@ -20,7 +20,7 @@
 allowedOf r = (r && 0x0001) != 0
 ```
 
-> **Verification failed:** saw-spec-gen failed
+> **Not yet verified.**
 
 [enforceAccess](enforceAccess.md) result extractors
 [enforceAccess](enforceAccess.md) packs the EnforceOutcome struct into one i16 with

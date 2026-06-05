@@ -82,15 +82,45 @@ foreach ($t in @(
     }
 }
 
-# Targets: (cppName, cryptolName)
+# Targets: (cppName, cryptolName, optional Bc).
+#
+# Bc selects which compiled artifact saw-spec-gen runs against.
+#   'O0'  → verify_targets.bc   (-O0 -fno-inline, default; preserves
+#                                 each decision function as a standalone
+#                                 LLVM symbol with no STL inlining).
+#   'O1'  → verify_targets_o1.bc (-O1, used when the target transitively
+#                                 invokes STL aggregate constructors
+#                                 (e.g. std::optional<Uuid>) that SAW
+#                                 can't symbolically execute at -O0
+#                                 because the constructor bodies do
+#                                 typed reads through empty-struct
+#                                 globals (`std::nullopt_t`,
+#                                 `std::in_place_t`).  At -O1 those
+#                                 constructors fold into the caller as
+#                                 plain byte stores.)
+#
+# Cryptol fns canonicalize_lp_ret + canonicalize_lp_post model the two
+# halves of an output-pointer + return-value function: -CryRet feeds
+# `--cryptol-fn` (return value) and -CryPost feeds `--cryptol-fn-out`
+# (post-state of the output buffer).  saw-spec-gen wires these together
+# via `--out-buffer-param`/`--in-buffer-size`/`--max-len-precond`.
 $targets = @(
     @{ Cpp = 'authenticate';        Cry = 'authenticate'            }
     @{ Cpp = 'isValidRequestDate';  Cry = 'isValidRequestDate'      }
     @{ Cpp = 'provisionKey';        Cry = 'provisionKey'            }
     @{ Cpp = 'enrollDevice';        Cry = 'enrollDevice'            }
     @{ Cpp = 'enforceAccess';       Cry = 'enforceAccess'           }
-    @{ Cpp = 'getStatus';           Cry = 'getStatus'               }
-    @{ Cpp = 'canonicalize_lp';     Cry = 'canonicalize_lp_post'    }
+    @{ Cpp = 'getStatus';           Cry = 'getStatus'; Bc = 'O1'    }
+    @{ Cpp = 'canonicalize_lp';     Cry = 'canonicalize_lp_ret';
+       CryPost = 'canonicalize_lp_post';
+       ExtraArgs = @(
+           '--in-buffer-size',    'm=4',
+           '--in-buffer-size',    'b=4',
+           '--out-buffer-param',  'out=10',
+           '--cryptol-fn-out',    'out=canonicalize_lp_post',
+           '--max-len-precond',   'nm=4',
+           '--max-len-precond',   'nb=4'
+       ) }
 )
 if ($Only) {
     $targets = $targets | Where-Object { $Only -contains $_.Cpp }
@@ -158,24 +188,27 @@ foreach ($t in $targets) {
     Copy-Item .\SDEP_cpp.cry (Join-Path $outDir 'SDEP_cpp.cry') -Force
     Copy-Item ..\..\cryptol\SDEP.cry (Join-Path $outDir 'SDEP.cry') -Force
 
-    # If a hand-written custom spec exists, use it verbatim and skip
-    # gen-verify entirely.  This is for functions whose semantics
-    # involve patterns auto-gen can't model — e.g. `getStatus` whose
-    # `std::optional<Uuid>` payload is intentionally uninitialised
-    # when empty.
-    $customFile = Join-Path $here "custom\$cppName.saw"
-    if (Test-Path $customFile) {
-        Copy-Item $customFile (Join-Path $outDir 'verify.saw') -Force
-        Write-Host "  using custom spec $customFile" -ForegroundColor DarkGray
-    } else {
-    & $SawSpecGen gen-verify `
-        --ast $ast `
-        --bitcode (Join-Path $outDir 'verify_targets.bc') `
-        --llvm-ir (Join-Path $outDir 'verify_targets.ll') `
-        --cryptol-spec (Join-Path $outDir 'SDEP_cpp.cry') `
-        --function $cppName `
-        --cryptol-fn $cryName `
-        --output $outDir
+    # Per-target bitcode choice (default -O0, override to -O1 for
+    # targets that pull in STL aggregate constructors SAW can't
+    # symbolically execute at -O0 — currently only `getStatus`).
+    $bcKind  = if ($t.Bc) { $t.Bc } else { 'O0' }
+    $bcName  = if ($bcKind -eq 'O1') { 'verify_targets_o1.bc' } else { 'verify_targets.bc' }
+    $llName  = if ($bcKind -eq 'O1') { 'verify_targets_o1.ll' } else { 'verify_targets.ll' }
+    $bcPath  = Join-Path $outDir $bcName
+    $llPath  = Join-Path $outDir $llName
+
+    $genArgs = @(
+        'gen-verify',
+        '--ast',          $ast,
+        '--bitcode',      $bcPath,
+        '--llvm-ir',      $llPath,
+        '--cryptol-spec', (Join-Path $outDir 'SDEP_cpp.cry'),
+        '--function',     $cppName,
+        '--cryptol-fn',   $cryName,
+        '--output',       $outDir
+    )
+    if ($t.ExtraArgs) { $genArgs += $t.ExtraArgs }
+    & $SawSpecGen @genArgs
     if ($LASTEXITCODE) {
         Write-Host "  gen-verify failed" -ForegroundColor Red
         $results += [PSCustomObject]@{ Fn=$cppName; Verdict='gen-verify-failed' }
@@ -213,8 +246,9 @@ foreach ($t in $targets) {
     # (all six SDEP decision functions are pure value-in / value-out).
     $verifyPath = Join-Path $outDir 'verify.saw'
     $verifyText = Get-Content -Raw $verifyPath
+    $bcEsc      = [regex]::Escape($bcName)
     $stripped = $verifyText `
-        -replace '(?m)^\s*m_main\s+<-\s+llvm_load_module\s+"verify_targets\.bc";.*$', 'm <- llvm_load_module "verify_targets.bc";' `
+        -replace ('(?m)^\s*m_main\s+<-\s+llvm_load_module\s+"' + $bcEsc + '";.*$'), ('m <- llvm_load_module "' + $bcName + '";') `
         -replace '(?m)^\s*m_stubs\s+<-\s+llvm_load_module\s+"vtable_stubs\.bc";.*\r?\n', '' `
         -replace '(?m)^\s*m\s+<-\s+llvm_combine_modules\s+m_main.*\r?\n', '' `
         -replace '(?m)^\s*include\s+"interface_overrides\.saw";.*\r?\n', '' `
@@ -223,7 +257,6 @@ foreach ($t in $targets) {
         Set-Content -Path $verifyPath -Value $stripped -NoNewline
         Write-Host "  stripped unused vtable / interface plumbing" -ForegroundColor DarkGray
     }
-    }  # end else (no custom override)
 
     # saw-spec-gen may emit a vtable_stubs.ll for STL polymorphic types
     # it sees in the bitcode (e.g. std::memory_resource, std::exception).

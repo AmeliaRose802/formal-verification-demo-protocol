@@ -20,7 +20,7 @@
 isAccessMode_b m = m <= AM_Enforce_b
 ```
 
-> **Verification failed:** saw-spec-gen failed
+> **Not yet verified.**
 
 Checks whether the access mode b is valid for the given inputs.
 

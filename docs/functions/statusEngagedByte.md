@@ -20,7 +20,7 @@
 statusEngagedByte  s = s @ 18
 ```
 
-> **Verification failed:** saw-spec-gen failed
+> **Not yet verified.**
 
 [getStatus](getStatus.md) result extractors
 EnrollmentStatus byte layout (see [getStatus](getStatus.md) above):

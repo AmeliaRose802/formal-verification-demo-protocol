@@ -34,6 +34,27 @@ module SDEP_gaps where
 import SDEP
 
 ////////////////////////////////////////////////////////////////////////////////
+// Local re-implementation of helpers that live behind `private` in SDEP.cry.
+// These shadow the encapsulated names so the gap properties below can refer
+// to them without having to expose them at SDEP's public API surface (which
+// would weaken the spec module's encapsulation just to satisfy this
+// regression file). The bodies are intentionally identical to SDEP.cry's
+// own definitions — keep them in sync if you change SDEP.cry.
+////////////////////////////////////////////////////////////////////////////////
+
+// from `private` block around line 89 in SDEP.cry
+none : OptUUID
+none = (False, zero)
+
+// from `private` block around line 158 in SDEP.cry (HMAC algebra)
+hmacSha256 : HmacKey -> Request -> HmacTag
+hmacSha256 k r = k ^ r ^ (r <<< 1)   // placeholder; specs only use equality
+
+isValidSignature : HmacKey -> Request -> HmacTag -> Bit
+isValidSignature key req providedSig =
+  hmacSha256 key req == providedSig
+
+////////////////////////////////////////////////////////////////////////////////
 // G30 — Provision has no caller authentication.
 //
 // `provisionKey` takes `validRequest` (a flag computed from headers

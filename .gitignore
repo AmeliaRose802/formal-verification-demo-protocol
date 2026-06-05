@@ -52,6 +52,9 @@ Thumbs.db
 /_*.txt
 /_*.md
 
+# Pipeline orchestration scratch (regen-docs.ps1)
+/.pipeline.pid
+
 # DocFX build output
 _site/
 obj/

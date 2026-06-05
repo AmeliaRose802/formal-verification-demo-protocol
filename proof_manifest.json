@@ -2,26 +2,22 @@
   "functions": {
     "ER_Disabled_b": {
       "overall": {
-        "reason": "saw-spec-gen failed",
-        "status": "failed"
+        "status": "not_attempted"
       }
     },
     "FM_Disabled_b": {
       "overall": {
-        "reason": "saw-spec-gen failed",
-        "status": "failed"
+        "status": "not_attempted"
       }
     },
     "PR_Disabled_b": {
       "overall": {
-        "reason": "saw-spec-gen failed",
-        "status": "failed"
+        "status": "not_attempted"
       }
     },
     "allowedOf": {
       "overall": {
-        "reason": "saw-spec-gen failed",
-        "status": "failed"
+        "status": "not_attempted"
       }
     },
     "authenticate": {
@@ -32,20 +28,17 @@
     },
     "canonicalizeS": {
       "overall": {
-        "reason": "saw-spec-gen failed",
-        "status": "failed"
+        "status": "not_attempted"
       }
     },
     "canonicalize_lp_post": {
       "overall": {
-        "reason": "saw-spec-gen failed",
-        "status": "failed"
+        "status": "not_attempted"
       }
     },
     "canonicalize_lp_ret": {
       "overall": {
-        "reason": "saw-spec-gen failed",
-        "status": "failed"
+        "status": "not_attempted"
       }
     },
     "enforceAccess": {
@@ -68,32 +61,27 @@
     },
     "isAccessDecision_b": {
       "overall": {
-        "reason": "saw-spec-gen failed",
-        "status": "failed"
+        "status": "not_attempted"
       }
     },
     "isAccessMode_b": {
       "overall": {
-        "reason": "saw-spec-gen failed",
-        "status": "failed"
+        "status": "not_attempted"
       }
     },
     "isActivationResult_b": {
       "overall": {
-        "reason": "saw-spec-gen failed",
-        "status": "failed"
+        "status": "not_attempted"
       }
     },
     "isAuthResult_b": {
       "overall": {
-        "reason": "saw-spec-gen failed",
-        "status": "failed"
+        "status": "not_attempted"
       }
     },
     "isKeyVaultResult_b": {
       "overall": {
-        "reason": "saw-spec-gen failed",
-        "status": "failed"
+        "status": "not_attempted"
       }
     },
     "isValidRequestDate": {
@@ -104,8 +92,7 @@
     },
     "loggedOf": {
       "overall": {
-        "reason": "saw-spec-gen failed",
-        "status": "failed"
+        "status": "not_attempted"
       }
     },
     "provisionKey": {
@@ -116,14 +103,12 @@
     },
     "statusEngagedByte": {
       "overall": {
-        "reason": "saw-spec-gen failed",
-        "status": "failed"
+        "status": "not_attempted"
       }
     },
     "statusPayloadBytes": {
       "overall": {
-        "reason": "saw-spec-gen failed",
-        "status": "failed"
+        "status": "not_attempted"
       }
     }
   },

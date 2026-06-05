@@ -18,7 +18,7 @@ P26: Access-enforce mode with no matching rule allows silently.
 > ⚠ **Implementation equivalence is incomplete.** This property holds against the Cryptol model. For the guarantee to carry over to the compiled code, every involved function must also have a SAW equivalence proof.
 >
 > - ✓ proven equivalent: `enforceAccess`
-> - ✗ equivalence proof **failed**: `allowedOf`, `loggedOf`
+> - ✗ equivalence proof **not yet attempted**: `allowedOf`, `loggedOf`
 
 **Involved:** [`AD_NoRule_b`](../functions/AD_NoRule_b.md), [`AM_Enforce_b`](../functions/AM_Enforce_b.md), [`allowedOf`](../functions/allowedOf.md), [`enforceAccess`](../functions/enforceAccess.md), [`loggedOf`](../functions/loggedOf.md)
 
@@ -38,7 +38,7 @@ loggedOf (enforceAccess AM_Audit_b decision) == (decision == AD_Deny_b)
 > ⚠ **Implementation equivalence is incomplete.** This property holds against the Cryptol model. For the guarantee to carry over to the compiled code, every involved function must also have a SAW equivalence proof.
 >
 > - ✓ proven equivalent: `enforceAccess`
-> - ✗ equivalence proof **failed**: `isAccessDecision_b`, `loggedOf`
+> - ✗ equivalence proof **not yet attempted**: `isAccessDecision_b`, `loggedOf`
 
 **Involved:** [`AD_Deny_b`](../functions/AD_Deny_b.md), [`AM_Audit_b`](../functions/AM_Audit_b.md), [`enforceAccess`](../functions/enforceAccess.md), [`isAccessDecision_b`](../functions/isAccessDecision_b.md), [`loggedOf`](../functions/loggedOf.md)
 

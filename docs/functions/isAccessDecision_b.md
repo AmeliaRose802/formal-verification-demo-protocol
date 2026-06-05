@@ -20,7 +20,7 @@
 isAccessDecision_b d = d <= AD_NoRule_b
 ```
 
-> **Verification failed:** saw-spec-gen failed
+> **Not yet verified.**
 
 Checks whether the access decision b is valid for the given inputs.
 

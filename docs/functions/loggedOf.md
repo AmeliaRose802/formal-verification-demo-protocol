@@ -20,7 +20,7 @@
 loggedOf  r = (r && 0x0100) != 0
 ```
 
-> **Verification failed:** saw-spec-gen failed
+> **Not yet verified.**
 
 Tests whether `r` is well-formed.
 

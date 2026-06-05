@@ -92,10 +92,15 @@ if (-not $OnlyCryptol) {
     # Functions blocked by an open saw-spec-gen bug (see
     # SAW_SPEC_GEN_BUG_REPORT_*.md). These are tracked as KNOWN-BUG
     # rather than ERROR so the pipeline doesn't go red while the
-    # upstream tooling fix is in flight.
-    $sawKnownBugs = @{
-        'enforceAccess' = 'SAW_SPEC_GEN_BUG_REPORT_packed_struct_return_i16.md'
-    }
+    # upstream tooling fix is in flight. (Empty: the three cases that
+    # previously needed hand-written specs (`enforceAccess`, `getStatus`,
+    # `canonicalize_lp`) are now auto-generated end-to-end via
+    # saw-spec-gen — `enforceAccess` through register-return support,
+    # `getStatus` by selecting the -O1 bitcode flavour (Bc='O1'), and
+    # `canonicalize_lp` through the buffer-override CLI flags
+    # `--in-buffer-size`, `--out-buffer-param`, `--cryptol-fn-out`,
+    # `--max-len-precond`, and `--cryptol-arg-order`.)
+    $sawKnownBugs = @{}
 
     foreach ($t in $targets) {
         $logFile = Join-Path $sawDir "out_$t\saw_run.log"
