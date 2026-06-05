@@ -23,7 +23,9 @@ on:
       - 'cryptol/**'
       - 'verify_all.ps1'
       - 'scripts/ci-install.ps1'
+      - 'Dockerfile'
       - '.github/workflows/verify.yml'
+      - '.github/workflows/publish-ci-image.yml'
   push:
     branches: [main]
     paths:
@@ -32,7 +34,9 @@ on:
       - 'cryptol/**'
       - 'verify_all.ps1'
       - 'scripts/ci-install.ps1'
+      - 'Dockerfile'
       - '.github/workflows/verify.yml'
+      - '.github/workflows/publish-ci-image.yml'
   workflow_dispatch:
 
 concurrency:
