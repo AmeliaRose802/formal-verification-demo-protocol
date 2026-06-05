@@ -136,13 +136,40 @@ $ast     = Join-Path $here 'verify_targets_ast.json'
 $srcAbs  = (Resolve-Path '..\src\decision.cpp').Path
 $incAbs  = (Resolve-Path '..\include').Path
 
+# Extra clang args needed when running on a non-Windows host.
+#
+# We target x86_64-pc-windows-msvc so the LLVM IR matches what the
+# production Windows build emits (MSVC name mangling + ABI) — that's
+# what verify.saw's `llvm_verify` symbol strings expect. On Windows
+# runners clang auto-discovers the installed MSVC stdlib for its
+# system includes. On Linux there's no MSVC stdlib, so `<cstdint>`
+# (pulled by cpp/include/sdep/types.hpp) fails to resolve.
+#
+# The standalone LLVM tarball we install on Linux
+# (LLVM-${VERSION}-Linux-X64.tar.xz) ships libc++ headers at
+# `include/c++/v1/`. Those headers are ABI-portable at the
+# template/typedef level we use (cstdint typedefs, std::array,
+# std::optional shape) and let clang produce the bitcode SAW needs
+# without us having to install a real MSVC SDK in the container.
+$linuxClangExtras = @()
+if (-not ($IsWindows -or $env:OS -eq 'Windows_NT')) {
+    $libcxxInc = Join-Path $ClangBin '..' | Join-Path -ChildPath 'include' | Join-Path -ChildPath 'c++' | Join-Path -ChildPath 'v1'
+    $resolved  = Resolve-Path $libcxxInc -ErrorAction SilentlyContinue
+    if ($resolved) {
+        $linuxClangExtras = @('-stdlib=libc++', '-isystem', $resolved.Path)
+        Write-Host ("  (linux) added libc++ headers: {0}" -f $resolved.Path) -ForegroundColor DarkGray
+    } else {
+        Write-Warning ("libc++ headers not found at {0} — clang may fail to find <cstdint> when targeting x86_64-pc-windows-msvc on Linux." -f $libcxxInc)
+    }
+}
+
 if (-not $SkipBuild) {
     Write-Host '─── compile cpp/src/decision.cpp → bitcode + IR (-O0)' -ForegroundColor Cyan
     & $clang -c -emit-llvm -O0 -fno-inline -fno-rtti -fexceptions `
-        -target x86_64-pc-windows-msvc -std=c++20 -I $incAbs $srcAbs -o $bc
+        -target x86_64-pc-windows-msvc -std=c++20 @linuxClangExtras -I $incAbs $srcAbs -o $bc
     if ($LASTEXITCODE) { throw "clang bc failed" }
     & $clang -S -emit-llvm -O0 -fno-inline -fno-rtti -fexceptions `
-        -target x86_64-pc-windows-msvc -std=c++20 -I $incAbs $srcAbs -o $ll
+        -target x86_64-pc-windows-msvc -std=c++20 @linuxClangExtras -I $incAbs $srcAbs -o $ll
     if ($LASTEXITCODE) { throw "clang ll failed" }
 
     Write-Host '─── compile cpp/src/decision.cpp → bitcode + IR (-O1, STL-inlined)' -ForegroundColor Cyan
@@ -151,16 +178,24 @@ if (-not $SkipBuild) {
     # are messy at -O0.  At -O1 the constructor bodies fold into plain
     # byte stores, which SAW can simulate directly.
     & $clang -c -emit-llvm -O1 -fno-rtti -fexceptions `
-        -target x86_64-pc-windows-msvc -std=c++20 -I $incAbs $srcAbs -o $bcOpt
+        -target x86_64-pc-windows-msvc -std=c++20 @linuxClangExtras -I $incAbs $srcAbs -o $bcOpt
     if ($LASTEXITCODE) { throw "clang -O1 bc failed" }
     & $clang -S -emit-llvm -O1 -fno-rtti -fexceptions `
-        -target x86_64-pc-windows-msvc -std=c++20 -I $incAbs $srcAbs -o $llOpt
+        -target x86_64-pc-windows-msvc -std=c++20 @linuxClangExtras -I $incAbs $srcAbs -o $llOpt
     if ($LASTEXITCODE) { throw "clang -O1 ll failed" }
 
     Write-Host '─── dump + filter clang AST' -ForegroundColor Cyan
-    cmd /c "`"$clang`" -Xclang -ast-dump=json -fsyntax-only -fno-rtti -fexceptions -target x86_64-pc-windows-msvc -std=c++20 -I`"$incAbs`" `"$srcAbs`" > `"$ast`" 2>NUL"
+    # Portable PS redirect (the old `cmd /c "... > $ast 2>NUL"` doesn't
+    # exist on Linux). `*> $null` discards stderr, `> $ast` captures
+    # JSON to disk. PS 7+ writes UTF-8 without BOM by default which is
+    # what clang's `-ast-dump=json` expects.
+    & $clang -Xclang -ast-dump=json -fsyntax-only -fno-rtti -fexceptions `
+        -target x86_64-pc-windows-msvc -std=c++20 @linuxClangExtras -I $incAbs $srcAbs 2>$null > $ast
     if ($LASTEXITCODE) { throw "clang ast-dump failed" }
-    & $SawSpecGen filter-ast --input $ast --output $ast --keep $here\..
+    # Use Join-Path so the path passed to saw-spec-gen is OS-native
+    # (Linux PS would otherwise hand it the literal string `<here>\..`,
+    # and Rust's std::fs treats `\` as a filename char on Linux).
+    & $SawSpecGen filter-ast --input $ast --output $ast --keep (Join-Path $here '..')
     if ($LASTEXITCODE) { throw "filter-ast failed" }
 }
 
@@ -273,7 +308,7 @@ foreach ($t in $targets) {
 
     Push-Location $outDir
     try {
-        $log = & $SawExe .\verify.saw 2>&1 | Out-String
+        $log = & $SawExe ./verify.saw 2>&1 | Out-String
         $log | Set-Content saw_run.log
         Write-Host $log
         $verdict = if ($log -match 'Proof succeeded')      { 'VERIFIED' }
