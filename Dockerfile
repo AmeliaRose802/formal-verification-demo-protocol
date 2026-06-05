@@ -8,7 +8,7 @@
 #   - PowerShell 7.6.2 (verify_all.ps1 and per-language run.ps1 are pwsh)
 #   - Rust stable with `llvm-tools-preview` (matching-version llvm-as for
 #     the Rust pipeline's bitcode-reassembly step)
-#   - saw-spec-gen (latest release)
+#   - saw-spec-gen (built from source; pinned by SAW_SPEC_GEN_TAG)
 #
 # Tools are dropped at the same paths ci-install.ps1 uses
 # ($HOME/.demo_protocol/{llvm,saw,bin}) so the layout is identical to a
@@ -86,22 +86,33 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
  && /usr/local/cargo/bin/rustc --version \
  && ls /usr/local/rustup/toolchains/*/lib/rustlib/x86_64-unknown-linux-gnu/bin/llvm-as
 
-# ── saw-spec-gen (latest release) ─────────────────────────────────────
+# ── saw-spec-gen (built from source) ──────────────────────────────────
 # Both per-language run.ps1 scripts read $env:SAW_SPEC_GEN to find this
-# binary. Baking it in keeps the verify job's cold start near-zero.
+# binary. We build from git rather than downloading a release tarball
+# because the saw-spec-gen repo doesn't currently publish release
+# binaries — its release.yml lives on a feature branch, not on master,
+# so `releases/latest/download/...` returns 404 and every image build
+# fails. Building once at image-bake time is fine: the Rust toolchain
+# is already installed in the previous layer, and the resulting binary
+# is baked into the image so the verify job pays nothing for it.
+#
+# SAW_SPEC_GEN_TAG controls which git ref to build:
+#   - "latest"  → origin's default branch (HEAD)
+#   - anything else (e.g. "v0.3.1" or a branch name) → that ref
 RUN mkdir -p /root/.demo_protocol/bin \
- && asset='saw-spec-gen-linux-x86_64.tar.gz' \
  && if [ "${SAW_SPEC_GEN_TAG}" = "latest" ]; then \
-        url="https://github.com/AmeliaRose802/saw-spec-gen/releases/latest/download/${asset}"; \
+        ref_args=""; \
     else \
-        url="https://github.com/AmeliaRose802/saw-spec-gen/releases/download/${SAW_SPEC_GEN_TAG}/${asset}"; \
+        ref_args="--tag ${SAW_SPEC_GEN_TAG}"; \
     fi \
- && curl -fsSL -o /tmp/ssg.tar.gz "$url" \
- && mkdir -p /tmp/ssg-stage \
- && tar -xzf /tmp/ssg.tar.gz -C /tmp/ssg-stage \
- && cp "$(find /tmp/ssg-stage -type f -name 'saw-spec-gen' | head -1)" /root/.demo_protocol/bin/saw-spec-gen \
+ && cargo install \
+        --git https://github.com/AmeliaRose802/saw-spec-gen.git \
+        ${ref_args} \
+        --root /tmp/ssg-install \
+        saw-spec-gen \
+ && cp /tmp/ssg-install/bin/saw-spec-gen /root/.demo_protocol/bin/saw-spec-gen \
  && chmod +x /root/.demo_protocol/bin/saw-spec-gen \
- && rm -rf /tmp/ssg.tar.gz /tmp/ssg-stage \
+ && rm -rf /tmp/ssg-install \
  && /root/.demo_protocol/bin/saw-spec-gen --version
 
 # ── Env vars matching scripts/ci-install.ps1's GITHUB_ENV output ──────
