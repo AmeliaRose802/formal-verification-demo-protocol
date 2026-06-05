@@ -60,7 +60,7 @@ jobs:
   # to surface, and gives reviewers fast feedback before the proof
   # job finishes.
   build-test:
-    name: build + unit tests (${{ matrix.os }})
+    name: build + unit tests, Rust + C++ (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
@@ -172,7 +172,7 @@ jobs:
   # Passes `-SkipRust` so Layer 2 (Rust ≡ Cryptol) is left to the
   # separate non-blocking `verify-rust-linux` job below.
   verify-linux:
-    name: verify (ubuntu-22.04, container)
+    name: verify C++ + Cryptol (ubuntu-22.04, container)
     runs-on: ubuntu-22.04
     needs: wait-for-image
     timeout-minutes: 60
@@ -196,7 +196,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: verify_out-ubuntu-22.04
+          name: verify_out-cpp-cryptol-ubuntu-22.04
           path: |
             verify_out/**
             cpp/saw/out_*/saw_run.log
@@ -224,7 +224,7 @@ jobs:
   # killed before the cache save step ran — leaving every subsequent
   # run to repeat the full cold install.
   verify-windows:
-    name: verify (windows-2022)
+    name: verify C++ + Cryptol (windows-2022)
     runs-on: windows-2022
     timeout-minutes: 120
 
@@ -268,7 +268,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: verify_out-windows-2022
+          name: verify_out-cpp-cryptol-windows-2022
           path: |
             verify_out/**
             cpp/saw/out_*/saw_run.log
@@ -290,7 +290,7 @@ jobs:
   # When the pipeline stabilises, fold this back into verify-linux /
   # verify-windows and drop `continue-on-error`.
   verify-rust-linux:
-    name: verify rust (ubuntu-22.04, container) [non-blocking]
+    name: verify Rust (ubuntu-22.04, container) [non-blocking]
     runs-on: ubuntu-22.04
     needs: wait-for-image
     continue-on-error: true
