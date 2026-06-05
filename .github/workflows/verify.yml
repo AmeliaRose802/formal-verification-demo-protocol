@@ -215,61 +215,110 @@ jobs:
   # the Rust layer, which doesn't run in this job.
   #
   # Budget note: the cold-cache `Install verification toolchain` step
-  # alone takes ~55-60 min on hosted windows-2022 runners (LLVM + SAW
-  # are ~1 GB combined and the runner's disk + GitHub-side extraction
-  # are slow). Cached runs finish that step in seconds. Keep
-  # timeout-minutes high enough that a cold-cache run can finish
-  # install + populate the cache + still leave room for the actual
-  # proof. A previous run hit the 60-min limit mid-install and was
-  # killed before the cache save step ran — leaving every subsequent
-  # run to repeat the full cold install.
+  # historically took ~55–60 min on hosted windows-2022 runners (LLVM
+  # extract dominated by bsdtar's single-threaded xz decode + Defender
+  # AV scanning of thousands of small files). Two-pronged fix:
+  #   1. Toolchain caches split into LLVM / SAW / saw-spec-gen, each
+  #      keyed on the tool version (not the installer-script hash).
+  #      That way unrelated edits to ci-install.ps1 don't blow the
+  #      ~1 GB LLVM cache. Borrowed from saw-spec-gen / llvm-exception-
+  #      lower's CI which solved the same problem.
+  #   2. ci-install.ps1 prefers 7zip on Windows (multi-threaded xz),
+  #      which alone cuts cold extracts from ~40 min to ~10 min.
+  # First uninterrupted run still pays the full cold-install cost while
+  # populating the caches; every subsequent run finishes in minutes
+  # even when ci-install.ps1 changes.
   verify-windows:
     name: verify C++ + Cryptol (windows-2022) [non-blocking until cache warms]
     runs-on: windows-2022
     # Non-blocking for the same reason verify-rust-linux is: the cold-cache
-    # `Install verification toolchain` step takes ~60 min on hosted
-    # windows-2022 runners, and `concurrency.cancel-in-progress: true`
+    # install on hosted windows-2022 runners can still take ~10–15 min
+    # the very first time, and `concurrency.cancel-in-progress: true`
     # above will cancel the run before the cache-save step ever fires
-    # if any new commit lands in that window. Result: the toolchain
-    # cache never gets written and every Windows run repeats the cold
-    # install. Mirroring saw-spec-gen's CI, we let this job go red
-    # without blocking PRs; once a single push gets to run uninterrupted
-    # the cache populates and subsequent runs finish in minutes. Flip
-    # `continue-on-error` back to false once the cache is reliably warm.
+    # if a new commit lands in that window. Once a single push runs
+    # uninterrupted the version-keyed caches populate and subsequent
+    # runs finish in minutes — at which point this can flip back to
+    # `continue-on-error: false`.
     continue-on-error: true
     timeout-minutes: 120
+
+    env:
+      # Single source of truth for the versions ci-install.ps1 will
+      # install. Embedded in the cache keys below so a version bump
+      # is the only thing that invalidates the cache.
+      DEMO_LLVM_VERSION: '20.1.6'
+      DEMO_SAW_VERSION: '1.5'
+      # Cache-key generation suffix. Bump to invalidate all toolchain
+      # caches without changing a tool version (e.g. corrupted cache).
+      DEMO_CACHE_REV: 'v1'
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # ── SAW + LLVM + saw-spec-gen toolchain cache ─────────────────
-      # ci-install.ps1 stages everything under ~/.demo_protocol/, so
-      # caching that one tree fully memoises the (~1 GB combined)
-      # SAW + LLVM + saw-spec-gen downloads across runs. Key off the
-      # installer script — bumping a tool version in it invalidates
-      # the cache automatically.
-      - name: Restore toolchain cache
-        id: restore-toolchain
+      # ── Per-tool toolchain caches ─────────────────────────────────
+      # Each tool gets its own cache under ~/.demo_protocol/<tool>/.
+      # ci-install.ps1 already short-circuits each Step when its target
+      # binary (bin/clang, bin/saw, bin/saw-spec-gen) is already in
+      # place, so a cache hit makes the step a no-op for that tool.
+      #
+      # Keys are intentionally tied to TOOL VERSION (not installer
+      # script hash) so editing ci-install.ps1 — which we do often
+      # while iterating on CI — doesn't trash the ~1 GB LLVM cache.
+      # Borrowed from llvm-exception-lower's CI which uses the same
+      # pattern: `key: llvm-20.1.6-windows-x64-saw-e2e`.
+      - name: Restore LLVM cache
+        id: restore-llvm
         uses: actions/cache/restore@v4
         with:
-          path: ~/.demo_protocol
-          key: windows-demo_protocol-toolchain-${{ hashFiles('scripts/ci-install.ps1') }}
+          path: ~/.demo_protocol/llvm
+          key: windows-demo_protocol-llvm-${{ env.DEMO_LLVM_VERSION }}-${{ env.DEMO_CACHE_REV }}
+
+      - name: Restore SAW cache
+        id: restore-saw
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.demo_protocol/saw
+          key: windows-demo_protocol-saw-${{ env.DEMO_SAW_VERSION }}-${{ env.DEMO_CACHE_REV }}
+
+      # saw-spec-gen tracks `latest` by default; its cache is small
+      # (<100 MB) so we key it on the installer-script hash. Cheap to
+      # rebuild when invalidated, and gets refreshed any time the
+      # script changes (which is also when a tag bump would land).
+      - name: Restore saw-spec-gen cache
+        id: restore-ssg
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.demo_protocol/bin
+          key: windows-demo_protocol-ssg-${{ hashFiles('scripts/ci-install.ps1') }}-${{ env.DEMO_CACHE_REV }}
 
       - name: Install verification toolchain
         shell: pwsh
-        run: pwsh -NoProfile -File scripts/ci-install.ps1 -WriteGithubPath
+        run: pwsh -NoProfile -File scripts/ci-install.ps1 -WriteGithubPath -LlvmVersion $env:DEMO_LLVM_VERSION -SawVersion $env:DEMO_SAW_VERSION
 
       # Split restore/save so the (slow) tool install is still cached
-      # even when the verification step itself fails — otherwise
-      # actions/cache@v4 would skip the save on failure and every red
-      # PR run would re-download the SAW + LLVM bundles.
-      - name: Save toolchain cache
-        if: always() && steps.restore-toolchain.outputs.cache-hit != 'true'
+      # even when verification itself fails. `if: always() && cache-hit
+      # != 'true'` ensures we save exactly the cache(s) that were cold.
+      - name: Save LLVM cache
+        if: always() && steps.restore-llvm.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
-          path: ~/.demo_protocol
-          key: ${{ steps.restore-toolchain.outputs.cache-primary-key }}
+          path: ~/.demo_protocol/llvm
+          key: ${{ steps.restore-llvm.outputs.cache-primary-key }}
+
+      - name: Save SAW cache
+        if: always() && steps.restore-saw.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.demo_protocol/saw
+          key: ${{ steps.restore-saw.outputs.cache-primary-key }}
+
+      - name: Save saw-spec-gen cache
+        if: always() && steps.restore-ssg.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.demo_protocol/bin
+          key: ${{ steps.restore-ssg.outputs.cache-primary-key }}
 
       - name: Run verify_all.ps1 (skip Rust)
         shell: pwsh
