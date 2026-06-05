@@ -8,7 +8,7 @@
 #   - PowerShell 7.6.2 (verify_all.ps1 and per-language run.ps1 are pwsh)
 #   - Rust stable with `llvm-tools-preview` (matching-version llvm-as for
 #     the Rust pipeline's bitcode-reassembly step)
-#   - saw-spec-gen (release tarball; pinned by SAW_SPEC_GEN_TAG)
+#   - saw-spec-gen (built from source; pinned by SAW_SPEC_GEN_TAG)
 #
 # Tools are dropped at the same paths ci-install.ps1 uses
 # ($HOME/.demo_protocol/{llvm,saw,bin}) so the layout is identical to a
@@ -86,26 +86,33 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
  && /usr/local/cargo/bin/rustc --version \
  && ls /usr/local/rustup/toolchains/*/lib/rustlib/x86_64-unknown-linux-gnu/bin/llvm-as
 
-# ── saw-spec-gen (prebuilt release tarball) ───────────────────────────
+# ── saw-spec-gen (built from source) ──────────────────────────────────
 # Both per-language run.ps1 scripts read $env:SAW_SPEC_GEN to find this
-# binary. We download the official release tarball from GitHub:
-#   https://github.com/AmeliaRose802/saw-spec-gen/releases/tag/${SAW_SPEC_GEN_TAG}
-# The tarball contains a single binary at archive root (no parent dir),
-# so we extract straight into /root/.demo_protocol/bin/.
+# binary. We'd prefer to download a release tarball, but the official
+# v0.1.0 binaries are built against GLIBC 2.39 (ubuntu 24.04) and our
+# base image is ubuntu:22.04 (GLIBC 2.35). Until the release workflow
+# upstream is fixed to build on ubuntu-22.04, we build from git inside
+# this image — the Rust toolchain is already installed in the previous
+# layer, and the resulting binary is baked in so the verify job pays
+# nothing for it.
 #
-# SAW_SPEC_GEN_TAG controls which release to pull:
-#   - "latest"  → resolves via releases/latest/download/...
-#   - anything else (e.g. "v0.1.0") → that specific tag
+# SAW_SPEC_GEN_TAG controls which git ref to build:
+#   - "latest"  → origin's default branch (HEAD)
+#   - anything else (e.g. "v0.1.0") → that tag
 RUN mkdir -p /root/.demo_protocol/bin \
  && if [ "${SAW_SPEC_GEN_TAG}" = "latest" ]; then \
-        ssg_url="https://github.com/AmeliaRose802/saw-spec-gen/releases/latest/download/saw-spec-gen-linux-x86_64.tar.gz"; \
+        ref_args=""; \
     else \
-        ssg_url="https://github.com/AmeliaRose802/saw-spec-gen/releases/download/${SAW_SPEC_GEN_TAG}/saw-spec-gen-linux-x86_64.tar.gz"; \
+        ref_args="--tag ${SAW_SPEC_GEN_TAG}"; \
     fi \
- && curl -fsSL -o /tmp/ssg.tar.gz "${ssg_url}" \
- && tar -xzf /tmp/ssg.tar.gz -C /root/.demo_protocol/bin \
+ && cargo install \
+        --git https://github.com/AmeliaRose802/saw-spec-gen.git \
+        ${ref_args} \
+        --root /tmp/ssg-install \
+        saw-spec-gen \
+ && cp /tmp/ssg-install/bin/saw-spec-gen /root/.demo_protocol/bin/saw-spec-gen \
  && chmod +x /root/.demo_protocol/bin/saw-spec-gen \
- && rm /tmp/ssg.tar.gz \
+ && rm -rf /tmp/ssg-install \
  && /root/.demo_protocol/bin/saw-spec-gen --version
 
 # ── Env vars matching scripts/ci-install.ps1's GITHUB_ENV output ──────
