@@ -213,10 +213,20 @@ jobs:
   # the available Windows base images are multi-GB pulls that wipe out
   # any cold-start savings. Stick with the cached tarball install: the
   # first run pays the install cost, subsequent runs hit the cache.
+  #
+  # Budget note: the cold-cache `Install verification toolchain` step
+  # alone takes ~55-60 min on hosted windows-2022 runners (LLVM + SAW
+  # are ~1 GB combined and the runner's disk + GitHub-side extraction
+  # are slow). Cached runs finish that step in seconds. Keep
+  # timeout-minutes high enough that a cold-cache run can finish
+  # install + populate the cache + still leave room for the actual
+  # 4-layer proof. A previous run hit the 60-min limit mid-install
+  # and was killed before the cache save step ran — leaving every
+  # subsequent run to repeat the full cold install.
   verify-windows:
     name: verify (windows-2022)
     runs-on: windows-2022
-    timeout-minutes: 60
+    timeout-minutes: 120
 
     steps:
       - name: Checkout
