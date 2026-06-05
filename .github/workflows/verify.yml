@@ -224,8 +224,19 @@ jobs:
   # killed before the cache save step ran — leaving every subsequent
   # run to repeat the full cold install.
   verify-windows:
-    name: verify C++ + Cryptol (windows-2022)
+    name: verify C++ + Cryptol (windows-2022) [non-blocking until cache warms]
     runs-on: windows-2022
+    # Non-blocking for the same reason verify-rust-linux is: the cold-cache
+    # `Install verification toolchain` step takes ~60 min on hosted
+    # windows-2022 runners, and `concurrency.cancel-in-progress: true`
+    # above will cancel the run before the cache-save step ever fires
+    # if any new commit lands in that window. Result: the toolchain
+    # cache never gets written and every Windows run repeats the cold
+    # install. Mirroring saw-spec-gen's CI, we let this job go red
+    # without blocking PRs; once a single push gets to run uninterrupted
+    # the cache populates and subsequent runs finish in minutes. Flip
+    # `continue-on-error` back to false once the cache is reliably warm.
+    continue-on-error: true
     timeout-minutes: 120
 
     steps:
