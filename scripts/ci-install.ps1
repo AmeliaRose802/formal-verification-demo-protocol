@@ -146,9 +146,14 @@ function Get-DownloadedArchive {
             # The produced tar name is derived from $tmp (which carries
             # our `demo_protocol-<guid>-` prefix), NOT from $leaf — 7z
             # strips just the final compression extension from the
-            # input file it actually sees.
+            # input file it actually sees. We strip via regex rather
+            # than [Path]::ChangeExtension($tmp, $null), because in
+            # PowerShell $null binds to the [string]extension overload
+            # as "", which keeps a trailing dot ('foo.tar.') — Windows
+            # Test-Path silently matches that to 'foo.tar' but 7z's
+            # literal-path open fails with "cannot find the file".
             $tmpDir = [System.IO.Path]::GetDirectoryName($tmp)
-            $producedTar = [System.IO.Path]::ChangeExtension($tmp, $null)  # foo.tar.xz → foo.tar
+            $producedTar = $tmp -replace '\.(xz|gz|bz2)$', ''
             # 7z exit codes: 0 = OK, 1 = warning, 2+ = fatal.
             & $sevenZip.Path x $tmp "-o$tmpDir" '-mmt=on' '-y' '-bso0' '-bsp0' | Out-Null
             if ($LASTEXITCODE -gt 1) { throw "7z xz/gzip decode failed (exit $LASTEXITCODE)" }
