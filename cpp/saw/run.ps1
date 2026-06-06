@@ -136,13 +136,44 @@ $ast     = Join-Path $here 'verify_targets_ast.json'
 $srcAbs  = (Resolve-Path '..\src\decision.cpp').Path
 $incAbs  = (Resolve-Path '..\include').Path
 
+# Clang target triple is host-dependent so we use natively-available
+# C++ stdlib headers + the host's name-mangling ABI:
+#
+#   Windows runners → x86_64-pc-windows-msvc
+#       clang auto-discovers the installed MSVC SDK / vcruntime headers.
+#       Bitcode uses MSVC name mangling.
+#
+#   Linux runners   → x86_64-unknown-linux-gnu
+#       clang auto-discovers gcc's libstdc++ via the build-essential
+#       apt package shipped in the CI image. Bitcode uses Itanium
+#       name mangling.
+#
+# Both runners verify the SAME Cryptol-level equivalence — the bit
+# layouts of the integer / enum / span signatures are ABI-identical
+# for these decision functions, only the symbol names differ. The
+# verify.saw script is regenerated per-run by saw-spec-gen from the
+# actual bitcode, so its `llvm_verify` symbol strings always match
+# whichever target produced the bitcode.
+#
+# Earlier we tried forcing windows-msvc on Linux + standalone libc++,
+# but libc++'s __config notices `_MSC_VER` from the target triple and
+# pulls in MSVC's `<vcruntime_exception.h>` which doesn't exist on
+# Linux. Using each host's native C++ stdlib avoids the whole shim
+# tarball-of-Windows-CRT-headers problem.
+$clangTarget = if ($IsWindows -or $env:OS -eq 'Windows_NT') {
+    'x86_64-pc-windows-msvc'
+} else {
+    'x86_64-unknown-linux-gnu'
+}
+Write-Host ("  clang target: {0}" -f $clangTarget) -ForegroundColor DarkGray
+
 if (-not $SkipBuild) {
     Write-Host '─── compile cpp/src/decision.cpp → bitcode + IR (-O0)' -ForegroundColor Cyan
     & $clang -c -emit-llvm -O0 -fno-inline -fno-rtti -fexceptions `
-        -target x86_64-pc-windows-msvc -std=c++20 -I $incAbs $srcAbs -o $bc
+        -target $clangTarget -std=c++20 -I $incAbs $srcAbs -o $bc
     if ($LASTEXITCODE) { throw "clang bc failed" }
     & $clang -S -emit-llvm -O0 -fno-inline -fno-rtti -fexceptions `
-        -target x86_64-pc-windows-msvc -std=c++20 -I $incAbs $srcAbs -o $ll
+        -target $clangTarget -std=c++20 -I $incAbs $srcAbs -o $ll
     if ($LASTEXITCODE) { throw "clang ll failed" }
 
     Write-Host '─── compile cpp/src/decision.cpp → bitcode + IR (-O1, STL-inlined)' -ForegroundColor Cyan
@@ -151,16 +182,24 @@ if (-not $SkipBuild) {
     # are messy at -O0.  At -O1 the constructor bodies fold into plain
     # byte stores, which SAW can simulate directly.
     & $clang -c -emit-llvm -O1 -fno-rtti -fexceptions `
-        -target x86_64-pc-windows-msvc -std=c++20 -I $incAbs $srcAbs -o $bcOpt
+        -target $clangTarget -std=c++20 -I $incAbs $srcAbs -o $bcOpt
     if ($LASTEXITCODE) { throw "clang -O1 bc failed" }
     & $clang -S -emit-llvm -O1 -fno-rtti -fexceptions `
-        -target x86_64-pc-windows-msvc -std=c++20 -I $incAbs $srcAbs -o $llOpt
+        -target $clangTarget -std=c++20 -I $incAbs $srcAbs -o $llOpt
     if ($LASTEXITCODE) { throw "clang -O1 ll failed" }
 
     Write-Host '─── dump + filter clang AST' -ForegroundColor Cyan
-    cmd /c "`"$clang`" -Xclang -ast-dump=json -fsyntax-only -fno-rtti -fexceptions -target x86_64-pc-windows-msvc -std=c++20 -I`"$incAbs`" `"$srcAbs`" > `"$ast`" 2>NUL"
+    # Portable PS redirect (the old `cmd /c "... > $ast 2>NUL"` doesn't
+    # exist on Linux). `*> $null` discards stderr, `> $ast` captures
+    # JSON to disk. PS 7+ writes UTF-8 without BOM by default which is
+    # what clang's `-ast-dump=json` expects.
+    & $clang -Xclang -ast-dump=json -fsyntax-only -fno-rtti -fexceptions `
+        -target $clangTarget -std=c++20 -I $incAbs $srcAbs 2>$null > $ast
     if ($LASTEXITCODE) { throw "clang ast-dump failed" }
-    & $SawSpecGen filter-ast --input $ast --output $ast --keep $here\..
+    # Use Join-Path so the path passed to saw-spec-gen is OS-native
+    # (Linux PS would otherwise hand it the literal string `<here>\..`,
+    # and Rust's std::fs treats `\` as a filename char on Linux).
+    & $SawSpecGen filter-ast --input $ast --output $ast --keep (Join-Path $here '..')
     if ($LASTEXITCODE) { throw "filter-ast failed" }
 }
 
@@ -265,7 +304,7 @@ foreach ($t in $targets) {
     $stubsLl = Join-Path $outDir 'vtable_stubs.ll'
     $stubsBc = Join-Path $outDir 'vtable_stubs.bc'
     if ((Test-Path $stubsLl) -and (-not (Test-Path $stubsBc))) {
-        & $clang -c -emit-llvm -target x86_64-pc-windows-msvc $stubsLl -o $stubsBc 2>&1 | Out-Null
+        & $clang -c -emit-llvm -target $clangTarget $stubsLl -o $stubsBc 2>&1 | Out-Null
         if (-not (Test-Path $stubsBc)) {
             Write-Host "  WARNING: failed to assemble vtable_stubs.bc" -ForegroundColor Yellow
         }
@@ -273,7 +312,7 @@ foreach ($t in $targets) {
 
     Push-Location $outDir
     try {
-        $log = & $SawExe .\verify.saw 2>&1 | Out-String
+        $log = & $SawExe ./verify.saw 2>&1 | Out-String
         $log | Set-Content saw_run.log
         Write-Host $log
         $verdict = if ($log -match 'Proof succeeded')      { 'VERIFIED' }

@@ -131,14 +131,19 @@ try {
     # NOTE: saw-spec-gen recently dropped the per-pass CLI flags; the
     # poison→undef + strip-msvc-eh transforms are now always-on. See its
     # `patch-llvm-ir --help`.
+    # NOTE: forward slashes here — PowerShell does NOT translate backslash
+    # path arguments when handing them to external tools. saw-spec-gen and
+    # the rustup llvm tools use Rust's std::fs which treats `\` as a
+    # literal filename character on Linux, so `.\sdep.ll` would fail with
+    # ENOENT. `./` works on both Windows and Linux.
     & $SawSpecGen patch-llvm-ir `
-        --input  .\sdep.ll `
-        --output .\sdep_patched.ll 2>&1 | Out-Host
+        --input  ./sdep.ll `
+        --output ./sdep_patched.ll 2>&1 | Out-Host
     if ($LASTEXITCODE) { throw "patch-llvm-ir failed" }
 
     $llvmAs  = Join-Path $RustupLlvmBin ('llvm-as' + $exeExt)
     $llvmOpt = Join-Path $RustupLlvmBin ('opt'     + $exeExt)
-    & $llvmAs .\sdep_patched.ll -o .\sdep_full.bc
+    & $llvmAs ./sdep_patched.ll -o ./sdep_full.bc
     if ($LASTEXITCODE) { throw "llvm-as failed" }
     Write-Host '  bitcode reassembled' -ForegroundColor DarkGray
 
@@ -147,10 +152,10 @@ try {
     #    specs in verify_template.saw are hand-customized from these).
     # ------------------------------------------------------------------
     Write-Host '─── saw-spec-gen from-llvm-ir (scaffolding)' -ForegroundColor Cyan
-    Remove-Item .\specs_scaffold -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item ./specs_scaffold -Recurse -Force -ErrorAction SilentlyContinue
     & $SawSpecGen from-llvm-ir `
-        --input .\sdep.ll `
-        --output .\specs_scaffold `
+        --input ./sdep.ll `
+        --output ./specs_scaffold `
         --filter '_ZN4sdep' 2>&1 | Out-Host
     if ($LASTEXITCODE) { throw "saw-spec-gen failed" }
 
@@ -201,7 +206,7 @@ try {
     $keep = ($symbols.Values | Sort-Object -Unique) -join ','
     & $llvmOpt --passes=internalize,globaldce `
         --internalize-public-api-list=$keep `
-        .\sdep_full.bc -o .\sdep.bc 2>&1 | Out-Host
+        ./sdep_full.bc -o ./sdep.bc 2>&1 | Out-Host
     if ($LASTEXITCODE) { throw "opt internalize/globaldce failed" }
     $stripped = (Get-Item .\sdep.bc).Length
     Write-Host ("  stripped bitcode: {0} bytes" -f $stripped) -ForegroundColor DarkGray
@@ -232,7 +237,7 @@ try {
     # ------------------------------------------------------------------
     $env:PATH = $SolverBin + [System.IO.Path]::PathSeparator + $env:PATH
     Write-Host '─── running SAW' -ForegroundColor Cyan
-    $log = & $SawExe .\verify.saw 2>&1 | Out-String
+    $log = & $SawExe ./verify.saw 2>&1 | Out-String
     $log | Set-Content saw_run.log
     Write-Host $log
 

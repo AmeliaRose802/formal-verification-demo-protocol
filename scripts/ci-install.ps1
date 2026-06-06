@@ -72,6 +72,21 @@ $userHome    = if ($env:HOME) { $env:HOME } else { $env:USERPROFILE }
 $installRoot = Join-Path $userHome '.demo_protocol'
 New-Item -ItemType Directory -Path $installRoot -Force | Out-Null
 
+# On Windows, exclude the install tree from Defender real-time scanning.
+# Extracting the LLVM/SAW tarballs writes thousands of files; AV scanning
+# each one as it lands is the single biggest cause of the multi-minute
+# (sometimes ~hour) cold install on hosted windows runners. Best-effort:
+# hosted runners run elevated so this succeeds; a non-admin local dev just
+# gets a warning and the slower path.
+if ($platform -eq 'Windows') {
+    try {
+        Add-MpPreference -ExclusionPath $installRoot -ErrorAction Stop
+        Write-Host "  Defender exclusion added for $installRoot" -ForegroundColor DarkGreen
+    } catch {
+        Write-Host "  (Defender exclusion not applied: $($_.Exception.Message))" -ForegroundColor DarkYellow
+    }
+}
+
 function Write-Step([string]$msg) {
     Write-Host ''
     Write-Host '═══════════════════════════════════════════════════════' -ForegroundColor Cyan
@@ -84,7 +99,15 @@ function Get-DownloadedArchive {
     param(
         [Parameter(Mandatory)][string] $Url,
         [Parameter(Mandatory)][string] $DestDir,
-        [switch] $Tarball
+        [switch] $Tarball,
+        # When set (tarballs only), extract just these archive members
+        # instead of the whole thing. Massively reduces disk writes +
+        # AV scanning when the archive ships gigabytes we never use.
+        [string[]] $IncludeMembers,
+        # Passed through to tar --strip-components. Lets selective
+        # extraction land members directly at $DestDir without the
+        # leading top-level archive directory.
+        [int] $StripComponents = 0
     )
     if ((Test-Path -LiteralPath $DestDir) -and -not $Force) {
         # Heuristic: if the dir exists AND is non-empty, treat as cached.
@@ -105,14 +128,54 @@ function Get-DownloadedArchive {
 
     Write-Host "  extracting → $DestDir"
     if ($Tarball -or $leaf -match '\.tar\.(gz|xz|bz2)$') {
-        # Pin to bsdtar on Windows runners. The `tar` on $PATH there is
-        # git-bash's MSYS tar, which mis-parses `C:\...` paths as remote
-        # SSH hosts ("Cannot connect to C:").
-        $tarExe = if ($platform -eq 'Windows') {
-            Join-Path $env:SystemRoot 'System32\tar.exe'
-        } else { 'tar' }
-        Push-Location $DestDir
-        try { & $tarExe -xf $tmp } finally { Pop-Location }
+        # On Windows, prefer 7zip when available — its xz/gzip decoders
+        # are multi-threaded and 2–4× faster than bsdtar's single-
+        # threaded path on hosted runners. The selective-member
+        # filtering options below (-IncludeMembers / -StripComponents)
+        # only work with bsdtar; the only LLVM caller that used them
+        # was reworked to do a full extract + post-hoc move so 7z
+        # could be used for the heavy step.
+        $sevenZip = if ($platform -eq 'Windows') {
+            Get-Command 7z -ErrorAction SilentlyContinue
+        } else { $null }
+        $useSevenZip = $sevenZip -and -not $IncludeMembers -and $StripComponents -eq 0
+
+        if ($useSevenZip) {
+            # Two-stage extract: 7z first decompresses xz/gzip to a
+            # sibling .tar, then unpacks that .tar into $DestDir.
+            # The produced tar name is derived from $tmp (which carries
+            # our `demo_protocol-<guid>-` prefix), NOT from $leaf — 7z
+            # strips just the final compression extension from the
+            # input file it actually sees. We strip via regex rather
+            # than [Path]::ChangeExtension($tmp, $null), because in
+            # PowerShell $null binds to the [string]extension overload
+            # as "", which keeps a trailing dot ('foo.tar.') — Windows
+            # Test-Path silently matches that to 'foo.tar' but 7z's
+            # literal-path open fails with "cannot find the file".
+            $tmpDir = [System.IO.Path]::GetDirectoryName($tmp)
+            $producedTar = $tmp -replace '\.(xz|gz|bz2)$', ''
+            # 7z exit codes: 0 = OK, 1 = warning, 2+ = fatal.
+            & $sevenZip.Path x $tmp "-o$tmpDir" '-mmt=on' '-y' '-bso0' '-bsp0' | Out-Null
+            if ($LASTEXITCODE -gt 1) { throw "7z xz/gzip decode failed (exit $LASTEXITCODE)" }
+            if (-not (Test-Path -LiteralPath $producedTar)) {
+                throw "expected $producedTar after 7z decode of $leaf but file missing"
+            }
+            & $sevenZip.Path x $producedTar "-o$DestDir" '-mmt=on' '-y' '-bso0' '-bsp0' | Out-Null
+            if ($LASTEXITCODE -gt 1) { throw "7z tar extract failed (exit $LASTEXITCODE)" }
+            Remove-Item -LiteralPath $producedTar -Force -ErrorAction SilentlyContinue
+        } else {
+            # Pin to bsdtar on Windows runners. The `tar` on $PATH there is
+            # git-bash's MSYS tar, which mis-parses `C:\...` paths as remote
+            # SSH hosts ("Cannot connect to C:").
+            $tarExe = if ($platform -eq 'Windows') {
+                Join-Path $env:SystemRoot 'System32\tar.exe'
+            } else { 'tar' }
+            $tarArgs = @('-xf', $tmp)
+            if ($StripComponents -gt 0) { $tarArgs += "--strip-components=$StripComponents" }
+            if ($IncludeMembers)        { $tarArgs += $IncludeMembers }
+            Push-Location $DestDir
+            try { & $tarExe @tarArgs } finally { Pop-Location }
+        }
     } else {
         Expand-Archive -LiteralPath $tmp -DestinationPath $DestDir -Force
     }
@@ -127,13 +190,32 @@ if (-not (Test-Path -LiteralPath (Join-Path $llvmRoot ('bin/clang' + $exe))) -or
     switch ($platform) {
         'Windows' {
             $url = "https://github.com/llvm/llvm-project/releases/download/llvmorg-$LlvmVersion/clang+llvm-$LlvmVersion-x86_64-pc-windows-msvc.tar.xz"
+            $topDir = "clang+llvm-$LlvmVersion-x86_64-pc-windows-msvc"
+            if (Test-Path $llvmRoot) { Remove-Item -Recurse -Force $llvmRoot }
+            # Full extract to a staging dir, then move only what
+            # verify_all.ps1 actually uses (bin/ + lib/clang/) to the
+            # final $llvmRoot. The full tarball unpacks to ~5 GB
+            # dominated by LLVM/Clang static .lib archives we never
+            # link against, but the extra disk-write cost is more than
+            # paid back by being able to use 7zip's multi-threaded xz
+            # decoder for the heavy step. The old bsdtar `--include`
+            # path forced single-threaded extraction (xz can't be
+            # filtered without decoding the full stream) and took
+            # 40-50 min on hosted windows runners; the stage-and-move
+            # dance below benchmarks at ~1-3 min on the same runners
+            # (matching what llvm-exception-lower's CI sees with the
+            # same 7zip-piped pattern).
             $stage = Join-Path $installRoot 'llvm-stage'
             if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }
             Get-DownloadedArchive -Url $url -DestDir $stage -Tarball
-            # Tarball extracts to clang+llvm-<ver>-<triple>/ — flatten.
-            $inner = Get-ChildItem -LiteralPath $stage -Directory | Select-Object -First 1
-            if (Test-Path $llvmRoot) { Remove-Item -Recurse -Force $llvmRoot }
-            Move-Item -LiteralPath $inner.FullName -Destination $llvmRoot
+            $inner = Join-Path $stage $topDir
+            if (-not (Test-Path $inner)) {
+                $alt = Get-ChildItem -LiteralPath $stage -Directory | Select-Object -First 1
+                if ($alt) { $inner = $alt.FullName }
+            }
+            New-Item -ItemType Directory -Path (Join-Path $llvmRoot 'lib') -Force | Out-Null
+            Move-Item -LiteralPath (Join-Path $inner 'bin')       -Destination (Join-Path $llvmRoot 'bin')
+            Move-Item -LiteralPath (Join-Path $inner 'lib/clang') -Destination (Join-Path $llvmRoot 'lib/clang')
             Remove-Item -Recurse -Force $stage
         }
         'Linux' {

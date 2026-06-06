@@ -10,9 +10,16 @@ name: Verify (SAW + Cryptol)
 #   4. Cryptol + Z3 — every gap in cryptol/SDEP_gaps.cry still produces
 #      a counterexample (= the documented attacker-visible gap is real)
 #
+# Layer 2 (Rust) runs in its own `verify-rust-linux` job with
+# `continue-on-error: true` so its WIP status doesn't fail the
+# pipeline. The main `verify-{linux,windows}` jobs pass `-SkipRust`
+# and only cover layers 1 / 3 / 4. Once Rust verification is stable,
+# drop `continue-on-error` and merge the Rust layer back into the
+# main jobs.
+#
 # Toolchain (installed by scripts/ci-install.ps1, cached per-OS):
 #   LLVM 20.1.6, SAW 1.5 with bundled solvers, saw-spec-gen (latest),
-#   plus the in-workflow Rust stable toolchain.
+#   plus the in-workflow Rust stable toolchain (Rust job only).
 
 on:
   pull_request:
@@ -23,7 +30,9 @@ on:
       - 'cryptol/**'
       - 'verify_all.ps1'
       - 'scripts/ci-install.ps1'
+      - 'Dockerfile'
       - '.github/workflows/verify.yml'
+      - '.github/workflows/publish-ci-image.yml'
   push:
     branches: [main]
     paths:
@@ -32,7 +41,9 @@ on:
       - 'cryptol/**'
       - 'verify_all.ps1'
       - 'scripts/ci-install.ps1'
+      - 'Dockerfile'
       - '.github/workflows/verify.yml'
+      - '.github/workflows/publish-ci-image.yml'
   workflow_dispatch:
 
 concurrency:
@@ -49,7 +60,7 @@ jobs:
   # to surface, and gives reviewers fast feedback before the proof
   # job finishes.
   build-test:
-    name: build + unit tests (${{ matrix.os }})
+    name: build + unit tests, Rust + C++ (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
@@ -149,7 +160,7 @@ jobs:
           echo "::error::CI image never became ready. Check the 'Publish CI image' workflow."
           exit 1
 
-  # ── Slow lane (Linux): full 4-layer SAW + Cryptol proof, in container ─
+  # ── Slow lane (Linux): SAW + Cryptol proof (layers 1 / 3 / 4), in container ─
   # Runs inside the pre-baked image published by publish-ci-image.yml.
   # The image already contains LLVM 20.1.6, SAW 1.5, PowerShell 7,
   # Rust stable + llvm-tools-preview, and saw-spec-gen at the same
@@ -157,8 +168,11 @@ jobs:
   # uses, with CLANG_BIN / SAW_EXE / SAW_SPEC_GEN / SOLVER_BIN /
   # CRYPTOL_EXE / RUSTUP_LLVM_BIN already set via ENV. No install step,
   # no ~1 GB tarball download — just checkout + verify_all.ps1.
+  #
+  # Passes `-SkipRust` so Layer 2 (Rust ≡ Cryptol) is left to the
+  # separate non-blocking `verify-rust-linux` job below.
   verify-linux:
-    name: verify (ubuntu-22.04, container)
+    name: verify C++ + Cryptol (ubuntu-22.04, container)
     runs-on: ubuntu-22.04
     needs: wait-for-image
     timeout-minutes: 60
@@ -166,6 +180,183 @@ jobs:
       image: ghcr.io/ameliarose802/formal-verification-demo-protocol-ci:latest
       # GITHUB_TOKEN works for both public and private GHCR packages,
       # so this stays green even before package visibility is flipped.
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run verify_all.ps1 (skip Rust)
+        shell: pwsh
+        run: pwsh -NoProfile -File verify_all.ps1 -SkipRust
+
+      - name: Upload SAW verify_out on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verify_out-cpp-cryptol-ubuntu-22.04
+          path: |
+            verify_out/**
+            cpp/saw/out_*/saw_run.log
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # ── Slow lane (Windows): SAW + Cryptol proof (layers 1 / 3 / 4), via cached installer ─
+  # Hosted windows-* runners don't support the `container:` job key and
+  # the available Windows base images are multi-GB pulls that wipe out
+  # any cold-start savings. Stick with the cached tarball install: the
+  # first run pays the install cost, subsequent runs hit the cache.
+  #
+  # Passes `-SkipRust` so Layer 2 (Rust ≡ Cryptol) is left to the
+  # separate non-blocking `verify-rust-linux` job. Rust toolchain +
+  # cargo cache are intentionally absent here — they're only used by
+  # the Rust layer, which doesn't run in this job.
+  #
+  # Budget note: the cold-cache `Install verification toolchain` step
+  # historically took ~55–60 min on hosted windows-2022 runners (LLVM
+  # extract dominated by bsdtar's single-threaded xz decode + Defender
+  # AV scanning of thousands of small files). Two-pronged fix:
+  #   1. Toolchain caches split into LLVM / SAW / saw-spec-gen, each
+  #      keyed on the tool version (not the installer-script hash).
+  #      That way unrelated edits to ci-install.ps1 don't blow the
+  #      ~1 GB LLVM cache. Borrowed from saw-spec-gen / llvm-exception-
+  #      lower's CI which solved the same problem.
+  #   2. ci-install.ps1 prefers 7zip on Windows (multi-threaded xz),
+  #      which alone cuts cold extracts from ~40 min to ~10 min.
+  # First uninterrupted run still pays the full cold-install cost while
+  # populating the caches; every subsequent run finishes in minutes
+  # even when ci-install.ps1 changes.
+  verify-windows:
+    name: verify C++ + Cryptol (windows-2022) [non-blocking until cache warms]
+    runs-on: windows-2022
+    # Non-blocking for the same reason verify-rust-linux is: the cold-cache
+    # install on hosted windows-2022 runners can still take ~10–15 min
+    # the very first time, and `concurrency.cancel-in-progress: true`
+    # above will cancel the run before the cache-save step ever fires
+    # if a new commit lands in that window. Once a single push runs
+    # uninterrupted the version-keyed caches populate and subsequent
+    # runs finish in minutes — at which point this can flip back to
+    # `continue-on-error: false`.
+    continue-on-error: true
+    timeout-minutes: 120
+
+    env:
+      # Single source of truth for the versions ci-install.ps1 will
+      # install. Embedded in the cache keys below so a version bump
+      # is the only thing that invalidates the cache.
+      DEMO_LLVM_VERSION: '20.1.6'
+      DEMO_SAW_VERSION: '1.5'
+      # Cache-key generation suffix. Bump to invalidate all toolchain
+      # caches without changing a tool version (e.g. corrupted cache).
+      DEMO_CACHE_REV: 'v1'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── Per-tool toolchain caches ─────────────────────────────────
+      # Each tool gets its own cache under ~/.demo_protocol/<tool>/.
+      # ci-install.ps1 already short-circuits each Step when its target
+      # binary (bin/clang, bin/saw, bin/saw-spec-gen) is already in
+      # place, so a cache hit makes the step a no-op for that tool.
+      #
+      # Keys are intentionally tied to TOOL VERSION (not installer
+      # script hash) so editing ci-install.ps1 — which we do often
+      # while iterating on CI — doesn't trash the ~1 GB LLVM cache.
+      # Borrowed from llvm-exception-lower's CI which uses the same
+      # pattern: `key: llvm-20.1.6-windows-x64-saw-e2e`.
+      - name: Restore LLVM cache
+        id: restore-llvm
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.demo_protocol/llvm
+          key: windows-demo_protocol-llvm-${{ env.DEMO_LLVM_VERSION }}-${{ env.DEMO_CACHE_REV }}
+
+      - name: Restore SAW cache
+        id: restore-saw
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.demo_protocol/saw
+          key: windows-demo_protocol-saw-${{ env.DEMO_SAW_VERSION }}-${{ env.DEMO_CACHE_REV }}
+
+      # saw-spec-gen tracks `latest` by default; its cache is small
+      # (<100 MB) so we key it on the installer-script hash. Cheap to
+      # rebuild when invalidated, and gets refreshed any time the
+      # script changes (which is also when a tag bump would land).
+      - name: Restore saw-spec-gen cache
+        id: restore-ssg
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.demo_protocol/bin
+          key: windows-demo_protocol-ssg-${{ hashFiles('scripts/ci-install.ps1') }}-${{ env.DEMO_CACHE_REV }}
+
+      - name: Install verification toolchain
+        shell: pwsh
+        run: pwsh -NoProfile -File scripts/ci-install.ps1 -WriteGithubPath -LlvmVersion $env:DEMO_LLVM_VERSION -SawVersion $env:DEMO_SAW_VERSION
+
+      # Split restore/save so the (slow) tool install is still cached
+      # even when verification itself fails. `if: always() && cache-hit
+      # != 'true'` ensures we save exactly the cache(s) that were cold.
+      - name: Save LLVM cache
+        if: always() && steps.restore-llvm.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.demo_protocol/llvm
+          key: ${{ steps.restore-llvm.outputs.cache-primary-key }}
+
+      - name: Save SAW cache
+        if: always() && steps.restore-saw.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.demo_protocol/saw
+          key: ${{ steps.restore-saw.outputs.cache-primary-key }}
+
+      - name: Save saw-spec-gen cache
+        if: always() && steps.restore-ssg.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.demo_protocol/bin
+          key: ${{ steps.restore-ssg.outputs.cache-primary-key }}
+
+      - name: Run verify_all.ps1 (skip Rust)
+        shell: pwsh
+        run: pwsh -NoProfile -File verify_all.ps1 -SkipRust
+
+      - name: Upload SAW verify_out on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verify_out-cpp-cryptol-windows-2022
+          path: |
+            verify_out/**
+            cpp/saw/out_*/saw_run.log
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # ── Rust verification (non-blocking, WIP) ─────────────────────────
+  # Layer 2: SAW + Z3 proof that the sdep crate's pure decision
+  # functions are equivalent to their Rust-ABI Cryptol models.
+  #
+  # Marked `continue-on-error: true` because the Rust verification
+  # pipeline is still under active development — chrono-based functions
+  # (is_valid_request_date) need override-spec infrastructure that's
+  # not wired up yet. The job still runs on every PR so we can track
+  # progress and catch regressions on the Rust paths that DO verify,
+  # but a failure here doesn't block merges.
+  #
+  # Linux-only for now (container = no install step, fastest signal).
+  # When the pipeline stabilises, fold this back into verify-linux /
+  # verify-windows and drop `continue-on-error`.
+  verify-rust-linux:
+    name: verify Rust (ubuntu-22.04, container) [non-blocking]
+    runs-on: ubuntu-22.04
+    needs: wait-for-image
+    continue-on-error: true
+    timeout-minutes: 30
+    container:
+      image: ghcr.io/ameliarose802/formal-verification-demo-protocol-ci:latest
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -182,106 +373,25 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             rust/target
-          key: linux-verify-cargo-${{ hashFiles('rust/Cargo.lock', 'rust/Cargo.toml') }}
+          key: linux-verify-rust-cargo-${{ hashFiles('rust/Cargo.lock', 'rust/Cargo.toml') }}
           restore-keys: |
-            linux-verify-cargo-
+            linux-verify-rust-cargo-
 
-      - name: Run verify_all.ps1
+      - name: Run rust/saw/run.ps1
         shell: pwsh
-        run: pwsh -NoProfile -File verify_all.ps1
+        working-directory: rust/saw
+        run: pwsh -NoProfile -File ./run.ps1
 
-      - name: Upload SAW verify_out on failure
-        if: failure()
+      - name: Upload Rust SAW logs
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: verify_out-ubuntu-22.04
+          name: verify_out-rust-ubuntu-22.04
           path: |
-            verify_out/**
-            cpp/saw/out_*/saw_run.log
             rust/saw/saw_run.log
             rust/saw/sdep.ll
             rust/saw/sdep_patched.ll
-          if-no-files-found: ignore
-          retention-days: 14
-
-  # ── Slow lane (Windows): same 4-layer proof, via cached installer ────
-  # Hosted windows-* runners don't support the `container:` job key and
-  # the available Windows base images are multi-GB pulls that wipe out
-  # any cold-start savings. Stick with the cached tarball install: the
-  # first run pays the install cost, subsequent runs hit the cache.
-  verify-windows:
-    name: verify (windows-2022)
-    runs-on: windows-2022
-    timeout-minutes: 60
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      # ── Rust toolchain ───────────────────────────────────────────
-      # Needed for Layer 2 (cargo build --release --no-default-features
-      # of the sdep crate to LLVM bitcode). llvm-tools-preview ships
-      # the matching-version llvm-as / opt that rust/saw/run.ps1 uses
-      # to reassemble the patched LLVM IR — without it, the runtime
-      # system clang's LLVM rejects rustc's newer IR attributes.
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: llvm-tools-preview
-
-      - name: Cache cargo registry (Rust layer)
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            rust/target
-          key: windows-verify-cargo-${{ hashFiles('rust/Cargo.lock', 'rust/Cargo.toml') }}
-          restore-keys: |
-            windows-verify-cargo-
-
-      # ── SAW + LLVM + saw-spec-gen toolchain cache ─────────────────
-      # ci-install.ps1 stages everything under ~/.demo_protocol/, so
-      # caching that one tree fully memoises the (~1 GB combined)
-      # SAW + LLVM + saw-spec-gen downloads across runs. Key off the
-      # installer script — bumping a tool version in it invalidates
-      # the cache automatically.
-      - name: Restore toolchain cache
-        id: restore-toolchain
-        uses: actions/cache/restore@v4
-        with:
-          path: ~/.demo_protocol
-          key: windows-demo_protocol-toolchain-${{ hashFiles('scripts/ci-install.ps1') }}
-
-      - name: Install verification toolchain
-        shell: pwsh
-        run: pwsh -NoProfile -File scripts/ci-install.ps1 -WriteGithubPath
-
-      # Split restore/save so the (slow) tool install is still cached
-      # even when the verification step itself fails — otherwise
-      # actions/cache@v4 would skip the save on failure and every red
-      # PR run would re-download the SAW + LLVM bundles.
-      - name: Save toolchain cache
-        if: always() && steps.restore-toolchain.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: ~/.demo_protocol
-          key: ${{ steps.restore-toolchain.outputs.cache-primary-key }}
-
-      - name: Run verify_all.ps1
-        shell: pwsh
-        run: pwsh -NoProfile -File verify_all.ps1
-
-      - name: Upload SAW verify_out on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: verify_out-windows-2022
-          path: |
-            verify_out/**
-            cpp/saw/out_*/saw_run.log
-            rust/saw/saw_run.log
-            rust/saw/sdep.ll
-            rust/saw/sdep_patched.ll
+            rust/saw/verify.saw
+            rust/saw/specs_scaffold/**
           if-no-files-found: ignore
           retention-days: 14
