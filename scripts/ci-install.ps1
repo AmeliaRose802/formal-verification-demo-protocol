@@ -143,9 +143,12 @@ function Get-DownloadedArchive {
         if ($useSevenZip) {
             # Two-stage extract: 7z first decompresses xz/gzip to a
             # sibling .tar, then unpacks that .tar into $DestDir.
+            # The produced tar name is derived from $tmp (which carries
+            # our `demo_protocol-<guid>-` prefix), NOT from $leaf — 7z
+            # strips just the final compression extension from the
+            # input file it actually sees.
             $tmpDir = [System.IO.Path]::GetDirectoryName($tmp)
-            $producedTarName = [System.IO.Path]::GetFileNameWithoutExtension($leaf)  # foo.tar.xz → foo.tar
-            $producedTar = Join-Path $tmpDir $producedTarName
+            $producedTar = [System.IO.Path]::ChangeExtension($tmp, $null)  # foo.tar.xz → foo.tar
             # 7z exit codes: 0 = OK, 1 = warning, 2+ = fatal.
             & $sevenZip.Path x $tmp "-o$tmpDir" '-mmt=on' '-y' '-bso0' '-bsp0' | Out-Null
             if ($LASTEXITCODE -gt 1) { throw "7z xz/gzip decode failed (exit $LASTEXITCODE)" }
