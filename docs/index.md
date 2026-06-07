@@ -68,3 +68,9 @@ Per-function detail pages: [functions](functions/index.md)
 | [Structured-request properties](properties/structured-request-properties.md) | P28–P29 |
 | [Intentional counterexamples](properties/intentional-counterexamples.md) | P30–P32 |
 
+
+## Additional Documentation
+
+This site ships with additional hand-written documentation:
+
+- [Formal Verification](extra_docs/index.md)
