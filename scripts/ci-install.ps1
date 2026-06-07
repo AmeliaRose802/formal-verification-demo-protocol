@@ -141,28 +141,18 @@ function Get-DownloadedArchive {
         $useSevenZip = $sevenZip -and -not $IncludeMembers -and $StripComponents -eq 0
 
         if ($useSevenZip) {
-            # Two-stage extract: 7z first decompresses xz/gzip to a
-            # sibling .tar, then unpacks that .tar into $DestDir.
-            # The produced tar name is derived from $tmp (which carries
-            # our `demo_protocol-<guid>-` prefix), NOT from $leaf — 7z
-            # strips just the final compression extension from the
-            # input file it actually sees. We strip via regex rather
-            # than [Path]::ChangeExtension($tmp, $null), because in
-            # PowerShell $null binds to the [string]extension overload
-            # as "", which keeps a trailing dot ('foo.tar.') — Windows
-            # Test-Path silently matches that to 'foo.tar' but 7z's
-            # literal-path open fails with "cannot find the file".
-            $tmpDir = [System.IO.Path]::GetDirectoryName($tmp)
-            $producedTar = $tmp -replace '\.(xz|gz|bz2)$', ''
-            # 7z exit codes: 0 = OK, 1 = warning, 2+ = fatal.
-            & $sevenZip.Path x $tmp "-o$tmpDir" '-mmt=on' '-y' '-bso0' '-bsp0' | Out-Null
-            if ($LASTEXITCODE -gt 1) { throw "7z xz/gzip decode failed (exit $LASTEXITCODE)" }
-            if (-not (Test-Path -LiteralPath $producedTar)) {
-                throw "expected $producedTar after 7z decode of $leaf but file missing"
-            }
-            & $sevenZip.Path x $producedTar "-o$DestDir" '-mmt=on' '-y' '-bso0' '-bsp0' | Out-Null
-            if ($LASTEXITCODE -gt 1) { throw "7z tar extract failed (exit $LASTEXITCODE)" }
-            Remove-Item -LiteralPath $producedTar -Force -ErrorAction SilentlyContinue
+            # Pipe pattern, lifted verbatim from llvm-exception-lower's
+            # e2e-saw.yml:
+            #     7z x file.tar.xz -so | 7z x -si -ttar -oDEST
+            # First 7z decompresses xz/gzip to stdout, second 7z reads
+            # the resulting tar from stdin (-si -ttar) and unpacks into
+            # $DestDir. No intermediate .tar on disk; no filename-
+            # derivation, no trailing-dot, no test-path probes — the
+            # bug class my earlier two-stage version kept hitting.
+            # pwsh 7+ keeps native-to-native pipes as raw byte streams,
+            # which is required for binary tar payloads.
+            & $sevenZip.Path x $tmp -so | & $sevenZip.Path x -si -ttar "-o$DestDir" '-y' '-bso0' '-bsp0'
+            if ($LASTEXITCODE -gt 1) { throw "7z xz→tar pipe extract failed (exit $LASTEXITCODE)" }
         } else {
             # Pin to bsdtar on Windows runners. The `tar` on $PATH there is
             # git-bash's MSYS tar, which mis-parses `C:\...` paths as remote
