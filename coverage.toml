@@ -1,0 +1,49 @@
+# Coverage matrix configuration for the SDEP demo protocol.
+#
+# Consumed by pretty-specs (`--coverage-config`, auto-detected as
+# `coverage.toml` in cwd). Joins the Cryptol model with the real C++
+# implementation inventory emitted by saw-spec-gen and classifies every
+# model function under the 5-badge taxonomy:
+#
+#   ✅ Proven            🔲 Proven (bounded)     🧩 Model abstraction
+#   ⚠️ Implemented, unverified (the gap)        📄 Spec-only
+#
+# The proven decision functions (provisionKey, enrollDevice, authenticate,
+# isValidRequestDate, enforceAccess) and the genuine gaps (getStatus,
+# canonicalizeS) are classified automatically from the proof manifest +
+# inventory. This file only declares the model-side *helpers* that have no
+# standalone implementation, so they don't masquerade as ⚠️ gaps.
+
+[exclude]
+# Nothing excluded — every modeled function is accounted for on the matrix.
+functions = []
+
+[abstraction]
+# ── ABI well-formedness predicates ───────────────────────────────────────
+# Modeling helpers that constrain an enum byte to its valid range. Used as
+# preconditions inside the proven decision functions; not standalone code.
+isKeyVaultResult_b   = "Well-formedness predicate over the KeyVaultResult ABI byte — a modeling precondition used inside the proven decision functions, not a standalone implementation."
+isAuthResult_b       = "Well-formedness predicate over the AuthResult ABI byte — a modeling precondition, not standalone code."
+isActivationResult_b = "Well-formedness predicate over the ActivationResult ABI byte — a modeling precondition, not standalone code."
+isAccessMode_b       = "Well-formedness predicate over the AccessMode ABI byte — a modeling precondition, not standalone code."
+isAccessDecision_b   = "Well-formedness predicate over the AccessDecision ABI byte — a modeling precondition, not standalone code."
+
+# ── Result-field extractors ──────────────────────────────────────────────
+# Pure accessors over the packed return bytes of enforceAccess / getStatus.
+# Their correctness is exercised by the proofs of the functions that produce
+# those bytes; they have no separate implementation symbol.
+allowedOf          = "Accessor over the packed enforceAccess outcome; modeling helper, exercised via the enforceAccess proof."
+loggedOf           = "Accessor over the packed enforceAccess outcome; modeling helper, exercised via the enforceAccess proof."
+statusEngagedByte  = "Accessor over the getStatus EnrollmentStatus bytes; modeling helper."
+statusPayloadBytes = "Accessor over the getStatus EnrollmentStatus bytes; modeling helper."
+
+# ── Bounded length-prefix encoder model ──────────────────────────────────
+# canonicalize_lp_post / _ret are the fixed-width (MAX_LEN-bounded) Cryptol
+# model of the production canonicalize_lp in cpp/src/decision.cpp, which is
+# proven separately under the length bound (see verify_all.ps1 Layer 1).
+canonicalize_lp_post = "Bounded (MAX_LEN) length-prefix encoder model; the production canonicalize_lp in cpp/src/decision.cpp is proven separately under the length bound."
+canonicalize_lp_ret  = "Byte-count model for the bounded length-prefix encoder; paired with canonicalize_lp_post."
+
+[spec_only]
+# Functions that live in the model on purpose with no implementation yet.
+functions = []
