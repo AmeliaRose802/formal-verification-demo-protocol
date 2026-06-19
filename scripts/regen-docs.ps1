@@ -10,7 +10,9 @@ param(
     [string]$PrettySpecs    = "C:\Users\ameliapayne\pretty-specs\target\release\pretty-specs.exe",
     [string]$SawSpecGen     = "C:\Users\ameliapayne\saw-spec-gen\target\release\saw-spec-gen.exe",
     [string]$SawSpecGenRoot = "C:\Users\ameliapayne\saw-spec-gen",
-    [string]$PipelineScript = "C:\Users\ameliapayne\pretty-specs\pipeline.ps1"
+    # pipeline.ps1 is vendored into this repo (crystal-cryptal's release ships
+    # only the pretty-specs binary, not this script). See scripts/vendor/.
+    [string]$PipelineScript = "$PSScriptRoot\vendor\pipeline.ps1"
 )
 
 $ErrorActionPreference = "Stop"

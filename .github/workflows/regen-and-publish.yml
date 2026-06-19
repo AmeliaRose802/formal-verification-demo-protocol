@@ -21,16 +21,15 @@
 # Toolchain
 # ---------
 # - The container image already bundles LLVM, SAW, Z3, Cryptol and pwsh.
-# - The pretty-specs renderer (repo AmeliaRose802/crystal-cryptal, which
-#   ships pipeline.ps1 and builds the `pretty-specs` binary) and
-#   saw-spec-gen (the spec generator) live in separate public repos and
-#   are checked out + built here, mirroring scripts/regen-docs.ps1.
-#   pipeline.ps1 builds saw-spec-gen from its source root; we pre-build
-#   pretty-specs.
-# - Both tool repos are public, so the default `github.token` reads them;
-#   no extra secret is required. If/when crystal-cryptal publishes a
-#   prebuilt release binary, the "Build pretty-specs" step can be swapped
-#   for a release download.
+# - The pretty-specs renderer is consumed as a *published binary* from the
+#   public AmeliaRose802/crystal-cryptal GitHub Release (pinned via
+#   PRETTY_SPECS_VERSION below), so no Rust build of the renderer is needed.
+# - crystal-cryptal's release does NOT ship pipeline.ps1, so that script is
+#   vendored into this repo at scripts/vendor/pipeline.ps1. Keep its banner's
+#   tag in sync with PRETTY_SPECS_VERSION when bumping.
+# - saw-spec-gen (the spec generator) still has no published binary, so it is
+#   checked out + built from source here; pipeline.ps1 also needs its
+#   verify.ps1 from the repo root.
 
 name: Regenerate docs and publish
 
@@ -46,6 +45,7 @@ on:
       - 'coverage.toml'
       - 'docfx.json'
       - 'scripts/regen-docs.ps1'
+      - 'scripts/vendor/pipeline.ps1'
       - '.github/workflows/regen-and-publish.yml'
   workflow_dispatch:
 
@@ -53,6 +53,12 @@ permissions:
   contents: read
   pages: write
   id-token: write
+
+# Pinned published renderer. Bump together with the tag in the banner of
+# scripts/vendor/pipeline.ps1 (and re-vendor that file) when upgrading.
+env:
+  PRETTY_SPECS_VERSION: v0.2.0
+  PRETTY_SPECS_SHA256: c26272c89d8a28fda490f19ac277a2be70708f34f2649447049688c6ac702191
 
 # Share the Pages concurrency group with pages.yml so the two never try to
 # deploy at the same time. Don't cancel an in-flight deployment.
@@ -77,43 +83,57 @@ jobs:
       - name: Checkout demo_protocol
         uses: actions/checkout@v4
 
-      - name: Checkout crystal-cryptal (pretty-specs renderer + pipeline.ps1)
-        uses: actions/checkout@v4
-        with:
-          repository: AmeliaRose802/crystal-cryptal
-          ref: master
-          path: .tools/crystal-cryptal
-
       - name: Checkout saw-spec-gen (spec generator)
         uses: actions/checkout@v4
         with:
           repository: AmeliaRose802/saw-spec-gen
           path: .tools/saw-spec-gen
 
-      - name: Cache cargo + build artifacts
+      - name: Download pretty-specs ${{ env.PRETTY_SPECS_VERSION }} (published binary)
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $ver   = $env:PRETTY_SPECS_VERSION
+          $asset = "pretty-specs-$ver-x86_64-unknown-linux-gnu.tar.gz"
+          $url   = "https://github.com/AmeliaRose802/crystal-cryptal/releases/download/$ver/$asset"
+          New-Item -ItemType Directory -Force -Path .tools/pretty-specs, .tools/bin | Out-Null
+          Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile ".tools/$asset"
+
+          # Verify against the pinned digest so a moved/retagged asset can't slip in.
+          $actual = (Get-FileHash ".tools/$asset" -Algorithm SHA256).Hash.ToLower()
+          if ($actual -ne $env:PRETTY_SPECS_SHA256) {
+            throw "pretty-specs asset sha256 mismatch: got $actual expected $($env:PRETTY_SPECS_SHA256)"
+          }
+
+          tar -xzf ".tools/$asset" -C .tools/pretty-specs
+          $found = @(Get-ChildItem -Recurse -File -Path .tools/pretty-specs -Filter pretty-specs)
+          if ($found.Count -eq 0) { throw "pretty-specs binary not found inside $asset" }
+          Copy-Item $found[0].FullName .tools/bin/pretty-specs -Force
+          & chmod '+x' .tools/bin/pretty-specs
+          & .tools/bin/pretty-specs --version
+
+      - name: Cache cargo + saw-spec-gen build
         uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            .tools/crystal-cryptal/target
             .tools/saw-spec-gen/target
-          key: regen-cargo-${{ hashFiles('.tools/crystal-cryptal/Cargo.lock', '.tools/saw-spec-gen/Cargo.lock') }}
+          key: regen-cargo-${{ hashFiles('.tools/saw-spec-gen/Cargo.lock') }}
           restore-keys: |
             regen-cargo-
 
-      - name: Build pretty-specs
+      - name: Build saw-spec-gen
         run: |
           $ErrorActionPreference = 'Stop'
-          Push-Location .tools/crystal-cryptal
+          Push-Location .tools/saw-spec-gen
           cargo build --release
           Pop-Location
 
       - name: Regenerate docs + proof manifest
         run: |
           $ErrorActionPreference = 'Stop'
-          $pretty   = (Resolve-Path '.tools/crystal-cryptal/target/release/pretty-specs').Path
-          $pipeline = (Resolve-Path '.tools/crystal-cryptal/pipeline.ps1').Path
+          $pretty   = (Resolve-Path '.tools/bin/pretty-specs').Path
+          $pipeline = (Resolve-Path 'scripts/vendor/pipeline.ps1').Path
           $ssgRoot  = (Resolve-Path '.tools/saw-spec-gen').Path
           $ssgBin   = Join-Path $ssgRoot 'target/release/saw-spec-gen'
 
