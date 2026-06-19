@@ -50,9 +50,11 @@ to `out`, leaving bytes at positions >= 2+nm+nb unchanged. The SAW spec
 (auto-generated under cpp/saw/out_canonicalize_lp/ via saw-spec-gen
 gen-verify with --max-len-precond nm=4 / nb=4) runs at MAX_LEN = 4 —
 the smallest bound that still exercises the loop induction. It composes
-with [P24](../properties/canonicalization-byte-injectivity.md#p24--distinct-headers-have-distinct-canonical-bytes) ([FieldLen](../types.md#fieldlen) = 16) up to min(4, 16) = 4: SAW proves the C++
-implements the byte layout for nm,nb <= 4, and [P24](../properties/canonicalization-byte-injectivity.md#p24--distinct-headers-have-distinct-canonical-bytes) proves that byte
-layout is injective at any [FieldLen](../types.md#fieldlen) >= 4. Wall-clock SMT timings on
+with [P23](../properties/canonicalization-byte-injectivity.md#p23--distinct-requests-have-distinct-canonical-bytes) (the two-field length-prefix roundtrip, [FieldLen](../types.md#fieldlen) = 4): SAW
+proves the C++ writes the [nm][m][nb][b] byte layout for nm,nb <= 4,
+and [P23](../properties/canonicalization-byte-injectivity.md#p23--distinct-requests-have-distinct-canonical-bytes) proves that exact layout is injective by exhibiting a decoder
+that recovers (m,nm,b,nb) from the bytes — so the length tags are
+load-bearing, not the field widths. Wall-clock SMT timings on
 commodity hardware (Z3 4.x): MAX_LEN=4 ~ seconds (current),
 MAX_LEN=8 ~ 10s, MAX_LEN=12 ~ 2 min, MAX_LEN=16 ~ 13 min. To lift the
 bound entirely use `llvm_invariant`.

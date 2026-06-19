@@ -92,23 +92,23 @@ AD_NoRule_b          = 2 : [8]
 // (only 3 valid KeyVaultResult discriminants). Cryptol can't carry
 // that as an i8 precondition the way `range(...)` does in LLVM, so
 // the SAW spec will assert  vault_result <  3  before executing.
-provision_key_rust : Bit -> Bit -> [8] -> Bit -> [8]
+provision_key_rust : [1] -> [1] -> [8] -> [1] -> [8]
 provision_key_rust fleetEnabled validRequest vaultResult keyIsActive =
-  if ~fleetEnabled         then PR_Disabled_b
-   | ~validRequest         then PR_BadRequest_b
+  if fleetEnabled == 0     then PR_Disabled_b
+   | validRequest == 0     then PR_BadRequest_b
    | vaultResult != KV_Ok_b
                            then PR_InternalError_b
-   | keyIsActive           then PR_Unauthorized_b
+   | keyIsActive != 0      then PR_Unauthorized_b
   else                          PR_Succeeded_b
 
 ////////////////////////////////////////////////////////////////////////
 // 4.2 enroll_device — LLVM: (i1, i1, i8, i1) -> i8
 ////////////////////////////////////////////////////////////////////////
 // activation_result is niche-packed to i1 (Rust enum with 2 variants).
-enroll_device_rust : Bit -> Bit -> [8] -> [1] -> [8]
+enroll_device_rust : [1] -> [1] -> [8] -> [1] -> [8]
 enroll_device_rust fleetEnabled validMetadata authResult activationResult =
-  if ~fleetEnabled                       then ER_Disabled_b
-   | ~validMetadata                      then ER_Unauthorized_b
+  if fleetEnabled == 0                   then ER_Disabled_b
+   | validMetadata == 0                  then ER_Unauthorized_b
    | authResult == AR_Authenticated_b    then
         (if activationResult == AC_Success_bit then ER_Succeeded_b
          else                                       ER_Unauthorized_b)
@@ -118,9 +118,9 @@ enroll_device_rust fleetEnabled validMetadata authResult activationResult =
 ////////////////////////////////////////////////////////////////////////
 // 4.3 authenticate — LLVM: (i1, i1, i1) -> i1
 ////////////////////////////////////////////////////////////////////////
-authenticate_rust : Bit -> Bit -> Bit -> Bit
+authenticate_rust : [1] -> [1] -> [1] -> [1]
 authenticate_rust dateValid signatureValid claimsValid =
-  dateValid /\ signatureValid /\ claimsValid
+  dateValid && signatureValid && claimsValid
 
 ////////////////////////////////////////////////////////////////////////
 // 4.5 enforce_access — LLVM: (i8, i8) -> { i1, i1 }
@@ -131,16 +131,16 @@ authenticate_rust dateValid signatureValid claimsValid =
 //
 // Cryptol's pair maps to the same { i1, i1 } on the SAW side via
 // `llvm_struct_value`.
-enforce_access_rust : [8] -> [8] -> (Bit, Bit)
+enforce_access_rust : [8] -> [8] -> ([1], [1])
 enforce_access_rust mode decision =
-  if mode == AM_Off_b                     then (True, False)
+  if mode == AM_Off_b                     then (1, 0)
    | mode == AM_Audit_b                   then
-        (if decision == AD_Deny_b         then (True, True) else (True, False))
+        (if decision == AD_Deny_b         then (1, 1) else (1, 0))
    | mode == AM_Enforce_b                 then
-        (if decision == AD_Allow_b        then (True,  False)
-          | decision == AD_Deny_b         then (False, True)
-         else                                  (True,  False))
-  else                                         (True,  False)
+        (if decision == AD_Allow_b        then (1, 0)
+          | decision == AD_Deny_b         then (0, 1)
+         else                                  (1, 0))
+  else                                         (1, 0)
 
 ////////////////////////////////////////////////////////////////////////
 // 4.6 get_status — LLVM:
@@ -164,7 +164,7 @@ enforce_access_rust mode decision =
 //
 // All 20 bytes are written by the function, so the SAW postcondition
 // pins the entire buffer; nothing is `undef`.
-get_status_rust : Bit -> Bit -> Bit -> [16][8] -> [20][8]
+get_status_rust : [1] -> [1] -> [1] -> [16][8] -> [20][8]
 get_status_rust fleetEnabled hasKey keyIsActive keyId =
     [ fmByte
     , hkByte
@@ -173,9 +173,9 @@ get_status_rust fleetEnabled hasKey keyIsActive keyId =
     [ kaByte
     ]
   where
-    fmByte = if fleetEnabled then 1 else 0 : [8]
-    hkByte = if hasKey       then 1 else 0 : [8]
-    kaByte = if keyIsActive  then 1 else 0 : [8]
+    fmByte = if fleetEnabled != 0 then 1 else 0 : [8]
+    hkByte = if hasKey       != 0 then 1 else 0 : [8]
+    kaByte = if keyIsActive  != 0 then 1 else 0 : [8]
 
 ////////////////////////////////////////////////////////////////////////
 // 4.7 is_valid_request_date_secs — LLVM: (i64, i64, i64) -> i1
@@ -197,10 +197,10 @@ get_status_rust fleetEnabled hasKey keyIsActive keyId =
 // same wrapping subtraction Cryptol models.  SAW verifies the release
 // bitcode, so the equivalence holds unconditionally on the i64 input
 // space.
-is_valid_request_date_secs_rust : [64] -> [64] -> [64] -> Bit
+is_valid_request_date_secs_rust : [64] -> [64] -> [64] -> [1]
 is_valid_request_date_secs_rust requestSecs currentSecs windowSeconds =
-  if requestSecs >$ currentSecs then False
-  else (currentSecs - requestSecs) <=$ windowSeconds
+  [ if requestSecs >$ currentSecs then False
+    else (currentSecs - requestSecs) <=$ windowSeconds ]
 
 ////////////////////////////////////////////////////////////////////////
 // 5. Sanity bridges: prove the Rust-ABI definitions agree with the

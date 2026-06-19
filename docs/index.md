@@ -7,7 +7,7 @@ title: SDEP_cpp
 
 ## Coverage at a glance
 
-✅ 5 proven · 🔲 0 bounded · 🧩 11 abstractions · ⚠️ 28 **unverified** · 📄 0 spec-only
+✅ 5 proven · 🔲 0 bounded · 🔒 0 trusted assumptions · 🧩 11 adapters/stand-ins · ⚠️ 1 **unverified** · 📄 35 spec-only
 
 See the full breakdown — including every real function the codebase contains, whether or not it was modeled — on the [Coverage Matrix](coverage.md). Pages here that carry a 🧩, 🔲, or ⚠️ badge surface the caveat in a banner at the top.
 
@@ -36,27 +36,36 @@ All type definitions: [types.md](types.md)
 | [packOutcome](functions/packOutcome.md) | — | Computes 16 bits from `allowed` and `logged`. |
 | [enforceAccess](functions/enforceAccess.md) | ✅ Proven | Evaluates 8 conditions on `mode` and `decision` in priority order, returning the first applicable 16 bits. Defaults to `packOutcome True  False` when no prior condition matches. |
 | [getStatus](functions/getStatus.md) | ⚠️ Implemented, unverified | Computes `// pre-call bytes of the optional storage (havoc)     [20][8]` from `fleetEnabled`, `hasKey`, `keyIsActive`, `keyId`, and `preBytes`. |
-| [canonicalize_lp_post](functions/canonicalize_lp_post.md) | 🧩 Model abstraction | Length-prefixed canonicalization writes |
-| [canonicalize_lp_ret](functions/canonicalize_lp_ret.md) | 🧩 Model abstraction | Return value of canonicalize_lp: total bytes written = 2 + nm + nb. |
-| [isKeyVaultResult_b](functions/isKeyVaultResult_b.md) | 🧩 Model abstraction | Well-formedness predicates over ABI-width enum reps C++ enums are `enum class : std::uint8_t` so the LLVM ABI parameter is i8.  Symbolic execution explores all 256 values; valid program states only ever produce values in the declared range.  These predicates assert that range for use as preconditions in properties. |
-| [isAuthResult_b](functions/isAuthResult_b.md) | 🧩 Model abstraction | Checks whether the auth result b is valid for the given inputs. |
-| [isActivationResult_b](functions/isActivationResult_b.md) | 🧩 Model abstraction | Checks whether the activation result b is valid for the given inputs. |
-| [isAccessMode_b](functions/isAccessMode_b.md) | 🧩 Model abstraction | Checks whether the access mode b is valid for the given inputs. |
-| [isAccessDecision_b](functions/isAccessDecision_b.md) | 🧩 Model abstraction | Checks whether the access decision b is valid for the given inputs. |
-| [allowedOf](functions/allowedOf.md) | 🧩 Model abstraction | enforceAccess result extractors enforceAccess packs the EnforceOutcome struct into one i16 with little-endian byte order: low byte = allowed (0 or 1), high byte = logged (0 or 1). These helpers project the i16 back to Bits. |
-| [loggedOf](functions/loggedOf.md) | 🧩 Model abstraction | Tests whether `r` is well-formed. |
-| [statusEngagedByte](functions/statusEngagedByte.md) | 🧩 Model abstraction | Computes 8 bits from `s`. |
-| [statusPayloadBytes](functions/statusPayloadBytes.md) | 🧩 Model abstraction | Computes 16 bytes from `s`. |
+| [canonicalize_lp_post](functions/canonicalize_lp_post.md) | 🧩 ABI adapter / stand-in | Length-prefixed canonicalization writes |
+| [canonicalize_lp_ret](functions/canonicalize_lp_ret.md) | 🧩 ABI adapter / stand-in | Return value of canonicalize_lp: total bytes written = 2 + nm + nb. |
+| [isKeyVaultResult_b](functions/isKeyVaultResult_b.md) | 🧩 ABI adapter / stand-in | Well-formedness predicates over ABI-width enum reps C++ enums are `enum class : std::uint8_t` so the LLVM ABI parameter is i8.  Symbolic execution explores all 256 values; valid program states only ever produce values in the declared range.  These predicates assert that range for use as preconditions in properties. |
+| [isAuthResult_b](functions/isAuthResult_b.md) | 🧩 ABI adapter / stand-in | Checks whether the auth result b is valid for the given inputs. |
+| [isActivationResult_b](functions/isActivationResult_b.md) | 🧩 ABI adapter / stand-in | Checks whether the activation result b is valid for the given inputs. |
+| [isAccessMode_b](functions/isAccessMode_b.md) | 🧩 ABI adapter / stand-in | Checks whether the access mode b is valid for the given inputs. |
+| [isAccessDecision_b](functions/isAccessDecision_b.md) | 🧩 ABI adapter / stand-in | Checks whether the access decision b is valid for the given inputs. |
+| [allowedOf](functions/allowedOf.md) | 🧩 ABI adapter / stand-in | enforceAccess result extractors enforceAccess packs the EnforceOutcome struct into one i16 with little-endian byte order: low byte = allowed (0 or 1), high byte = logged (0 or 1). These helpers project the i16 back to Bits. |
+| [loggedOf](functions/loggedOf.md) | 🧩 ABI adapter / stand-in | Tests whether `r` is well-formed. |
+| [statusEngagedByte](functions/statusEngagedByte.md) | 🧩 ABI adapter / stand-in | Computes 8 bits from `s`. |
+| [statusPayloadBytes](functions/statusPayloadBytes.md) | 🧩 ABI adapter / stand-in | Computes 16 bytes from `s`. |
 | [hmacSha256](functions/hmacSha256.md) | — | Specs only use equality of HMAC outputs; the placeholder body is opaque to the solver, which models `hmacSha256` as an uninterpreted pure function for proof purposes. |
 | [isValidSignature](functions/isValidSignature.md) | — | Checks whether the signature is valid by comparing the computed and expected values. |
-| [canonNormalized](functions/canonNormalized.md) | — | Compares computed and provided values over `n` and `b`, returning `True` on match. |
-| [canonLenPrefixed](functions/canonLenPrefixed.md) | — | Bounded model writes a one-byte length tag followed by the FieldLen-byte field buffer. Production uses a 64-bit big-endian tag, but the injectivity argument that P23-P25 rely on is identical at any width. |
+| [lpFieldNormalized](functions/lpFieldNormalized.md) | — | Compares computed and provided values over `f`, returning `True` on match. |
+| [encodeLP2](functions/encodeLP2.md) | — | ---- Two-field length-prefix encoder/decoder (top-level payload) ------ encodeLP2 writes  [f.len] f.buf[0..f.len)  [g.len] g.buf[0..g.len) then zero-pads. The position of g's tag is f.len + 1, so the f\|g boundary is determined by the tag, not by the slot width. This is the exact byte layout the SAW-verified `canonicalize_lp` emits. |
+| [decodeLP2](functions/decodeLP2.md) | — | decodeLP2 reads the tag, takes exactly that many bytes, reads the next tag, and so on. Data-dependent indices are clamped `% bl` so the symbolic access stays in range; for normalized inputs the clamp is the identity. `decodeLP2 (encodeLP2 f g) == (f, g)` is P23. |
+| [itemsNormalized](functions/itemsNormalized.md) | — | ---- Record-list encoder/decoder (header / query MAP) ----------------- A header/query map serializes as a count tag followed by a sequence of length-prefixed items: <count> <len0> bytes0 <len1> bytes1 ... . This is the shape behind the classic "header smuggling" collision — under the old separator encoding a value byte could fake a record boundary and inject an extra record. Length + count tags make boundaries AND the number of records recoverable only by READING the tags. |
+| [encodeRecs](functions/encodeRecs.md) | — | Evaluates 6 conditions on `c`, `a0`, and `a1` in priority order, returning the first applicable RecBufLen bytes. Defaults to `0` when no prior condition matches. |
+| [decodeRecs](functions/decodeRecs.md) | — | Computes a result tuple from `buf`. |
 | [fieldNormalized](functions/fieldNormalized.md) | — | Compares computed and provided values over `f`, returning `True` on match. |
 | [requestNormalized](functions/requestNormalized.md) | — | Tests whether `r` is well-formed. |
 | [lpField](functions/lpField.md) | — | Computes 1 + StructFieldLen bytes from `f`. |
 | [lpHeader](functions/lpHeader.md) | — | Computes 2 * (1 + StructFieldLen) bytes from `h`. |
-| [canonicalizeS](functions/canonicalizeS.md) | ⚠️ Implemented, unverified | Computes 3 * (1 + StructFieldLen) + MaxHeaders * 2 * (1 + StructFieldLen) + 8 bytes from `r`. |
+| [canonicalizeS](functions/canonicalizeS.md) | 📄 Spec-only | Computes 3 * (1 + StructFieldLen) + MaxHeaders * 2 * (1 + StructFieldLen) + 8 bytes from `r`. |
 | [verifierTimestamp_current](functions/verifierTimestamp_current.md) | — | Computes 64 bits from `r` and `_`. |
+| [ksEngaged](functions/ksEngaged.md) | 📄 Spec-only | Predicates the body reads out of the pre-state object image `pre` together with the requested key id `kid`. |
+| [ksWasActive](functions/ksWasActive.md) | 📄 Spec-only | Compares computed and provided values over `pre`, returning `True` on match. |
+| [ksIdMatch](functions/ksIdMatch.md) | 📄 Spec-only | Compares computed and provided values over `pre` and `kid`, returning `True` on match. |
+| [keyStoreActivateRet](functions/keyStoreActivateRet.md) | 📄 Spec-only | Returned ActivationResult byte — structurally identical to the C++ branch ladder, same branch order. |
+| [keyStoreActivatePost](functions/keyStoreActivatePost.md) | 📄 Spec-only | Post-state object image. The body mutates EXACTLY one byte — the `isActive` flag — and only on a matching activation of an inactive key; every other byte (mutex, keyId, secret, createdAt, engaged) is carried through unchanged. This is the monotone "latch": once set, `isActive` is never cleared by `activate`. |
 
 Per-function detail pages: [functions](functions/index.md)
 
@@ -73,6 +82,7 @@ Per-function detail pages: [functions](functions/index.md)
 | [enforceAccess matrix-coverage closures](properties/enforce-access-matrix-coverage-closures.md) | P26–P27 |
 | [Structured-request properties](properties/structured-request-properties.md) | P28–P29 |
 | [Intentional counterexamples](properties/intentional-counterexamples.md) | P30–P32 |
+| [prove)](properties/prove).md) | KS1–KS4 |
 
 
 ## Additional Documentation

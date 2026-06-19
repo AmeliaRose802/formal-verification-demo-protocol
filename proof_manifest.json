@@ -90,6 +90,46 @@
         "status": "proven"
       }
     },
+    "keyStoreActivatePost": {
+      "overall": {
+        "status": "not_attempted"
+      }
+    },
+    "keyStoreActivateRet": {
+      "overall": {
+        "status": "not_attempted"
+      }
+    },
+    "ksEngaged": {
+      "overall": {
+        "status": "not_attempted"
+      }
+    },
+    "ksIdMatch": {
+      "overall": {
+        "status": "not_attempted"
+      }
+    },
+    "ksWasActive": {
+      "overall": {
+        "status": "not_attempted"
+      }
+    },
+    "ks_off_engaged": {
+      "overall": {
+        "status": "not_attempted"
+      }
+    },
+    "ks_off_isActive": {
+      "overall": {
+        "status": "not_attempted"
+      }
+    },
+    "ks_off_keyId": {
+      "overall": {
+        "status": "not_attempted"
+      }
+    },
     "loggedOf": {
       "overall": {
         "status": "not_attempted"

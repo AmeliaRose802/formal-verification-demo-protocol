@@ -218,13 +218,36 @@ pub fn is_valid_request_date(
     current_time: DateTime<Utc>,
     window_seconds: i64,
 ) -> bool {
-    if request_timestamp > current_time {
+    is_valid_request_date_secs(
+        request_timestamp.timestamp(),
+        current_time.timestamp(),
+        window_seconds,
+    )
+}
+
+/// Pure integer-seconds core of [`is_valid_request_date`].
+///
+/// Split out so SAW can symbolically verify the date-window decision
+/// without pulling in chrono's `signed_duration_since`/`num_seconds`,
+/// which emit Win64 SEH cleanup funclets that the SAW 1.5 bitcode
+/// parser cannot ingest (`FUNC_CODE_OPERAND_BUNDLE`). The chrono
+/// wrapper above just projects both timestamps to whole seconds via
+/// `DateTime::timestamp` and delegates here.
+///
+/// Verified equivalent to `is_valid_request_date_secs_rust` in
+/// `rust/saw/SDEP_rust.cry`. Subtraction is intentionally wrapping
+/// (release builds disable overflow checks), matching the Cryptol
+/// model's two's-complement `-`.
+#[inline(never)]
+pub fn is_valid_request_date_secs(
+    request_secs: i64,
+    current_secs: i64,
+    window_seconds: i64,
+) -> bool {
+    if request_secs > current_secs {
         return false;
     }
-    let elapsed = current_time
-        .signed_duration_since(request_timestamp)
-        .num_seconds();
-    elapsed <= window_seconds
+    current_secs.wrapping_sub(request_secs) <= window_seconds
 }
 
 /// Validates HMAC-SHA256 signature using constant-time comparison.

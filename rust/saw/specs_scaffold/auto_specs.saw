@@ -13,3 +13,4 @@ include "sdep__is_valid_signature_e8d4b733_auto_spec.saw";
 include "sdep__canonicalize_headers_b3d6e568_auto_spec.saw";
 include "sdep__canonicalize_payload_99b10f31_auto_spec.saw";
 include "sdep__is_valid_request_date_2e388802_auto_spec.saw";
+include "sdep__is_valid_request_date_secs_2c48362f_auto_spec.saw";

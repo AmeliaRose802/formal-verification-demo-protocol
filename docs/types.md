@@ -22,18 +22,41 @@ Abstract 256-bit handle for a canonicalized request payload. The HMAC properties
 Used by: [`hmacSha256`](functions/hmacSha256.md), [`isValidSignature`](functions/isValidSignature.md)
 
 ### FieldLen
-**Type:** `[16]` — `16`-bit value
+**Type:** `[4]` — `4`-bit value
 
-Field length in bytes for the length-prefixed canonicalizer (bounded-model parameter; production uses `std::size_t` fields).
+── Variable-length-within-a-bound canonicalization model (P23-P25) ────── This is an HONEST bounded model of the production length-prefix framing in cpp/src/canonical.cpp. The earlier revision of this model encoded each field at a FIXED width (`[nm] # m # [nb] # b` with m,b : [16][8]).
 
-Used by: [`canonNormalized`](functions/canonNormalized.md), [`canonLenPrefixed`](functions/canonLenPrefixed.md)
+Used by: [`encodeLP2`](functions/encodeLP2.md), [`decodeLP2`](functions/decodeLP2.md)
 
 ### IndexWidth
 **Type:** `[8]` — `8`-bit value
 
-Index/length width in bits. One byte holds any length up to FieldLen = 16, matching the 8-bit tag used by the bounded canonicalizer.
+Length-tag / index width in bits. One byte addresses any length <= 255.
 
-Used by: [`canonNormalized`](functions/canonNormalized.md), [`canonLenPrefixed`](functions/canonLenPrefixed.md)
+Used by: [`itemsNormalized`](functions/itemsNormalized.md), [`encodeRecs`](functions/encodeRecs.md), [`decodeRecs`](functions/decodeRecs.md)
+
+### LpField
+A bounded variable-length field: a logical length `len` and a fixed-size storage buffer `buf`. "Normalized" means bytes past `len` are zero, so two fields differing only in unused padding are the same logical value (any collision the solver finds is therefore real).
+
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `len` | [IndexWidth] | `IndexWidth`-bit value |
+| `buf` | [FieldLen][8] | Buffer of `FieldLen` bytes |
+
+Used by: [`lpZeroField`](functions/lpZeroField.md), [`lpFieldNormalized`](functions/lpFieldNormalized.md), [`encodeLP2`](functions/encodeLP2.md), [`decodeLP2`](functions/decodeLP2.md), [`itemsNormalized`](functions/itemsNormalized.md), [`encodeRecs`](functions/encodeRecs.md), [`decodeRecs`](functions/decodeRecs.md)
+
+### MaxItems
+**Type:** `[2]` — `2`-bit value
+
+Number of length-prefixed items a record-list (header / query MAP) may carry in the bounded model. Two is enough to exhibit boundary-shifting and record add/drop ("smuggling") collisions.
+
+### RecBufLen
+**Type:** `[1 + MaxItems * (1 + FieldLen)]` — `1 + MaxItems * (1 + FieldLen)`-bit value
+
+Total bytes of the record-list encoding: a count tag plus, per item, a length tag and its FieldLen-byte slot.
+
+Used by: [`encodeRecs`](functions/encodeRecs.md), [`decodeRecs`](functions/decodeRecs.md)
 
 ### StructFieldLen
 **Type:** `[2]` — `2`-bit value
@@ -85,4 +108,11 @@ Structural request shape used by the canonicalizer model: HTTP method, path, bod
 | `hdrs` | [MaxHeaders]Header | Array of `MaxHeaders` `Header` values |
 
 Used by: [`requestNormalized`](functions/requestNormalized.md), [`canonicalizeS`](functions/canonicalizeS.md), [`verifierTimestamp_current`](functions/verifierTimestamp_current.md)
+
+### KS_BYTES
+**Type:** `[152]` — `152`-bit value
+
+Bounded check over the configured finite model. The `std::scoped_lock` is out of scope: SAW verifies the single-threaded transition the body performs once the lock is held.
+
+Used by: [`ksEngaged`](functions/ksEngaged.md), [`ksWasActive`](functions/ksWasActive.md), [`ksIdMatch`](functions/ksIdMatch.md), [`keyStoreActivateRet`](functions/keyStoreActivateRet.md), [`keyStoreActivatePost`](functions/keyStoreActivatePost.md)
 
