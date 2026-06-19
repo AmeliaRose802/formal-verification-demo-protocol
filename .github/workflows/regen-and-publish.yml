@@ -21,17 +21,16 @@
 # Toolchain
 # ---------
 # - The container image already bundles LLVM, SAW, Z3, Cryptol and pwsh.
-# - pretty-specs (the renderer + pipeline.ps1) and saw-spec-gen (the spec
-#   generator) live in separate repos and are checked out + built here,
-#   mirroring scripts/regen-docs.ps1. pipeline.ps1 builds saw-spec-gen
-#   from its source root; we pre-build pretty-specs.
-#
-# One-time setup
-# --------------
-# If the pretty-specs repo is private, add a repo/Org secret
-# `PRETTY_SPECS_TOKEN` (a PAT or fine-grained token with `contents:read`
-# on AmeliaRose802/pretty-specs). If it is public, the default
-# `github.token` is used automatically and no secret is required.
+# - The pretty-specs renderer (repo AmeliaRose802/crystal-cryptal, which
+#   ships pipeline.ps1 and builds the `pretty-specs` binary) and
+#   saw-spec-gen (the spec generator) live in separate public repos and
+#   are checked out + built here, mirroring scripts/regen-docs.ps1.
+#   pipeline.ps1 builds saw-spec-gen from its source root; we pre-build
+#   pretty-specs.
+# - Both tool repos are public, so the default `github.token` reads them;
+#   no extra secret is required. If/when crystal-cryptal publishes a
+#   prebuilt release binary, the "Build pretty-specs" step can be swapped
+#   for a release download.
 
 name: Regenerate docs and publish
 
@@ -78,19 +77,18 @@ jobs:
       - name: Checkout demo_protocol
         uses: actions/checkout@v4
 
-      - name: Checkout pretty-specs (renderer + pipeline.ps1)
+      - name: Checkout crystal-cryptal (pretty-specs renderer + pipeline.ps1)
         uses: actions/checkout@v4
         with:
-          repository: AmeliaRose802/pretty-specs
-          path: .tools/pretty-specs
-          token: ${{ secrets.PRETTY_SPECS_TOKEN || github.token }}
+          repository: AmeliaRose802/crystal-cryptal
+          ref: master
+          path: .tools/crystal-cryptal
 
       - name: Checkout saw-spec-gen (spec generator)
         uses: actions/checkout@v4
         with:
           repository: AmeliaRose802/saw-spec-gen
           path: .tools/saw-spec-gen
-          token: ${{ secrets.PRETTY_SPECS_TOKEN || github.token }}
 
       - name: Cache cargo + build artifacts
         uses: actions/cache@v4
@@ -98,24 +96,24 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            .tools/pretty-specs/target
+            .tools/crystal-cryptal/target
             .tools/saw-spec-gen/target
-          key: regen-cargo-${{ hashFiles('.tools/pretty-specs/Cargo.lock', '.tools/saw-spec-gen/Cargo.lock') }}
+          key: regen-cargo-${{ hashFiles('.tools/crystal-cryptal/Cargo.lock', '.tools/saw-spec-gen/Cargo.lock') }}
           restore-keys: |
             regen-cargo-
 
       - name: Build pretty-specs
         run: |
           $ErrorActionPreference = 'Stop'
-          Push-Location .tools/pretty-specs
+          Push-Location .tools/crystal-cryptal
           cargo build --release
           Pop-Location
 
       - name: Regenerate docs + proof manifest
         run: |
           $ErrorActionPreference = 'Stop'
-          $pretty   = (Resolve-Path '.tools/pretty-specs/target/release/pretty-specs').Path
-          $pipeline = (Resolve-Path '.tools/pretty-specs/pipeline.ps1').Path
+          $pretty   = (Resolve-Path '.tools/crystal-cryptal/target/release/pretty-specs').Path
+          $pipeline = (Resolve-Path '.tools/crystal-cryptal/pipeline.ps1').Path
           $ssgRoot  = (Resolve-Path '.tools/saw-spec-gen').Path
           $ssgBin   = Join-Path $ssgRoot 'target/release/saw-spec-gen'
 

@@ -17,7 +17,9 @@ touches source (`cpp/**`, `rust/**`, `cryptol/**`, `extra_docs/**`,
 `assets/**`, `coverage.toml`, `docfx.json`). It:
 
 1. Spins up the verification toolchain container image.
-2. Checks out and builds `pretty-specs` + `saw-spec-gen`.
+2. Checks out and builds the `pretty-specs` renderer (from the public
+   [`crystal-cryptal`](https://github.com/AmeliaRose802/crystal-cryptal)
+   repo, which ships `pipeline.ps1`) + `saw-spec-gen`.
 3. Runs the exact same `pipeline.ps1` invocation as `regen-docs.ps1` below.
 4. Renders the DocFX site from the freshly regenerated `docs/` and deploys
    it to GitHub Pages.
@@ -27,10 +29,10 @@ back to the repo, so it needs no write access to `main` and can't create an
 auto-commit loop. The committed `docs/` stays as the last human-reviewed
 snapshot; the live site always reflects current `main`.
 
-**One-time setup:** if the `pretty-specs` repo is private, add a repo/Org
-secret `PRETTY_SPECS_TOKEN` (PAT with `contents:read` on
-`AmeliaRose802/pretty-specs`). If it's public, the default token is used and
-no secret is required.
+Both tool repos are **public**, so no secrets or one-time setup are
+required. (If `crystal-cryptal` starts publishing a prebuilt release binary,
+the "Build pretty-specs" step can be swapped for a release download to skip
+the from-source build.)
 
 The manual flow below is now only needed when you want the **committed**
 `docs/` artifacts updated in the repo (e.g. to review the doc diff in a PR),
