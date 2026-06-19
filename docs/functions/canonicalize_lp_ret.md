@@ -1,4 +1,6 @@
-# `canonicalize_lp_ret`  ✗
+# `canonicalize_lp_ret`  🧩
+
+> 🧩 **Model abstraction.** Byte-count model for the bounded length-prefix encoder; paired with canonicalize_lp_post. No production function is proven equivalent to this definition on this page.
 
 ### Signature
 

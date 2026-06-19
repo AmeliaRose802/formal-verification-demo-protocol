@@ -1,4 +1,6 @@
-# `getStatus`  ✗
+# `getStatus`  ⚠️
+
+> ⚠️ **Implemented, unverified.** This function exists in the codebase but **no machine-checked equivalence proof** has been discharged. Real implementation: `C:/Users/ameliapayne/demo_protocol/cpp/src/decision.cpp`. Verification **failed**: verify script exited with code 2.
 
 ### Signature
 

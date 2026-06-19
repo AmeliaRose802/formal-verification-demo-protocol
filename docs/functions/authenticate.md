@@ -1,4 +1,4 @@
-# `authenticate`  ✓
+# `authenticate`  ✅
 
 ### Signature
 

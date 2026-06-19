@@ -1,4 +1,6 @@
-# `canonicalize_lp_post`  ✗
+# `canonicalize_lp_post`  🧩
+
+> 🧩 **Model abstraction.** Bounded (MAX_LEN) length-prefix encoder model; the production canonicalize_lp in cpp/src/decision.cpp is proven separately under the length bound. No production function is proven equivalent to this definition on this page.
 
 ### Signature
 

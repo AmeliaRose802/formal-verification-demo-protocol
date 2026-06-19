@@ -1,4 +1,6 @@
-# `ER_Disabled_b`  ✗
+# `ER_Disabled_b`  ⚠️
+
+> ⚠️ **Implemented, unverified.** This function exists in the codebase but **no machine-checked equivalence proof** has been discharged. Proof has not been attempted yet.
 
 ### Formal definition (Cryptol)
 

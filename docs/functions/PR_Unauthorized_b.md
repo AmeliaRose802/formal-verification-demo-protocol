@@ -1,4 +1,6 @@
-# `PR_Unauthorized_b`
+# `PR_Unauthorized_b`  ⚠️
+
+> ⚠️ **Implemented, unverified.** This function exists in the codebase but **no machine-checked equivalence proof** has been discharged.
 
 ### Formal definition (Cryptol)
 

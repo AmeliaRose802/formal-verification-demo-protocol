@@ -1,4 +1,6 @@
-# `isAccessDecision_b`  ✗
+# `isAccessDecision_b`  🧩
+
+> 🧩 **Model abstraction.** Well-formedness predicate over the AccessDecision ABI byte — a modeling precondition, not standalone code. No production function is proven equivalent to this definition on this page.
 
 ### Signature
 

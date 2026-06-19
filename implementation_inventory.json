@@ -1,0 +1,40 @@
+{
+  "functions": [
+    {
+      "name": "authenticate",
+      "lang": "cpp",
+      "symbol": "?authenticate@sdep@@YA_N_N00@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/decision.cpp"
+    },
+    {
+      "name": "enforceAccess",
+      "lang": "cpp",
+      "symbol": "?enforceAccess@sdep@@YA?AUEnforceOutcome@1@W4AccessMode@1@W4AccessDecision@1@@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/decision.cpp"
+    },
+    {
+      "name": "enrollDevice",
+      "lang": "cpp",
+      "symbol": "?enrollDevice@sdep@@YA?AW4EnrollmentResult@1@_N0W4AuthResult@1@W4ActivationResult@1@@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/decision.cpp"
+    },
+    {
+      "name": "getStatus",
+      "lang": "cpp",
+      "symbol": "?getStatus@sdep@@YA?AUEnrollmentStatus@1@_N00AEBUUuid@1@@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/decision.cpp"
+    },
+    {
+      "name": "isValidRequestDate",
+      "lang": "cpp",
+      "symbol": "?isValidRequestDate@sdep@@YA_N_J00@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/decision.cpp"
+    },
+    {
+      "name": "provisionKey",
+      "lang": "cpp",
+      "symbol": "?provisionKey@sdep@@YA?AW4ProvisionResult@1@_N0W4KeyVaultResult@1@0@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/decision.cpp"
+    }
+  ]
+}

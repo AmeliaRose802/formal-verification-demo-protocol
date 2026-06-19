@@ -1,4 +1,6 @@
-# `isActivationResult_b`  ✗
+# `isActivationResult_b`  🧩
+
+> 🧩 **Model abstraction.** Well-formedness predicate over the ActivationResult ABI byte — a modeling precondition, not standalone code. No production function is proven equivalent to this definition on this page.
 
 ### Signature
 

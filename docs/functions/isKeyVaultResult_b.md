@@ -1,4 +1,6 @@
-# `isKeyVaultResult_b`  ✗
+# `isKeyVaultResult_b`  🧩
+
+> 🧩 **Model abstraction.** Well-formedness predicate over the KeyVaultResult ABI byte — a modeling precondition used inside the proven decision functions, not a standalone implementation. No production function is proven equivalent to this definition on this page.
 
 ### Signature
 
