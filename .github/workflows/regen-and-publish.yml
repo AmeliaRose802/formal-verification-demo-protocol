@@ -109,7 +109,10 @@ jobs:
           if ($found.Count -eq 0) { throw "pretty-specs binary not found inside $asset" }
           Copy-Item $found[0].FullName .tools/bin/pretty-specs -Force
           & chmod '+x' .tools/bin/pretty-specs
-          & .tools/bin/pretty-specs --version
+          # Smoke test: the binary has no --version flag (usage is
+          # `pretty-specs --favicon <PATH> [INPUTS]...`); --help exits 0.
+          & .tools/bin/pretty-specs --help
+          if ($LASTEXITCODE -ne 0) { throw "pretty-specs --help failed (exit $LASTEXITCODE)" }
 
       - name: Cache cargo + saw-spec-gen build
         uses: actions/cache@v4
