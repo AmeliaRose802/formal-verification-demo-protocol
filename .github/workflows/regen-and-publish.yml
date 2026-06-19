@@ -165,18 +165,21 @@ jobs:
         run: |
           # Hand the freshly rendered tree to the docfx job. Exclude the
           # heavy/irrelevant dirs: git metadata, SAW output, and the
-          # checked-out tool sources.
+          # checked-out tool sources. Write the archive OUTSIDE the tree
+          # being read ($RUNNER_TEMP) so tar can't try to include its own
+          # growing output ("file changed as we read it").
           tar `
+            --warning=no-file-changed `
             --exclude='./.git' `
             --exclude='./verify_out' `
             --exclude='./.tools' `
-            -czf rendered.tar.gz .
+            -czf "$env:RUNNER_TEMP/rendered.tar.gz" .
 
       - name: Upload rendered tree
         uses: actions/upload-artifact@v4
         with:
           name: rendered-tree
-          path: rendered.tar.gz
+          path: ${{ runner.temp }}/rendered.tar.gz
           retention-days: 3
 
       - name: Upload pipeline log (diagnostics)
