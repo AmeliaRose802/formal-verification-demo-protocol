@@ -1,0 +1,229 @@
+# Regenerate the docs from source and publish them to GitHub Pages,
+# automatically, on every push to `main`.
+#
+# Why this exists
+# ---------------
+# Previously the published site only refreshed when someone ran the
+# pretty-specs pipeline *locally* (scripts/regen-docs.ps1), committed the
+# regenerated docs/, and opened a PR — then pages.yml deployed the
+# committed docs/. This workflow removes that manual loop: when source
+# (Cryptol model, C++/Rust implementations, extra docs, assets, docfx
+# config) lands on `main`, CI re-runs the exact same pipeline inside the
+# verification toolchain container and deploys the freshly rendered site.
+#
+# It publishes the *freshly rendered* _site rather than committing docs/
+# back to the repo, so it never needs write access to a protected `main`
+# and can't create an auto-commit trigger loop. The committed docs/ in the
+# repo remains the last human-reviewed snapshot; the live site always
+# reflects current source. (pages.yml stays as a manual fallback that
+# deploys the committed docs/.)
+#
+# Toolchain
+# ---------
+# - The container image already bundles LLVM, SAW, Z3, Cryptol and pwsh.
+# - The pretty-specs renderer is consumed as a *published binary* from the
+#   public AmeliaRose802/crystal-cryptal GitHub Release (pinned via
+#   PRETTY_SPECS_VERSION below), so no Rust build of the renderer is needed.
+# - crystal-cryptal's release does NOT ship pipeline.ps1, so that script is
+#   vendored into this repo at scripts/vendor/pipeline.ps1. Keep its banner's
+#   tag in sync with PRETTY_SPECS_VERSION when bumping.
+# - saw-spec-gen (the spec generator) still has no published binary, so it is
+#   checked out + built from source here; pipeline.ps1 also needs its
+#   verify.ps1 from the repo root.
+
+name: Regenerate docs and publish
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'cpp/**'
+      - 'rust/**'
+      - 'cryptol/**'
+      - 'extra_docs/**'
+      - 'assets/**'
+      - 'coverage.toml'
+      - 'docfx.json'
+      - 'scripts/regen-docs.ps1'
+      - 'scripts/vendor/pipeline.ps1'
+      - '.github/workflows/regen-and-publish.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Pinned published renderer. Bump together with the tag in the banner of
+# scripts/vendor/pipeline.ps1 (and re-vendor that file) when upgrading.
+env:
+  PRETTY_SPECS_VERSION: v0.2.0
+  PRETTY_SPECS_SHA256: c26272c89d8a28fda490f19ac277a2be70708f34f2649447049688c6ac702191
+
+# Share the Pages concurrency group with pages.yml so the two never try to
+# deploy at the same time. Don't cancel an in-flight deployment.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  # ── 1. Regenerate docs/ + proof_manifest.json inside the toolchain image ──
+  regen:
+    name: Regenerate docs (toolchain container)
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/ameliarose802/formal-verification-demo-protocol-ci:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Checkout demo_protocol
+        uses: actions/checkout@v4
+
+      - name: Checkout saw-spec-gen (spec generator)
+        uses: actions/checkout@v4
+        with:
+          repository: AmeliaRose802/saw-spec-gen
+          path: .tools/saw-spec-gen
+
+      - name: Download pretty-specs ${{ env.PRETTY_SPECS_VERSION }} (published binary)
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $ver   = $env:PRETTY_SPECS_VERSION
+          $asset = "pretty-specs-$ver-x86_64-unknown-linux-gnu.tar.gz"
+          $url   = "https://github.com/AmeliaRose802/crystal-cryptal/releases/download/$ver/$asset"
+          New-Item -ItemType Directory -Force -Path .tools/pretty-specs, .tools/bin | Out-Null
+          Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile ".tools/$asset"
+
+          # Verify against the pinned digest so a moved/retagged asset can't slip in.
+          $actual = (Get-FileHash ".tools/$asset" -Algorithm SHA256).Hash.ToLower()
+          if ($actual -ne $env:PRETTY_SPECS_SHA256) {
+            throw "pretty-specs asset sha256 mismatch: got $actual expected $($env:PRETTY_SPECS_SHA256)"
+          }
+
+          tar -xzf ".tools/$asset" -C .tools/pretty-specs
+          $found = @(Get-ChildItem -Recurse -File -Path .tools/pretty-specs -Filter pretty-specs)
+          if ($found.Count -eq 0) { throw "pretty-specs binary not found inside $asset" }
+          Copy-Item $found[0].FullName .tools/bin/pretty-specs -Force
+          & chmod '+x' .tools/bin/pretty-specs
+          & .tools/bin/pretty-specs --version
+
+      - name: Cache cargo + saw-spec-gen build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            .tools/saw-spec-gen/target
+          key: regen-cargo-${{ hashFiles('.tools/saw-spec-gen/Cargo.lock') }}
+          restore-keys: |
+            regen-cargo-
+
+      - name: Build saw-spec-gen
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Push-Location .tools/saw-spec-gen
+          cargo build --release
+          Pop-Location
+
+      - name: Regenerate docs + proof manifest
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $pretty   = (Resolve-Path '.tools/bin/pretty-specs').Path
+          $pipeline = (Resolve-Path 'scripts/vendor/pipeline.ps1').Path
+          $ssgRoot  = (Resolve-Path '.tools/saw-spec-gen').Path
+          $ssgBin   = Join-Path $ssgRoot 'target/release/saw-spec-gen'
+
+          # Clean prior outputs so we never publish a stale mixture.
+          Remove-Item -Recurse -Force verify_out, docs, proof_manifest.json, pipeline.log -ErrorAction SilentlyContinue
+
+          & $pipeline `
+            -Spec cpp/saw/SDEP_cpp.cry `
+            -Impl cpp/src/decision.cpp -ImplLang cpp `
+            -CxxIncludeDirs cpp/include -CxxStandard c++20 `
+            -ExtraClangFlags '-fexceptions','-fno-inline' `
+            -PrettySpecs $pretty `
+            -SawSpecGen $ssgBin `
+            -SawSpecGenRoot $ssgRoot `
+            -Output docs -VerifyOutput verify_out `
+            -ExtraDocs 'extra_docs:Formal Verification' `
+            -Logo assets/sat-pudding.png `
+            -Favicon assets/fabicon.png `
+            *>&1 | Tee-Object pipeline.log
+
+          if (-not (Test-Path docs/index.md)) {
+            throw "Regeneration failed: docs/ was not produced. See pipeline.log."
+          }
+
+      - name: Package rendered tree for the build job
+        run: |
+          # Hand the freshly rendered tree to the docfx job. Exclude the
+          # heavy/irrelevant dirs: git metadata, SAW output, and the
+          # checked-out tool sources.
+          tar `
+            --exclude='./.git' `
+            --exclude='./verify_out' `
+            --exclude='./.tools' `
+            -czf rendered.tar.gz .
+
+      - name: Upload rendered tree
+        uses: actions/upload-artifact@v4
+        with:
+          name: rendered-tree
+          path: rendered.tar.gz
+          retention-days: 3
+
+      - name: Upload pipeline log (diagnostics)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: regen-pipeline-log
+          path: pipeline.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # ── 2. Render the DocFX site from the regenerated docs/ ──────────────────
+  build:
+    name: Build DocFX site
+    needs: regen
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download rendered tree
+        uses: actions/download-artifact@v4
+        with:
+          name: rendered-tree
+
+      - name: Unpack rendered tree
+        run: tar -xzf rendered.tar.gz
+
+      - name: Set up .NET (for docfx tool)
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Install DocFX
+        run: dotnet tool update -g docfx
+
+      - name: Build site
+        run: docfx docfx.json --warningsAsErrors false
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  # ── 3. Deploy to GitHub Pages ────────────────────────────────────────────
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

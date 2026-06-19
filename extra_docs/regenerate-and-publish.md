@@ -9,6 +9,40 @@ explains *why* each step exists and what to do when something breaks.
 
 ---
 
+## Automatic regeneration on merge to `main` (no local action needed)
+
+You usually **don't** need to run anything locally. The workflow
+`.github/workflows/regen-and-publish.yml` runs on every push to `main` that
+touches source (`cpp/**`, `rust/**`, `cryptol/**`, `extra_docs/**`,
+`assets/**`, `coverage.toml`, `docfx.json`). It:
+
+1. Spins up the verification toolchain container image.
+2. Downloads the published `pretty-specs` renderer binary from the
+   [`crystal-cryptal`](https://github.com/AmeliaRose802/crystal-cryptal)
+   GitHub Release (pinned via `PRETTY_SPECS_VERSION`), and builds
+   `saw-spec-gen` from source.
+3. Runs the **vendored** `pipeline.ps1` (`scripts/vendor/pipeline.ps1`) with
+   the same arguments as `regen-docs.ps1` below.
+4. Renders the DocFX site from the freshly regenerated `docs/` and deploys
+   it to GitHub Pages.
+
+It publishes the freshly **rendered** site rather than committing `docs/`
+back to the repo, so it needs no write access to `main` and can't create an
+auto-commit loop. The committed `docs/` stays as the last human-reviewed
+snapshot; the live site always reflects current `main`.
+
+Everything it needs is **public**, so no secrets or one-time setup are
+required. `crystal-cryptal`'s release ships only the `pretty-specs` binary
+(not `pipeline.ps1`), so that script is vendored at
+`scripts/vendor/pipeline.ps1`; bump `PRETTY_SPECS_VERSION` and re-vendor the
+script together when upgrading.
+
+The manual flow below is now only needed when you want the **committed**
+`docs/` artifacts updated in the repo (e.g. to review the doc diff in a PR),
+or to publish from a branch other than `main`.
+
+---
+
 ## TL;DR
 
 From the repo root (`demo_protocol/`):
