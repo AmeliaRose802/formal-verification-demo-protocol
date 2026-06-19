@@ -1,4 +1,6 @@
-# `KV_IoError_b`
+# `KV_IoError_b`  ⚠️
+
+> ⚠️ **Implemented, unverified.** This function exists in the codebase but **no machine-checked equivalence proof** has been discharged.
 
 ### Formal definition (Cryptol)
 

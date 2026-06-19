@@ -1,4 +1,4 @@
-# `isValidRequestDate`  ✓
+# `isValidRequestDate`  ✅
 
 ### Signature
 

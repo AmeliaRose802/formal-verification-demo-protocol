@@ -1,4 +1,4 @@
-# `enrollDevice`  ✓
+# `enrollDevice`  ✅
 
 ### Signature
 

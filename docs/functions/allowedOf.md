@@ -1,4 +1,6 @@
-# `allowedOf`  ✗
+# `allowedOf`  🧩
+
+> 🧩 **Model abstraction.** Accessor over the packed enforceAccess outcome; modeling helper, exercised via the enforceAccess proof. No production function is proven equivalent to this definition on this page.
 
 ### Signature
 

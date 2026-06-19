@@ -1,4 +1,6 @@
-# `statusEngagedByte`  ✗
+# `statusEngagedByte`  🧩
+
+> 🧩 **Model abstraction.** Accessor over the getStatus EnrollmentStatus bytes; modeling helper. No production function is proven equivalent to this definition on this page.
 
 ### Signature
 

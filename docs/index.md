@@ -5,6 +5,12 @@ title: SDEP_cpp
 
 # SDEP_cpp
 
+## Coverage at a glance
+
+✅ 5 proven · 🔲 0 bounded · 🧩 11 abstractions · ⚠️ 28 **unverified** · 📄 0 spec-only
+
+See the full breakdown — including every real function the codebase contains, whether or not it was modeled — on the [Coverage Matrix](coverage.md). Pages here that carry a 🧩, 🔲, or ⚠️ badge surface the caveat in a banner at the top.
+
 ## How verification works here
 
 This site reports **two independent layers of proof**, and a security claim about the production binary needs *both*:
@@ -23,24 +29,24 @@ All type definitions: [types.md](types.md)
 
 | Function | Status | Description |
 |----------|--------|-------------|
-| [provisionKey](functions/provisionKey.md) | ✓ proven | Evaluates 4 conditions on `fleetEnabled`, `validRequest`, `vaultResult`, and `keyIsActive` in priority order, returning the first applicable 8 bits. Defaults to `PR_Succeeded_b` when no prior condition matches. |
-| [enrollDevice](functions/enrollDevice.md) | ✓ proven | The C++ body uses `switch` on AuthResult and ActivationResult.  Any enum value outside the declared set falls through to the defensive `return Unauthorized` after the outer switch.  We mirror that here. |
-| [authenticate](functions/authenticate.md) | ✓ proven | Evaluates a boolean condition over `dateValid`, `signatureValid`, and `claimsValid`. |
-| [isValidRequestDate](functions/isValidRequestDate.md) | ✓ proven | `std::int64_t` semantics. The implementation in cpp/include/sdep/auth.hpp first rejects negative timestamps / window (otherwise the subtraction `currentTime - requestTs` can wrap signed-overflow when requestTs is near INT64_MIN — found by SAW on 2026-05-30, see FINDINGS.md §1). The shim below mirrors that guard exactly so the SAW equivalence proof goes through for all i64 inputs. |
+| [provisionKey](functions/provisionKey.md) | ✅ Proven | Evaluates 4 conditions on `fleetEnabled`, `validRequest`, `vaultResult`, and `keyIsActive` in priority order, returning the first applicable 8 bits. Defaults to `PR_Succeeded_b` when no prior condition matches. |
+| [enrollDevice](functions/enrollDevice.md) | ✅ Proven | The C++ body uses `switch` on AuthResult and ActivationResult.  Any enum value outside the declared set falls through to the defensive `return Unauthorized` after the outer switch.  We mirror that here. |
+| [authenticate](functions/authenticate.md) | ✅ Proven | Evaluates a boolean condition over `dateValid`, `signatureValid`, and `claimsValid`. |
+| [isValidRequestDate](functions/isValidRequestDate.md) | ✅ Proven | `std::int64_t` semantics. The implementation in cpp/include/sdep/auth.hpp first rejects negative timestamps / window (otherwise the subtraction `currentTime - requestTs` can wrap signed-overflow when requestTs is near INT64_MIN — found by SAW on 2026-05-30, see FINDINGS.md §1). The shim below mirrors that guard exactly so the SAW equivalence proof goes through for all i64 inputs. |
 | [packOutcome](functions/packOutcome.md) | — | Computes 16 bits from `allowed` and `logged`. |
-| [enforceAccess](functions/enforceAccess.md) | ✓ proven | Evaluates 8 conditions on `mode` and `decision` in priority order, returning the first applicable 16 bits. Defaults to `packOutcome True  False` when no prior condition matches. |
-| [getStatus](functions/getStatus.md) | ✗ failed | Computes `// pre-call bytes of the optional storage (havoc)     [20][8]` from `fleetEnabled`, `hasKey`, `keyIsActive`, `keyId`, and `preBytes`. |
-| [canonicalize_lp_post](functions/canonicalize_lp_post.md) | ✗ not attempted | Length-prefixed canonicalization writes |
-| [canonicalize_lp_ret](functions/canonicalize_lp_ret.md) | ✗ not attempted | Return value of canonicalize_lp: total bytes written = 2 + nm + nb. |
-| [isKeyVaultResult_b](functions/isKeyVaultResult_b.md) | ✗ not attempted | Well-formedness predicates over ABI-width enum reps C++ enums are `enum class : std::uint8_t` so the LLVM ABI parameter is i8.  Symbolic execution explores all 256 values; valid program states only ever produce values in the declared range.  These predicates assert that range for use as preconditions in properties. |
-| [isAuthResult_b](functions/isAuthResult_b.md) | ✗ not attempted | Checks whether the auth result b is valid for the given inputs. |
-| [isActivationResult_b](functions/isActivationResult_b.md) | ✗ not attempted | Checks whether the activation result b is valid for the given inputs. |
-| [isAccessMode_b](functions/isAccessMode_b.md) | ✗ not attempted | Checks whether the access mode b is valid for the given inputs. |
-| [isAccessDecision_b](functions/isAccessDecision_b.md) | ✗ not attempted | Checks whether the access decision b is valid for the given inputs. |
-| [allowedOf](functions/allowedOf.md) | ✗ not attempted | enforceAccess result extractors enforceAccess packs the EnforceOutcome struct into one i16 with little-endian byte order: low byte = allowed (0 or 1), high byte = logged (0 or 1). These helpers project the i16 back to Bits. |
-| [loggedOf](functions/loggedOf.md) | ✗ not attempted | Tests whether `r` is well-formed. |
-| [statusEngagedByte](functions/statusEngagedByte.md) | ✗ not attempted | Computes 8 bits from `s`. |
-| [statusPayloadBytes](functions/statusPayloadBytes.md) | ✗ not attempted | Computes 16 bytes from `s`. |
+| [enforceAccess](functions/enforceAccess.md) | ✅ Proven | Evaluates 8 conditions on `mode` and `decision` in priority order, returning the first applicable 16 bits. Defaults to `packOutcome True  False` when no prior condition matches. |
+| [getStatus](functions/getStatus.md) | ⚠️ Implemented, unverified | Computes `// pre-call bytes of the optional storage (havoc)     [20][8]` from `fleetEnabled`, `hasKey`, `keyIsActive`, `keyId`, and `preBytes`. |
+| [canonicalize_lp_post](functions/canonicalize_lp_post.md) | 🧩 Model abstraction | Length-prefixed canonicalization writes |
+| [canonicalize_lp_ret](functions/canonicalize_lp_ret.md) | 🧩 Model abstraction | Return value of canonicalize_lp: total bytes written = 2 + nm + nb. |
+| [isKeyVaultResult_b](functions/isKeyVaultResult_b.md) | 🧩 Model abstraction | Well-formedness predicates over ABI-width enum reps C++ enums are `enum class : std::uint8_t` so the LLVM ABI parameter is i8.  Symbolic execution explores all 256 values; valid program states only ever produce values in the declared range.  These predicates assert that range for use as preconditions in properties. |
+| [isAuthResult_b](functions/isAuthResult_b.md) | 🧩 Model abstraction | Checks whether the auth result b is valid for the given inputs. |
+| [isActivationResult_b](functions/isActivationResult_b.md) | 🧩 Model abstraction | Checks whether the activation result b is valid for the given inputs. |
+| [isAccessMode_b](functions/isAccessMode_b.md) | 🧩 Model abstraction | Checks whether the access mode b is valid for the given inputs. |
+| [isAccessDecision_b](functions/isAccessDecision_b.md) | 🧩 Model abstraction | Checks whether the access decision b is valid for the given inputs. |
+| [allowedOf](functions/allowedOf.md) | 🧩 Model abstraction | enforceAccess result extractors enforceAccess packs the EnforceOutcome struct into one i16 with little-endian byte order: low byte = allowed (0 or 1), high byte = logged (0 or 1). These helpers project the i16 back to Bits. |
+| [loggedOf](functions/loggedOf.md) | 🧩 Model abstraction | Tests whether `r` is well-formed. |
+| [statusEngagedByte](functions/statusEngagedByte.md) | 🧩 Model abstraction | Computes 8 bits from `s`. |
+| [statusPayloadBytes](functions/statusPayloadBytes.md) | 🧩 Model abstraction | Computes 16 bytes from `s`. |
 | [hmacSha256](functions/hmacSha256.md) | — | Specs only use equality of HMAC outputs; the placeholder body is opaque to the solver, which models `hmacSha256` as an uninterpreted pure function for proof purposes. |
 | [isValidSignature](functions/isValidSignature.md) | — | Checks whether the signature is valid by comparing the computed and expected values. |
 | [canonNormalized](functions/canonNormalized.md) | — | Compares computed and provided values over `n` and `b`, returning `True` on match. |
@@ -49,7 +55,7 @@ All type definitions: [types.md](types.md)
 | [requestNormalized](functions/requestNormalized.md) | — | Tests whether `r` is well-formed. |
 | [lpField](functions/lpField.md) | — | Computes 1 + StructFieldLen bytes from `f`. |
 | [lpHeader](functions/lpHeader.md) | — | Computes 2 * (1 + StructFieldLen) bytes from `h`. |
-| [canonicalizeS](functions/canonicalizeS.md) | ✗ not attempted | Computes 3 * (1 + StructFieldLen) + MaxHeaders * 2 * (1 + StructFieldLen) + 8 bytes from `r`. |
+| [canonicalizeS](functions/canonicalizeS.md) | ⚠️ Implemented, unverified | Computes 3 * (1 + StructFieldLen) + MaxHeaders * 2 * (1 + StructFieldLen) + 8 bytes from `r`. |
 | [verifierTimestamp_current](functions/verifierTimestamp_current.md) | — | Computes 64 bits from `r` and `_`. |
 
 Per-function detail pages: [functions](functions/index.md)

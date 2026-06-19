@@ -1,4 +1,6 @@
-# `AC_Success_b`
+# `AC_Success_b`  ⚠️
+
+> ⚠️ **Implemented, unverified.** This function exists in the codebase but **no machine-checked equivalence proof** has been discharged.
 
 ### Formal definition (Cryptol)
 

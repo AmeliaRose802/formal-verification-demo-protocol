@@ -1,4 +1,6 @@
-# `isAuthResult_b`  ✗
+# `isAuthResult_b`  🧩
+
+> 🧩 **Model abstraction.** Well-formedness predicate over the AuthResult ABI byte — a modeling precondition, not standalone code. No production function is proven equivalent to this definition on this page.
 
 ### Signature
 
