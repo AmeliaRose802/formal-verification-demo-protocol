@@ -1,6 +1,6 @@
 # -----------------------------------------------------------------------------
 # VENDORED FILE — do not edit by hand.
-# Source: https://github.com/AmeliaRose802/crystal-cryptal  (pipeline.ps1 @ v0.2.0)
+# Source: https://github.com/AmeliaRose802/crystal-cryptal  (pipeline.ps1 @ v0.3.0)
 #
 # crystal-cryptal publishes the `pretty-specs` binary as a GitHub Release but
 # does not (yet) ship pipeline.ps1, so it is vendored here. Re-vendor with:

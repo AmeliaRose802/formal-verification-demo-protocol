@@ -357,9 +357,13 @@ private
   // Specs only use equality of HMAC outputs; the placeholder body is
   // opaque to the solver, which models `hmacSha256` as an uninterpreted
   // pure function for proof purposes.
+  // @coverage trusted: deliberate override — the real HMAC-SHA256 in cpp/src is an assumed contract, not proven equal to this algebraic placeholder.
   hmacSha256 : HmacKey -> Request -> HmacTag
   hmacSha256 k r = k ^ r ^ (r <<< 1)   // placeholder; only equality matters
 
+  // Signature check is a thin equality over the assumed HMAC; the C++ side
+  // delegates to a real verifier that is trusted, not proven, at this layer.
+  // @coverage trusted: deliberate override — signature verification is an assumed contract over the real HMAC.
   isValidSignature : HmacKey -> Request -> HmacTag -> Bit
   isValidSignature key req providedSig = hmacSha256 key req == providedSig
 

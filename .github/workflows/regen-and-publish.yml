@@ -57,8 +57,8 @@ permissions:
 # Pinned published renderer. Bump together with the tag in the banner of
 # scripts/vendor/pipeline.ps1 (and re-vendor that file) when upgrading.
 env:
-  PRETTY_SPECS_VERSION: v0.2.0
-  PRETTY_SPECS_SHA256: c26272c89d8a28fda490f19ac277a2be70708f34f2649447049688c6ac702191
+  PRETTY_SPECS_VERSION: v0.3.0
+  PRETTY_SPECS_SHA256: e26a55df3b909ac92ca5f8af6f3c923d7c2e42f2fbb281f15352253cc620377b
 
 # Share the Pages concurrency group with pages.yml so the two never try to
 # deploy at the same time. Don't cancel an in-flight deployment.
