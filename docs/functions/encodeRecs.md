@@ -1,4 +1,6 @@
-# `encodeRecs`  `internal helper`
+# `encodeRecs`  🧩  `internal helper`
+
+> 🧩 **Model abstraction.** bounded record-list encoder (count + length-prefixed items) modeling header/query MAP serialization. No production function is proven equivalent to this definition on this page.
 
 ### Signature
 

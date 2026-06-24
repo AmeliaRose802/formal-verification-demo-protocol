@@ -1,4 +1,6 @@
-# `decodeRecs`  `internal helper`
+# `decodeRecs`  🧩  `internal helper`
+
+> 🧩 **Model abstraction.** bounded record-list decoder; round-trip with encodeRecs underpins the record smuggling-collision proofs. No production function is proven equivalent to this definition on this page.
 
 ### Signature
 

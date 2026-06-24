@@ -1,6 +1,6 @@
-# `ks_off_isActive`  📄
+# `ks_off_isActive`  🧩
 
-> 📄 **Spec-only.** This definition lives in the Cryptol model on purpose — typically as a gap-exhibiting reference function — and has **no production implementation**.
+> 🧩 **Model abstraction.** byte offset of key_->isActive in the KeyStore object image; an addressing constant for the model, not executable code. No production function is proven equivalent to this definition on this page.
 
 ### Formal definition (Cryptol)
 

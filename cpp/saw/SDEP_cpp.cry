@@ -901,8 +901,11 @@ property P32_AuthenticatedImpliesEnrolled fleetEnabled validMetadata activationR
 
 // Offsets into the 152-byte KeyStore image.
 type KS_BYTES   = 152
+// @coverage abstraction: byte offset of key_->keyId in the KeyStore object image; an addressing constant for the model, not executable code.
 ks_off_keyId    = 80 : Integer   // start of key_->keyId (16 bytes)
+// @coverage abstraction: byte offset of key_->isActive in the KeyStore object image; an addressing constant for the model, not executable code.
 ks_off_isActive = 128 : Integer  // key_->isActive byte
+// @coverage abstraction: byte offset of the optional engaged flag in the KeyStore object image; an addressing constant for the model, not executable code.
 ks_off_engaged  = 144 : Integer  // optional engaged flag
 
 // Predicates the body reads out of the pre-state object image `pre`

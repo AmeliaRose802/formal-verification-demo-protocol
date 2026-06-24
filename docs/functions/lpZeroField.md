@@ -1,4 +1,6 @@
-# `lpZeroField`  `internal helper`
+# `lpZeroField`  🧩  `internal helper`
+
+> 🧩 **Model abstraction.** zero/empty length-prefixed field — initial value for the bounded canonicalization model. No production function is proven equivalent to this definition on this page.
 
 ### Signature
 

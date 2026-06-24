@@ -1,4 +1,6 @@
-# `requestNormalized`  `internal helper`
+# `requestNormalized`  🧩  `internal helper`
+
+> 🧩 **Model abstraction.** well-formedness predicate lifting fieldNormalized over every field of a structured request. No production function is proven equivalent to this definition on this page.
 
 ### Signature
 

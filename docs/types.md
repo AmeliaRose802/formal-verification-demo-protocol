@@ -112,7 +112,7 @@ Used by: [`requestNormalized`](functions/requestNormalized.md), [`canonicalizeS`
 ### KS_BYTES
 **Type:** `[152]` — `152`-bit value
 
-Bounded check over the configured finite model. The `std::scoped_lock` is out of scope: SAW verifies the single-threaded transition the body performs once the lock is held.
+Bounded check over the configured finite model. Bounded check over the configured finite model. Offsets into the 152-byte KeyStore image.
 
 Used by: [`ksEngaged`](functions/ksEngaged.md), [`ksWasActive`](functions/ksWasActive.md), [`ksIdMatch`](functions/ksIdMatch.md), [`keyStoreActivateRet`](functions/keyStoreActivateRet.md), [`keyStoreActivatePost`](functions/keyStoreActivatePost.md)
 

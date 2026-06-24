@@ -1,4 +1,6 @@
-# `lpFieldNormalized`  `internal helper`
+# `lpFieldNormalized`  🧩  `internal helper`
+
+> 🧩 **Model abstraction.** well-formedness predicate (len in range, tail zero-padded) for a bounded length-prefixed field. No production function is proven equivalent to this definition on this page.
 
 ### Signature
 

@@ -1,4 +1,6 @@
-# `decodeLP2`  `internal helper`
+# `decodeLP2`  🧩  `internal helper`
+
+> 🧩 **Model abstraction.** bounded two-field length-prefixed decoder; round-trip with encodeLP2 underpins P23-P25. No production function is proven equivalent to this definition on this page.
 
 ### Signature
 

@@ -1,4 +1,6 @@
-# `lpHeader`  `internal helper`
+# `lpHeader`  🧩  `internal helper`
+
+> 🧩 **Model abstraction.** length-prefix encoder stand-in for a request header (Authorization headers are excluded from the signed payload). No production function is proven equivalent to this definition on this page.
 
 ### Signature
 

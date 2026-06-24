@@ -1,4 +1,6 @@
-# `encodeLP2`  `internal helper`
+# `encodeLP2`  🧩  `internal helper`
+
+> 🧩 **Model abstraction.** bounded two-field length-prefixed encoder standing in for the production canonicalizer byte layout. No production function is proven equivalent to this definition on this page.
 
 ### Signature
 

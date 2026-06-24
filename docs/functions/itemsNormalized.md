@@ -1,4 +1,6 @@
-# `itemsNormalized`  `internal helper`
+# `itemsNormalized`  🧩  `internal helper`
+
+> 🧩 **Model abstraction.** well-formedness predicate for a bounded record-list (count tag + length-prefixed items). No production function is proven equivalent to this definition on this page.
 
 ### Signature
 

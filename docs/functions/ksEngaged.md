@@ -1,6 +1,6 @@
-# `ksEngaged`  📄
+# `ksEngaged`  🧩
 
-> 📄 **Spec-only.** This definition lives in the Cryptol model on purpose — typically as a gap-exhibiting reference function — and has **no production implementation**.
+> 🧩 **Model abstraction.** model predicate reading the KeyStore object image — stands in for the C++ field reads. No production function is proven equivalent to this definition on this page.
 
 ### Signature
 

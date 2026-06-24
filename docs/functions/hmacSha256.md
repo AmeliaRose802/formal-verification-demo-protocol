@@ -1,4 +1,6 @@
-# `hmacSha256`  `internal helper`
+# `hmacSha256`  🔒  `internal helper`
+
+> 🔒 **Trusted assumption — not proven here.** deliberate override — the real HMAC-SHA256 in cpp/src is an assumed contract, not proven equal to this algebraic placeholder. Any proof that depends on this definition inherits that assumption.
 
 ### Signature
 

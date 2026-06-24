@@ -1,6 +1,6 @@
-# `ksIdMatch`  📄
+# `ksIdMatch`  🧩
 
-> 📄 **Spec-only.** This definition lives in the Cryptol model on purpose — typically as a gap-exhibiting reference function — and has **no production implementation**.
+> 🧩 **Model abstraction.** model predicate (keyId equality) standing in for the C++ Uuid::operator==. No production function is proven equivalent to this definition on this page.
 
 ### Signature
 

@@ -1,4 +1,6 @@
-# `verifierTimestamp_current`  `internal helper`
+# `verifierTimestamp_current`  🧩  `internal helper`
+
+> 🧩 **Model abstraction.** modeling stand-in for the verifier's clock source; uses the request-bound timestamp in the bounded model. No production function is proven equivalent to this definition on this page.
 
 ### Signature
 

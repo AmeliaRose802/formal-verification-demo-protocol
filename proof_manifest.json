@@ -55,8 +55,8 @@
     },
     "getStatus": {
       "overall": {
-        "reason": "verify script exited with code 2",
-        "status": "failed"
+        "solver": "z3",
+        "status": "proven"
       }
     },
     "isAccessDecision_b": {

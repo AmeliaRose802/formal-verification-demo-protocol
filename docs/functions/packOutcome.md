@@ -1,4 +1,6 @@
-# `packOutcome`  `internal helper`
+# `packOutcome`  🧩  `internal helper`
+
+> 🧩 **Model abstraction.** bit-packing stand-in for the MSVC ABI's i16 aggregate return; models the byte layout, not a proven function. No production function is proven equivalent to this definition on this page.
 
 ### Signature
 

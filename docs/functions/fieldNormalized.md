@@ -1,4 +1,6 @@
-# `fieldNormalized`  `internal helper`
+# `fieldNormalized`  🧩  `internal helper`
+
+> 🧩 **Model abstraction.** well-formedness predicate over the structured-request field model (trailing bytes past len are zero). No production function is proven equivalent to this definition on this page.
 
 ### Signature
 

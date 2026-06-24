@@ -1,4 +1,6 @@
-# `lpField`  `internal helper`
+# `lpField`  🧩  `internal helper`
+
+> 🧩 **Model abstraction.** length-prefix encoder stand-in for a single structured-request field. No production function is proven equivalent to this definition on this page.
 
 ### Signature
 
