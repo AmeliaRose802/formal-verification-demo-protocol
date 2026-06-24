@@ -156,6 +156,7 @@ isValidRequestDate requestTs currentTime windowSeconds =
 //
 // We construct the i16 directly from the two boolean lanes.
 private
+  // @coverage abstraction: bit-packing stand-in for the MSVC ABI's i16 aggregate return; models the byte layout, not a proven function.
   packOutcome : Bit -> Bit -> [16]
   packOutcome allowed logged =
     (if logged  then 1 else 0 : [8]) #
@@ -381,6 +382,7 @@ type IndexWidth = 8
 
 private
 
+  // @coverage abstraction: well-formedness predicate for the bounded length-prefixed canonicalization model used by P23-P25.
   canonNormalized : [IndexWidth] -> [FieldLen][8] -> Bit
   canonNormalized n b =
       and [ (i >= n) ==> ((b @ i) == 0)
@@ -389,6 +391,7 @@ private
   // Bounded model writes a one-byte length tag followed by the FieldLen-byte
   // field buffer. Production uses a 64-bit big-endian tag, but the
   // injectivity argument that P23-P25 rely on is identical at any width.
+  // @coverage abstraction: bounded length-prefixed encoding model standing in for the production canonicalizer's byte layout.
   canonLenPrefixed : [IndexWidth] -> [FieldLen][8] -> [IndexWidth] -> [FieldLen][8] -> [2 * FieldLen + 2][8]
   canonLenPrefixed nm m nb b = [nm] # m # [nb] # b
 
@@ -429,12 +432,14 @@ type StructuredRequest =
 
 private
 
+  // @coverage abstraction: well-formedness predicate over the structured-request field model (trailing bytes past len are zero).
   fieldNormalized : Field -> Bit
   fieldNormalized f =
     (f.len <= (`StructFieldLen : [IndexWidth])) /\
     and [ (i >= f.len) ==> ((f.buf @ i) == 0)
         | i <- ([0 .. StructFieldLen - 1] : [StructFieldLen][IndexWidth]) ]
 
+  // @coverage abstraction: well-formedness predicate lifting fieldNormalized over every field of a structured request.
   requestNormalized : StructuredRequest -> Bit
   requestNormalized r =
     fieldNormalized r.method /\
@@ -443,9 +448,11 @@ private
     and [ fieldNormalized h.name /\ fieldNormalized h.value
         | h <- r.hdrs ]
 
+  // @coverage abstraction: length-prefix encoder stand-in for a single structured-request field.
   lpField : Field -> [1 + StructFieldLen][8]
   lpField f = [f.len] # f.buf
 
+  // @coverage abstraction: length-prefix encoder stand-in for a request header (Authorization headers are excluded from the signed payload).
   lpHeader : Header -> [2 * (1 + StructFieldLen)][8]
   lpHeader h = if h.isAuth then zero
                            else (lpField h.name) # (lpField h.value)
@@ -460,6 +467,7 @@ canonicalizeS r =
 
 private
 
+  // @coverage abstraction: modeling stand-in for the verifier's clock source; uses the request-bound timestamp in the bounded model.
   verifierTimestamp_current : StructuredRequest -> [64] -> [64]
   verifierTimestamp_current r _ = r.timestamp
 
