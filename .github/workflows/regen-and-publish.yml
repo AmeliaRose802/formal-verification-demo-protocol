@@ -24,12 +24,13 @@
 # - The pretty-specs renderer is consumed as a *published binary* from the
 #   public AmeliaRose802/crystal-cryptal GitHub Release (pinned via
 #   PRETTY_SPECS_VERSION below), so no Rust build of the renderer is needed.
-# - crystal-cryptal's release does NOT ship pipeline.ps1, so that script is
-#   vendored into this repo at scripts/vendor/pipeline.ps1. Keep its banner's
-#   tag in sync with PRETTY_SPECS_VERSION when bumping.
-# - saw-spec-gen (the spec generator) still has no published binary, so it is
-#   checked out + built from source here; pipeline.ps1 also needs its
-#   verify.ps1 from the repo root.
+# - saw-spec-gen (the spec generator) is likewise consumed as a *published
+#   binary* from its GitHub Release (pinned via SAW_SPEC_GEN_VERSION below)
+#   and driven through its native `verify-cpp` CLI command. The workflow
+#   therefore needs no saw-spec-gen checkout, no from-source `cargo build`,
+#   and none of the PowerShell wrappers (verify.ps1 / scripts/vendor/
+#   pipeline.ps1): it calls pretty-specs and `verify-cpp` directly in the
+#   "Regenerate docs" step below.
 
 name: Regenerate docs and publish
 
@@ -45,7 +46,6 @@ on:
       - 'coverage.toml'
       - 'docfx.json'
       - 'scripts/regen-docs.ps1'
-      - 'scripts/vendor/pipeline.ps1'
       - '.github/workflows/regen-and-publish.yml'
   workflow_dispatch:
 
@@ -54,11 +54,14 @@ permissions:
   pages: write
   id-token: write
 
-# Pinned published renderer. Bump together with the tag in the banner of
-# scripts/vendor/pipeline.ps1 (and re-vendor that file) when upgrading.
+# Pinned published tools. Bump each tag together with its SHA256 digest.
 env:
   PRETTY_SPECS_VERSION: v0.3.0
   PRETTY_SPECS_SHA256: e26a55df3b909ac92ca5f8af6f3c923d7c2e42f2fbb281f15352253cc620377b
+  # Published spec-generator binary, driven via its `verify-cpp` CLI.
+  # Bump the tag and digest together when upgrading.
+  SAW_SPEC_GEN_VERSION: v0.1.0
+  SAW_SPEC_GEN_SHA256: 9131d6fda82a50d7f542d1400a9710835b5a7bd1c9ff266f87385e3b5e5a99d4
 
 # Share the Pages concurrency group with pages.yml so the two never try to
 # deploy at the same time. Don't cancel an in-flight deployment.
@@ -82,12 +85,6 @@ jobs:
     steps:
       - name: Checkout demo_protocol
         uses: actions/checkout@v4
-
-      - name: Checkout saw-spec-gen (spec generator)
-        uses: actions/checkout@v4
-        with:
-          repository: AmeliaRose802/saw-spec-gen
-          path: .tools/saw-spec-gen
 
       - name: Download pretty-specs ${{ env.PRETTY_SPECS_VERSION }} (published binary)
         run: |
@@ -114,48 +111,117 @@ jobs:
           & .tools/bin/pretty-specs --help
           if ($LASTEXITCODE -ne 0) { throw "pretty-specs --help failed (exit $LASTEXITCODE)" }
 
-      - name: Cache cargo + saw-spec-gen build
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            .tools/saw-spec-gen/target
-          key: regen-cargo-${{ hashFiles('.tools/saw-spec-gen/Cargo.lock') }}
-          restore-keys: |
-            regen-cargo-
-
-      - name: Build saw-spec-gen
+      - name: Download saw-spec-gen ${{ env.SAW_SPEC_GEN_VERSION }} (published binary)
         run: |
           $ErrorActionPreference = 'Stop'
-          Push-Location .tools/saw-spec-gen
-          cargo build --release
-          Pop-Location
+          $ver   = $env:SAW_SPEC_GEN_VERSION
+          $asset = 'saw-spec-gen-linux-x86_64.tar.gz'
+          $url   = "https://github.com/AmeliaRose802/saw-spec-gen/releases/download/$ver/$asset"
+          New-Item -ItemType Directory -Force -Path .tools/saw-spec-gen, .tools/bin | Out-Null
+          Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile ".tools/$asset"
+
+          # Verify against the pinned digest so a moved/retagged asset can't slip in.
+          $actual = (Get-FileHash ".tools/$asset" -Algorithm SHA256).Hash.ToLower()
+          if ($actual -ne $env:SAW_SPEC_GEN_SHA256) {
+            throw "saw-spec-gen asset sha256 mismatch: got $actual expected $($env:SAW_SPEC_GEN_SHA256)"
+          }
+
+          tar -xzf ".tools/$asset" -C .tools/saw-spec-gen
+          $found = @(Get-ChildItem -Recurse -File -Path .tools/saw-spec-gen -Filter saw-spec-gen)
+          if ($found.Count -eq 0) { throw "saw-spec-gen binary not found inside $asset" }
+          Copy-Item $found[0].FullName .tools/bin/saw-spec-gen -Force
+          & chmod '+x' .tools/bin/saw-spec-gen
+          & .tools/bin/saw-spec-gen --version
+          if ($LASTEXITCODE -ne 0) { throw "saw-spec-gen --version failed (exit $LASTEXITCODE)" }
 
       - name: Regenerate docs + proof manifest
         run: |
           $ErrorActionPreference = 'Stop'
-          $pretty   = (Resolve-Path '.tools/bin/pretty-specs').Path
-          $pipeline = (Resolve-Path 'scripts/vendor/pipeline.ps1').Path
-          $ssgRoot  = (Resolve-Path '.tools/saw-spec-gen').Path
-          $ssgBin   = Join-Path $ssgRoot 'target/release/saw-spec-gen'
+          # verify-cpp is a native binary; handle its (sometimes non-zero, e.g.
+          # a genuine disproof) exit codes ourselves via $LASTEXITCODE rather
+          # than letting pwsh 7.4+ throw on the first non-zero native exit.
+          $PSNativeCommandUseErrorActionPreference = $false
+
+          $pretty = (Resolve-Path '.tools/bin/pretty-specs').Path
+          $ssg    = (Resolve-Path '.tools/bin/saw-spec-gen').Path
+
+          $spec      = 'cpp/saw/SDEP_cpp.cry'
+          $impl      = 'cpp/src/decision.cpp'
+          $verifyOut = 'verify_out'
+          $manifest  = 'proof_manifest.json'
+          $docs      = 'docs'
+
+          # Render flags shared by the initial (Step 0) and badge (Step 4) renders.
+          $renderArgs = @(
+            '--docfx',
+            '--logo',       'assets/sat-pudding.png',
+            '--favicon',    'assets/fabicon.png',
+            '--extra-docs', 'extra_docs:Formal Verification'
+          )
+
+          function Invoke-Pretty([string[]]$a) {
+            Write-Host "  > pretty-specs $($a -join ' ')" -ForegroundColor DarkGray
+            & $pretty @a
+            if ($LASTEXITCODE -ne 0) { throw "pretty-specs exited with code $LASTEXITCODE" }
+          }
 
           # Clean prior outputs so we never publish a stale mixture.
-          Remove-Item -Recurse -Force verify_out, docs, proof_manifest.json, pipeline.log -ErrorAction SilentlyContinue
+          Remove-Item -Recurse -Force $verifyOut, $docs, $manifest, pipeline.log -ErrorAction SilentlyContinue
 
-          & $pipeline `
-            -Spec cpp/saw/SDEP_cpp.cry `
-            -Impl cpp/src/decision.cpp -ImplLang cpp `
-            -CxxIncludeDirs cpp/include -CxxStandard c++20 `
-            -ExtraClangFlags '-fexceptions','-fno-inline' `
-            -PrettySpecs $pretty `
-            -SawSpecGen $ssgBin `
-            -SawSpecGenRoot $ssgRoot `
-            -Output docs -VerifyOutput verify_out `
-            -ExtraDocs 'extra_docs:Formal Verification' `
-            -Logo assets/sat-pudding.png `
-            -Favicon assets/fabicon.png `
-            *>&1 | Tee-Object pipeline.log
+          Start-Transcript -Path pipeline.log | Out-Null
+          try {
+            # -- Step 0: initial render (no proof badges) --
+            Invoke-Pretty (@($spec, '-o', $docs) + $renderArgs)
+
+            # -- Step 1: emit the function list --
+            New-Item -ItemType Directory -Force -Path $verifyOut | Out-Null
+            $fnList = Join-Path $verifyOut 'function_list.json'
+            Invoke-Pretty @($spec, '--emit-function-list', '-o', $fnList)
+
+            # -- Step 2: verify each function via the saw-spec-gen `verify-cpp`
+            #    CLI. This replaces the old pipeline.ps1 -> verify.ps1 wrappers;
+            #    verify-cpp runs compile -> AST -> gen-verify -> SAW and writes
+            #    out_<fn>/result.json itself. Cryptol-only helpers with no C++
+            #    symbol soft-exit as not_attempted via --spec-only-on-missing. --
+            $functions = Get-Content $fnList | ConvertFrom-Json
+            $passed = 0; $failed = 0
+            foreach ($fn in $functions) {
+              $name   = $fn.name
+              $outDir = Join-Path $verifyOut "out_$name"
+              Write-Host "  Verifying $name ..." -NoNewline
+              & $ssg verify-cpp `
+                --cpp-file     $impl `
+                --cryptol-spec $spec `
+                --cryptol-fn   $name `
+                --function     $name `
+                --output       $outDir `
+                --include-dir  cpp/include `
+                --cxx-standard c++20 `
+                --clang-flag   -fexceptions `
+                --clang-flag   -fno-inline `
+                --spec-only-on-missing
+              if ($LASTEXITCODE -eq 0) {
+                Write-Host ' ok' -ForegroundColor Green; $passed++
+              } else {
+                Write-Host " FAILED (exit $LASTEXITCODE)" -ForegroundColor Yellow; $failed++
+                # Record the failure so --adapt-saw-results still classifies it.
+                New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+                @{ cryptol_fn = $name; status = 'error'
+                   message = "verify-cpp exited with code $LASTEXITCODE" } |
+                  ConvertTo-Json | Set-Content (Join-Path $outDir 'result.json')
+              }
+            }
+            Write-Host "  $passed passed, $failed failed" -ForegroundColor $(if ($failed) { 'Yellow' } else { 'Green' })
+
+            # -- Step 3: adapt SAW results into the proof manifest --
+            Invoke-Pretty @('--adapt-saw-results', $verifyOut, '--manifest-output', $manifest)
+
+            # -- Step 4: final render with proof badges --
+            Invoke-Pretty (@($spec, '--proof-status', $manifest, '-o', $docs) + $renderArgs)
+          }
+          finally {
+            Stop-Transcript | Out-Null
+          }
 
           if (-not (Test-Path docs/index.md)) {
             throw "Regeneration failed: docs/ was not produced. See pipeline.log."
