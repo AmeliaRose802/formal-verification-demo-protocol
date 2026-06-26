@@ -5,18 +5,17 @@
 # ---------------
 # Previously the published site only refreshed when someone ran the
 # pretty-specs pipeline *locally* (scripts/regen-docs.ps1), committed the
-# regenerated docs/, and opened a PR — then pages.yml deployed the
-# committed docs/. This workflow removes that manual loop: when source
-# (Cryptol model, C++/Rust implementations, extra docs, assets, docfx
-# config) lands on `main`, CI re-runs the exact same pipeline inside the
-# verification toolchain container and deploys the freshly rendered site.
+# regenerated docs/, and opened a PR. This workflow removes that manual
+# loop: when source (Cryptol model, C++/Rust implementations, extra docs,
+# assets, docfx config) lands on `main`, CI re-runs the exact same pipeline
+# inside the verification toolchain container and deploys the freshly
+# rendered site.
 #
 # It publishes the *freshly rendered* _site rather than committing docs/
 # back to the repo, so it never needs write access to a protected `main`
-# and can't create an auto-commit trigger loop. The committed docs/ in the
-# repo remains the last human-reviewed snapshot; the live site always
-# reflects current source. (pages.yml stays as a manual fallback that
-# deploys the committed docs/.)
+# and can't create an auto-commit trigger loop. docs/ is generated output
+# (gitignored, never committed); the live site is rendered fresh from
+# source on every push by this workflow, which is the sole publisher.
 #
 # Toolchain
 # ---------
@@ -61,8 +60,8 @@ permissions:
 # time via the GitHub API — see the download steps), so there's no version
 # or digest pin to maintain.
 
-# Share the Pages concurrency group with pages.yml so the two never try to
-# deploy at the same time. Don't cancel an in-flight deployment.
+# This is the sole GitHub Pages publisher. The `pages` concurrency group
+# guards against overlapping deploys; don't cancel an in-flight deployment.
 concurrency:
   group: pages
   cancel-in-progress: false
