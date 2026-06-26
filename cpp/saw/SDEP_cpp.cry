@@ -978,3 +978,103 @@ property KS4_IoFailureNoEffect pre kid =
   (keyStoreActivateRet pre kid == AC_IoFailure_b) ==>
     (keyStoreActivatePost pre kid @ ks_off_isActive)
       == (pre @ ks_off_isActive)
+
+// ── KeyStore::provision — Trust-On-First-Use (TOFU) enrollment ─────────
+//
+// `provision(EnrollmentKey newKey) -> optional<EnrollmentKey>` is the
+// other half of the KeyStore lifecycle: it installs the FIRST key into
+// an empty store and is otherwise inert. Its body (held under the same
+// scoped_lock, modelled as a memory-neutral no-op here) does:
+//
+//   if key_ already engaged           -> return nullopt, store UNCHANGED
+//   else  newKey.isActive := false;   -> store newKey, engage; return Some
+//
+// This is the TOFU latch: once any key exists, provision can never
+// overwrite it (re-enrolment must go through the wipe path, out of
+// scope). The freshly stored key is always written INACTIVE — activation
+// is a separate, explicit step (`activate`), so provisioning alone never
+// yields a usable (active) credential.
+//
+// EnrollmentKey is a 64-byte POD: keyId@0 (16) · secret@16 (32) ·
+// isActive@48 (bool) · createdAt@56 (i64). Inside the KeyStore optional
+// it sits at object offset 80, so its isActive lands at 80+48 = 128 and
+// the optional engaged flag at 80+64 = 144 (consistent with activate).
+
+// @coverage abstraction: byte offset of EnrollmentKey.isActive within the 64-byte key record.
+ek_off_isActive = 48 : Integer
+
+// The body forces the incoming key INACTIVE before storing it.
+// @coverage abstraction: model of the `newKey.isActive = false` write the body performs prior to storing.
+newKeyStored : [64][8] -> [64][8]
+newKeyStored nk = update nk ek_off_isActive 0
+
+// Post-state object image. On the engaged (TOFU-locked) path nothing
+// changes; on the empty path the 64-byte (inactivated) key is written
+// into the optional payload at offset 80 and the engaged flag at 144 is
+// set. Bytes 0..79 (mutex) and 145..151 (tail padding) are preserved.
+// @coverage abstraction: Cryptol model of KeyStore::provision's post-state; implementation-level SAW proof ties this to the C++ body.
+keyStoreProvisionPost : [KS_BYTES][8] -> [64][8] -> [KS_BYTES][8]
+keyStoreProvisionPost pre nk =
+  if (pre @ ks_off_engaged) == 1
+  then pre
+  else (take`{80} pre) # (newKeyStored nk) # [1] # (drop`{145} pre)
+
+// Returned optional<EnrollmentKey> image (72 bytes: 64-byte payload ·
+// engaged@64 · 7 bytes tail). ONLY meaningful on the empty (fresh) path,
+// where the body memcpy's the just-stored 72-byte optional out of the
+// object — so the tail bytes mirror the object's tail (pre[145..151]).
+// On the engaged path the return is nullopt and its payload is left
+// uninitialised (only the engaged byte, asserted 0, is defined); the
+// SAW harness therefore checks that path with a partial postcondition.
+// @coverage abstraction: Cryptol model of KeyStore::provision's returned optional on the fresh-enrolment path.
+keyStoreProvisionRet : [KS_BYTES][8] -> [64][8] -> [72][8]
+keyStoreProvisionRet pre nk = (newKeyStored nk) # [1] # (drop`{145} pre)
+
+// ── Cryptol properties (provable by :prove) ───────────────────────────
+
+// PROV1: TOFU frame condition — provisioning into an already-engaged
+// store is a no-op on the object image (the existing key is never
+// overwritten).
+property PROV1_TofuFrame pre nk =
+  ((pre @ ks_off_engaged) == 1) ==>
+    (keyStoreProvisionPost pre nk == pre)
+
+// PROV2: a freshly provisioned key is always stored INACTIVE — provision
+// alone never produces an active credential.
+property PROV2_FreshKeyInactive pre nk =
+  ((pre @ ks_off_engaged) == 0) ==>
+    ((keyStoreProvisionPost pre nk @ ks_off_isActive) == 0)
+
+// PROV3: provisioning into an empty store engages it (sets the optional
+// flag), so a subsequent provision hits the TOFU lock.
+property PROV3_FreshEngages pre nk =
+  ((pre @ ks_off_engaged) == 0) ==>
+    ((keyStoreProvisionPost pre nk @ ks_off_engaged) == 1)
+
+// PROV4: the returned key (fresh path) is itself inactive — the caller
+// receives a provisional, not-yet-usable credential.
+property PROV4_ReturnedKeyInactive pre nk =
+  (keyStoreProvisionRet pre nk @ ek_off_isActive) == 0
+
+// PROV5: provision never touches the mutex bytes (object offsets 0..79),
+// on either path — the lock region is carried through verbatim.
+property PROV5_MutexPreserved pre nk =
+  take`{80} (keyStoreProvisionPost pre nk) == take`{80} pre
+
+// ── KeyStore read accessors — hasKey() / isActive() ───────────────────
+// Both take the lock, read the optional, and return a bool without
+// mutating the object. hasKey() reports whether a key is engaged;
+// isActive() reports engaged AND the key's isActive flag.
+// @coverage abstraction: model of KeyStore::hasKey() (optional has_value).
+ksHasKey : [KS_BYTES][8] -> Bit
+ksHasKey pre = (pre @ ks_off_engaged) == 1
+
+// @coverage abstraction: model of KeyStore::isActive() (engaged && key_->isActive).
+ksIsActive : [KS_BYTES][8] -> Bit
+ksIsActive pre = ((pre @ ks_off_engaged) == 1) /\ ((pre @ ks_off_isActive) == 1)
+
+// ACC1: an active store necessarily has a key — isActive() implies
+// hasKey(). This couples the two accessors so a caller can rely on
+// isActive() as a strictly stronger check.
+property ACC1_ActiveImpliesHasKey pre =
+  ksIsActive pre ==> ksHasKey pre
