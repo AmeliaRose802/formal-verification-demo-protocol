@@ -19,10 +19,12 @@ touches source (`cpp/**`, `rust/**`, `cryptol/**`, `extra_docs/**`,
 1. Spins up the verification toolchain container image.
 2. Downloads the published `pretty-specs` renderer binary from the
    [`crystal-cryptal`](https://github.com/AmeliaRose802/crystal-cryptal)
-   GitHub Release (pinned via `PRETTY_SPECS_VERSION`), and builds
-   `saw-spec-gen` from source.
-3. Runs the **vendored** `pipeline.ps1` (`scripts/vendor/pipeline.ps1`) with
-   the same arguments as `regen-docs.ps1` below.
+   GitHub Release (the **latest** release, resolved at run time), and the
+   published `saw-spec-gen` binary.
+3. Runs pretty-specs' native `--pipeline` orchestrator with the same
+   arguments as `regen-docs.ps1` below (render → emit function list →
+   `saw-spec-gen verify-cpp` per function → adapt results → re-render with
+   badges).
 4. Renders the DocFX site from the freshly regenerated `docs/` and deploys
    it to GitHub Pages.
 
@@ -32,10 +34,9 @@ auto-commit loop. The committed `docs/` stays as the last human-reviewed
 snapshot; the live site always reflects current `main`.
 
 Everything it needs is **public**, so no secrets or one-time setup are
-required. `crystal-cryptal`'s release ships only the `pretty-specs` binary
-(not `pipeline.ps1`), so that script is vendored at
-`scripts/vendor/pipeline.ps1`; bump `PRETTY_SPECS_VERSION` and re-vendor the
-script together when upgrading.
+required. As of `crystal-cryptal` v0.5.0 the renderer ships a native
+`--pipeline` orchestrator, so the previously vendored `pipeline.ps1` is gone
+and the workflow simply tracks the latest published `pretty-specs` release.
 
 The manual flow below is now only needed when you want the **committed**
 `docs/` artifacts updated in the repo (e.g. to review the doc diff in a PR),

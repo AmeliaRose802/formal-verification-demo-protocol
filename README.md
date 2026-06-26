@@ -77,7 +77,7 @@ docs/                         DocFX source (generated from Cryptol)
 - [pretty-specs](https://github.com/AmeliaRose802/pretty-specs) — renders Cryptol modules to DocFX-flavored Markdown with per-function and per-property cross-references; emits the contents of [docs/](docs/).
 - [saw-spec-gen](https://github.com/AmeliaRose802/saw-spec-gen) — auto-generates SAW spec scaffolding from clang AST and `mir-json` so Layer 1 and Layer 2 specs stay aligned with the C++/Rust ABIs.
 
-The full doc-regeneration + verification pipeline (`pipeline.ps1` from `pretty-specs`) drives the verifiers above and rewrites [docs/](docs/) on every run; the GitHub Actions workflow at [.github/workflows/pages.yml](.github/workflows/pages.yml) then renders that into the published site.
+The full doc-regeneration + verification pipeline (pretty-specs' native `--pipeline`, wrapped by [scripts/regen-docs.ps1](scripts/regen-docs.ps1)) drives the verifiers above and rewrites [docs/](docs/) on every run; the GitHub Actions workflow at [.github/workflows/pages.yml](.github/workflows/pages.yml) then renders that into the published site.
 
 ---
 
