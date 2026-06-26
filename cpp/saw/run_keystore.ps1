@@ -31,6 +31,17 @@ $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 Push-Location $here
 try {
+    # This harness is MSVC-ABI specific: keystore_specs.saw pins
+    # MSVC-mangled symbol names, the MSVC CRT mutex primitives
+    # (_Mtx_lock / _Mtx_unlock), and the 80-byte MSVC std::mutex object
+    # layout. A native Linux / libstdc++ build matches none of those, so
+    # the proofs only run on Windows. Skip cleanly elsewhere (the pure
+    # decision functions and all Cryptol properties still verify on Linux).
+    if (-not ($IsWindows -or $env:OS -eq 'Windows_NT')) {
+        Write-Host 'KeyStore proofs SKIPPED (non-Windows host: keystore_specs.saw is MSVC-ABI specific)' -ForegroundColor Yellow
+        exit 0
+    }
+
     function Resolve-ToolDir {
         param([string] $Current, [string] $EnvName, [string] $Probe)
         $envVal = [Environment]::GetEnvironmentVariable($EnvName)

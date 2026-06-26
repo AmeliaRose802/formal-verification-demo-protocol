@@ -134,8 +134,17 @@ if (-not $OnlyCryptol) {
     # (cpp/saw/keystore_specs.saw) driven by run_keystore.ps1, which
     # loads the REAL production bitcode of cpp/src/key_store.cpp and
     # verifies each mangled symbol against the keyStore* Cryptol models.
-    $ksScript = Join-Path $sawDir 'run_keystore.ps1'
-    if (Test-Path $ksScript) {
+    # The KeyStore harness (keystore_specs.saw) is MSVC-ABI specific: it
+    # pins MSVC-mangled symbol names (`?activate@KeyStore@sdep@@...`), the
+    # MSVC CRT mutex primitives (`_Mtx_lock` / `_Mtx_unlock`), and the
+    # 80-byte MSVC `std::mutex` object layout. None of that holds for a
+    # native Linux / libstdc++ build, so these proofs only run on Windows.
+    # Linux CI still proves the pure decision functions (Layer 1 above) and
+    # all Cryptol properties (Layers 3-4); the stateful proofs are covered
+    # by the Windows job.
+    $ksScript      = Join-Path $sawDir 'run_keystore.ps1'
+    $isWindowsHost = $IsWindows -or $env:OS -eq 'Windows_NT'
+    if ((Test-Path $ksScript) -and $isWindowsHost) {
         $ksArgv = @()
         if ($SkipBuild) { $ksArgv += '-SkipBuild' }
         $ksLog = & pwsh -NoProfile -File $ksScript @ksArgv 2>&1 | Out-String
@@ -158,6 +167,8 @@ if (-not $OnlyCryptol) {
             }
             $sawResults += [pscustomobject]@{ Fn = $km.Fn; Verdict = $verdict }
         }
+    } elseif (-not $isWindowsHost) {
+        Write-Host '  (skipping stateful KeyStore proofs: keystore_specs.saw is MSVC-ABI specific; covered by the Windows job)' -ForegroundColor DarkGray
     } else {
         Write-Warning "Missing $ksScript — skipping stateful KeyStore proofs"
     }

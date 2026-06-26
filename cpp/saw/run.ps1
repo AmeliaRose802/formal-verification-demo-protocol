@@ -136,60 +136,45 @@ $ast     = Join-Path $here 'verify_targets_ast.json'
 $srcAbs  = (Resolve-Path '..\src\decision.cpp').Path
 $incAbs  = (Resolve-Path '..\include').Path
 
-# Extra clang args needed when running on a non-Windows host.
+# Clang target triple is host-dependent so we use natively-available
+# C++ stdlib headers + the host's name-mangling ABI:
 #
-# We target x86_64-pc-windows-msvc so the LLVM IR matches what the
-# production Windows build emits (MSVC name mangling + ABI) — that's
-# what verify.saw's `llvm_verify` symbol strings expect. On Windows
-# runners clang auto-discovers the installed MSVC stdlib for its
-# system includes. On Linux there's no MSVC stdlib, so `<cstdint>`
-# (pulled by cpp/include/sdep/types.hpp) fails to resolve.
+#   Windows runners → x86_64-pc-windows-msvc
+#       clang auto-discovers the installed MSVC SDK / vcruntime headers.
+#       Bitcode uses MSVC name mangling.
 #
-# The standalone LLVM tarball we install on Linux
-# (LLVM-${VERSION}-Linux-X64.tar.xz) ships libc++ headers at
-# `include/c++/v1/`. Those headers are ABI-portable at the
-# template/typedef level we use (cstdint typedefs, std::array,
-# std::optional shape) and let clang produce the bitcode SAW needs
-# without us having to install a real MSVC SDK in the container.
-$linuxClangExtras = @()
-if (-not ($IsWindows -or $env:OS -eq 'Windows_NT')) {
-    $incRoot   = Join-Path $ClangBin '..' | Join-Path -ChildPath 'include'
-    $libcxxInc = Join-Path $incRoot 'c++' | Join-Path -ChildPath 'v1'
-    $resolved  = Resolve-Path $libcxxInc -ErrorAction SilentlyContinue
-    if ($resolved) {
-        $linuxClangExtras = @('-stdlib=libc++', '-isystem', $resolved.Path)
-        # The official LLVM-${VERSION}-Linux-X64 tarball keeps the generated
-        # <__config_site> header in a target-triple subdir
-        # (include/<triple>/c++/v1/__config_site), NOT in include/c++/v1.
-        # libc++'s <__config> #includes it unconditionally, so without that
-        # directory on the search path clang aborts with
-        # "'__config_site' file not found". Locate it dynamically so we
-        # never hard-code the host triple.
-        $incRootResolved = Resolve-Path $incRoot -ErrorAction SilentlyContinue
-        $csDir = $null
-        if ($incRootResolved) {
-            $configSites = @(Get-ChildItem -Path $incRootResolved.Path -Filter '__config_site' -Recurse -File -ErrorAction SilentlyContinue)
-            if ($configSites.Count -gt 0) { $csDir = $configSites[0].Directory.FullName }
-        }
-        if ($csDir) {
-            $linuxClangExtras += @('-isystem', $csDir)
-            Write-Host ("  (linux) added libc++ headers: {0} (+ __config_site: {1})" -f $resolved.Path, $csDir) -ForegroundColor DarkGray
-        } else {
-            Write-Host ("  (linux) added libc++ headers: {0}" -f $resolved.Path) -ForegroundColor DarkGray
-            Write-Warning "  (linux) __config_site not found under $incRoot — clang may abort on <__config>."
-        }
-    } else {
-        Write-Warning ("libc++ headers not found at {0} — clang may fail to find <cstdint> when targeting x86_64-pc-windows-msvc on Linux." -f $libcxxInc)
-    }
+#   Linux runners   → x86_64-unknown-linux-gnu
+#       clang auto-discovers gcc's libstdc++ via the build-essential
+#       apt package shipped in the CI image. Bitcode uses Itanium
+#       name mangling.
+#
+# Both runners verify the SAME Cryptol-level equivalence — the bit
+# layouts of the integer / enum / span signatures are ABI-identical
+# for these decision functions, only the symbol names differ. The
+# verify.saw script is regenerated per-run by saw-spec-gen from the
+# actual bitcode, so its `llvm_verify` symbol strings always match
+# whichever target produced the bitcode.
+#
+# Do NOT force windows-msvc on Linux: libc++'s headers branch on the
+# target triple, see `_WIN32` / `_MSC_VER`, and pull in MSVC-only
+# headers (`<vcruntime_exception.h>`) plus the Windows thread backend
+# (`__thread/support/windows.h`, `::timespec`) that don't exist on a
+# Linux toolchain, so the bitcode build aborts. Each host's native C++
+# stdlib avoids the whole tarball-of-Windows-CRT-headers problem.
+$clangTarget = if ($IsWindows -or $env:OS -eq 'Windows_NT') {
+    'x86_64-pc-windows-msvc'
+} else {
+    'x86_64-unknown-linux-gnu'
 }
+Write-Host ("  clang target: {0}" -f $clangTarget) -ForegroundColor DarkGray
 
 if (-not $SkipBuild) {
     Write-Host '─── compile cpp/src/decision.cpp → bitcode + IR (-O0)' -ForegroundColor Cyan
     & $clang -c -emit-llvm -O0 -fno-inline -fno-rtti -fexceptions `
-        -target x86_64-pc-windows-msvc -std=c++20 @linuxClangExtras -I $incAbs $srcAbs -o $bc
+        -target $clangTarget -std=c++20 -I $incAbs $srcAbs -o $bc
     if ($LASTEXITCODE) { throw "clang bc failed" }
     & $clang -S -emit-llvm -O0 -fno-inline -fno-rtti -fexceptions `
-        -target x86_64-pc-windows-msvc -std=c++20 @linuxClangExtras -I $incAbs $srcAbs -o $ll
+        -target $clangTarget -std=c++20 -I $incAbs $srcAbs -o $ll
     if ($LASTEXITCODE) { throw "clang ll failed" }
 
     Write-Host '─── compile cpp/src/decision.cpp → bitcode + IR (-O1, STL-inlined)' -ForegroundColor Cyan
@@ -198,10 +183,10 @@ if (-not $SkipBuild) {
     # are messy at -O0.  At -O1 the constructor bodies fold into plain
     # byte stores, which SAW can simulate directly.
     & $clang -c -emit-llvm -O1 -fno-rtti -fexceptions `
-        -target x86_64-pc-windows-msvc -std=c++20 @linuxClangExtras -I $incAbs $srcAbs -o $bcOpt
+        -target $clangTarget -std=c++20 -I $incAbs $srcAbs -o $bcOpt
     if ($LASTEXITCODE) { throw "clang -O1 bc failed" }
     & $clang -S -emit-llvm -O1 -fno-rtti -fexceptions `
-        -target x86_64-pc-windows-msvc -std=c++20 @linuxClangExtras -I $incAbs $srcAbs -o $llOpt
+        -target $clangTarget -std=c++20 -I $incAbs $srcAbs -o $llOpt
     if ($LASTEXITCODE) { throw "clang -O1 ll failed" }
 
     Write-Host '─── dump + filter clang AST' -ForegroundColor Cyan
@@ -210,7 +195,7 @@ if (-not $SkipBuild) {
     # JSON to disk. PS 7+ writes UTF-8 without BOM by default which is
     # what clang's `-ast-dump=json` expects.
     & $clang -Xclang -ast-dump=json -fsyntax-only -fno-rtti -fexceptions `
-        -target x86_64-pc-windows-msvc -std=c++20 @linuxClangExtras -I $incAbs $srcAbs 2>$null > $ast
+        -target $clangTarget -std=c++20 -I $incAbs $srcAbs 2>$null > $ast
     if ($LASTEXITCODE) { throw "clang ast-dump failed" }
     # Use Join-Path so the path passed to saw-spec-gen is OS-native
     # (Linux PS would otherwise hand it the literal string `<here>\..`,
@@ -337,7 +322,7 @@ foreach ($t in $targets) {
     $stubsLl = Join-Path $outDir 'vtable_stubs.ll'
     $stubsBc = Join-Path $outDir 'vtable_stubs.bc'
     if ((Test-Path $stubsLl) -and (-not (Test-Path $stubsBc))) {
-        & $clang -c -emit-llvm -target x86_64-pc-windows-msvc $stubsLl -o $stubsBc 2>&1 | Out-Null
+        & $clang -c -emit-llvm -target $clangTarget $stubsLl -o $stubsBc 2>&1 | Out-Null
         if (-not (Test-Path $stubsBc)) {
             Write-Host "  WARNING: failed to assemble vtable_stubs.bc" -ForegroundColor Yellow
         }
