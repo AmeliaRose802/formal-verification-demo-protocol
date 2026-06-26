@@ -153,11 +153,31 @@ $incAbs  = (Resolve-Path '..\include').Path
 # without us having to install a real MSVC SDK in the container.
 $linuxClangExtras = @()
 if (-not ($IsWindows -or $env:OS -eq 'Windows_NT')) {
-    $libcxxInc = Join-Path $ClangBin '..' | Join-Path -ChildPath 'include' | Join-Path -ChildPath 'c++' | Join-Path -ChildPath 'v1'
+    $incRoot   = Join-Path $ClangBin '..' | Join-Path -ChildPath 'include'
+    $libcxxInc = Join-Path $incRoot 'c++' | Join-Path -ChildPath 'v1'
     $resolved  = Resolve-Path $libcxxInc -ErrorAction SilentlyContinue
     if ($resolved) {
         $linuxClangExtras = @('-stdlib=libc++', '-isystem', $resolved.Path)
-        Write-Host ("  (linux) added libc++ headers: {0}" -f $resolved.Path) -ForegroundColor DarkGray
+        # The official LLVM-${VERSION}-Linux-X64 tarball keeps the generated
+        # <__config_site> header in a target-triple subdir
+        # (include/<triple>/c++/v1/__config_site), NOT in include/c++/v1.
+        # libc++'s <__config> #includes it unconditionally, so without that
+        # directory on the search path clang aborts with
+        # "'__config_site' file not found". Locate it dynamically so we
+        # never hard-code the host triple.
+        $incRootResolved = Resolve-Path $incRoot -ErrorAction SilentlyContinue
+        $csDir = $null
+        if ($incRootResolved) {
+            $configSites = @(Get-ChildItem -Path $incRootResolved.Path -Filter '__config_site' -Recurse -File -ErrorAction SilentlyContinue)
+            if ($configSites.Count -gt 0) { $csDir = $configSites[0].Directory.FullName }
+        }
+        if ($csDir) {
+            $linuxClangExtras += @('-isystem', $csDir)
+            Write-Host ("  (linux) added libc++ headers: {0} (+ __config_site: {1})" -f $resolved.Path, $csDir) -ForegroundColor DarkGray
+        } else {
+            Write-Host ("  (linux) added libc++ headers: {0}" -f $resolved.Path) -ForegroundColor DarkGray
+            Write-Warning "  (linux) __config_site not found under $incRoot — clang may abort on <__config>."
+        }
     } else {
         Write-Warning ("libc++ headers not found at {0} — clang may fail to find <cstdint> when targeting x86_64-pc-windows-msvc on Linux." -f $libcxxInc)
     }

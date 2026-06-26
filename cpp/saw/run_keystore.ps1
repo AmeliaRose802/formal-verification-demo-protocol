@@ -75,11 +75,27 @@ try {
     # libc++ headers for non-Windows hosts (mirrors run.ps1).
     $linuxClangExtras = @()
     if (-not ($IsWindows -or $env:OS -eq 'Windows_NT')) {
-        $libcxxInc = Join-Path $ClangBin '..' | Join-Path -ChildPath 'include' | Join-Path -ChildPath 'c++' | Join-Path -ChildPath 'v1'
+        $incRoot   = Join-Path $ClangBin '..' | Join-Path -ChildPath 'include'
+        $libcxxInc = Join-Path $incRoot 'c++' | Join-Path -ChildPath 'v1'
         $resolved  = Resolve-Path $libcxxInc -ErrorAction SilentlyContinue
         if ($resolved) {
             $linuxClangExtras = @('-stdlib=libc++', '-isystem', $resolved.Path)
-            Write-Host ("  (linux) added libc++ headers: {0}" -f $resolved.Path) -ForegroundColor DarkGray
+            # <__config_site> lives in include/<triple>/c++/v1 in the official
+            # LLVM Linux tarball, not in include/c++/v1; <__config> includes it
+            # unconditionally. Add its dir dynamically (mirrors run.ps1).
+            $incRootResolved = Resolve-Path $incRoot -ErrorAction SilentlyContinue
+            $csDir = $null
+            if ($incRootResolved) {
+                $configSites = @(Get-ChildItem -Path $incRootResolved.Path -Filter '__config_site' -Recurse -File -ErrorAction SilentlyContinue)
+                if ($configSites.Count -gt 0) { $csDir = $configSites[0].Directory.FullName }
+            }
+            if ($csDir) {
+                $linuxClangExtras += @('-isystem', $csDir)
+                Write-Host ("  (linux) added libc++ headers: {0} (+ __config_site: {1})" -f $resolved.Path, $csDir) -ForegroundColor DarkGray
+            } else {
+                Write-Host ("  (linux) added libc++ headers: {0}" -f $resolved.Path) -ForegroundColor DarkGray
+                Write-Warning "  (linux) __config_site not found under $incRoot — clang may abort on <__config>."
+            }
         } else {
             Write-Warning ("libc++ headers not found at {0}." -f $libcxxInc)
         }
