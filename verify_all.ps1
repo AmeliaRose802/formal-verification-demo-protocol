@@ -97,9 +97,9 @@ if (-not $OnlyCryptol) {
     # `canonicalize_lp`) are now auto-generated end-to-end via
     # saw-spec-gen — `enforceAccess` through register-return support,
     # `getStatus` by selecting the -O1 bitcode flavour (Bc='O1'), and
-    # `canonicalize_lp` through the buffer-override CLI flags
-    # `--in-buffer-size`, `--out-buffer-param`, `--cryptol-fn-out`,
-    # `--max-len-precond`, and `--cryptol-arg-order`.)
+    # `canonicalize_lp` through its buffer-override shaping
+    # (in_buffer_size / out_buffer_param / cryptol_fn_out /
+    # max_len_precond), now carried in cpp/saw/saw-spec-gen.toml.)
     $sawKnownBugs = @{}
 
     foreach ($t in $targets) {

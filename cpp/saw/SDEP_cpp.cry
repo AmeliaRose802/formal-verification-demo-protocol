@@ -243,7 +243,8 @@ getStatus fleetEnabled hasKey keyIsActive keyId preBytes =
 //
 // to `out`, leaving bytes at positions >= 2+nm+nb unchanged. The SAW spec
 // (auto-generated under cpp/saw/out_canonicalize_lp/ via saw-spec-gen
-// gen-verify with --max-len-precond nm=4 / nb=4) runs at MAX_LEN = 4 —
+// gen-verify, with the buffer shaping incl. max_len_precond nm=4 / nb=4
+// carried in cpp/saw/saw-spec-gen.toml) runs at MAX_LEN = 4 —
 // the smallest bound that still exercises the loop induction. It composes
 // with P23 (the two-field length-prefix roundtrip, FieldLen = 4): SAW
 // proves the C++ writes the [nm][m][nb][b] byte layout for nm,nb <= 4,

@@ -99,11 +99,14 @@ foreach ($t in @(
 #                                 constructors fold into the caller as
 #                                 plain byte stores.)
 #
-# Cryptol fns canonicalize_lp_ret + canonicalize_lp_post model the two
-# halves of an output-pointer + return-value function: -CryRet feeds
-# `--cryptol-fn` (return value) and -CryPost feeds `--cryptol-fn-out`
-# (post-state of the output buffer).  saw-spec-gen wires these together
-# via `--out-buffer-param`/`--in-buffer-size`/`--max-len-precond`.
+# canonicalize_lp is an output-pointer + return-value function modelled by
+# two Cryptol fns: `canonicalize_lp_ret` (return value) feeds `--cryptol-fn`
+# and `canonicalize_lp_post` (post-state of the output buffer) feeds
+# `--cryptol-fn-out`.  All of its per-function spec shaping (in-buffer-size /
+# out-buffer-param / cryptol-fn-out / max-len-precond) now lives in the
+# versioned saw-spec-gen.toml beside this script — keyed by the Cryptol fn
+# name and applied via `--config` below — instead of a hand-coded
+# `ExtraArgs` array here.
 $targets = @(
     @{ Cpp = 'authenticate';        Cry = 'authenticate'            }
     @{ Cpp = 'isValidRequestDate';  Cry = 'isValidRequestDate'      }
@@ -111,16 +114,7 @@ $targets = @(
     @{ Cpp = 'enrollDevice';        Cry = 'enrollDevice'            }
     @{ Cpp = 'enforceAccess';       Cry = 'enforceAccess'           }
     @{ Cpp = 'getStatus';           Cry = 'getStatus'; Bc = 'O1'    }
-    @{ Cpp = 'canonicalize_lp';     Cry = 'canonicalize_lp_ret';
-       CryPost = 'canonicalize_lp_post';
-       ExtraArgs = @(
-           '--in-buffer-size',    'm=4',
-           '--in-buffer-size',    'b=4',
-           '--out-buffer-param',  'out=10',
-           '--cryptol-fn-out',    'out=canonicalize_lp_post',
-           '--max-len-precond',   'nm=4',
-           '--max-len-precond',   'nb=4'
-       ) }
+    @{ Cpp = 'canonicalize_lp';     Cry = 'canonicalize_lp_ret'     }
 )
 if ($Only) {
     $targets = $targets | Where-Object { $Only -contains $_.Cpp }
@@ -245,6 +239,7 @@ foreach ($t in $targets) {
         '--cryptol-spec', (Join-Path $outDir 'SDEP_cpp.cry'),
         '--function',     $cppName,
         '--cryptol-fn',   $cryName,
+        '--config',       (Join-Path $here 'saw-spec-gen.toml'),
         '--output',       $outDir
     )
     if ($t.ExtraArgs) { $genArgs += $t.ExtraArgs }
@@ -282,8 +277,9 @@ foreach ($t in $targets) {
     # the point it processes `buf` -- but the `len` fresh-var is not declared
     # until *after* the buffer block, so SAW aborts with
     # `Value not in scope: len`.  That auto bound is always redundant here
-    # because `--max-len-precond len=K` injects the real, correctly-placed
-    # `` `K >= len `` precond further down.  Strip the out-of-order block.
+    # because the config's `max_len_precond` (saw-spec-gen.toml) injects the
+    # real, correctly-placed `` `K >= len `` precond further down.  Strip the
+    # out-of-order block.
     $verifyPath = Join-Path $outDir 'verify.saw'
     $verifyText = Get-Content -Raw $verifyPath
     $deBugged = $verifyText -replace `
