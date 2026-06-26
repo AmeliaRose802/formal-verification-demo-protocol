@@ -18,6 +18,9 @@ cpp/saw/verify_targets_o1.ll
 cpp/saw/verify_targets_ast.json
 cpp/saw/out_*/
 cpp/saw/*.log
+# Stray compiled artifacts (never commit generated bitcode/IR)
+cpp/saw/*.bc
+cpp/saw/*.ll
 
 rust/saw/sdep.bc
 rust/saw/sdep.ll
