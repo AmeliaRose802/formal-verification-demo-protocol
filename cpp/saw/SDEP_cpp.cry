@@ -878,10 +878,13 @@ property P32_AuthenticatedImpliesEnrolled fleetEnabled validMetadata activationR
 //     return ActivationResult::Success;
 //   }
 //
-// SAW verifies the SEQUENTIAL transition: it models the `KeyStore`
-// object as the flat 152-byte image laid out by the MSVC ABI and proves
-// that one call to `activate` agrees with the functions below for both
-// the returned `ActivationResult` byte AND the resulting object image.
+// The functions below model the SEQUENTIAL transition: the `KeyStore`
+// object is treated as the flat 152-byte image laid out by the MSVC ABI,
+// and one call to `activate` is EXPECTED to agree with them for both the
+// returned `ActivationResult` byte AND the resulting object image. This
+// is a Cryptol-level model only — an implementation-level SAW proof
+// (saw-spec-gen cannot yet generate stateful mutating-`this` specs) is
+// future work; see the CONCURRENCY CAVEAT below.
 //
 // Byte layout of the `KeyStore` object (confirmed via -fdump-record-
 // layouts and the -O1 LLVM IR):
@@ -1013,7 +1016,7 @@ newKeyStored nk = update nk ek_off_isActive 0
 // changes; on the empty path the 64-byte (inactivated) key is written
 // into the optional payload at offset 80 and the engaged flag at 144 is
 // set. Bytes 0..79 (mutex) and 145..151 (tail padding) are preserved.
-// @coverage abstraction: Cryptol model of KeyStore::provision's post-state; implementation-level SAW proof ties this to the C++ body.
+// @coverage abstraction: Cryptol model of KeyStore::provision's post-state; implementation-level SAW proof pending.
 keyStoreProvisionPost : [KS_BYTES][8] -> [64][8] -> [KS_BYTES][8]
 keyStoreProvisionPost pre nk =
   if (pre @ ks_off_engaged) == 1
@@ -1025,8 +1028,9 @@ keyStoreProvisionPost pre nk =
 // where the body memcpy's the just-stored 72-byte optional out of the
 // object — so the tail bytes mirror the object's tail (pre[145..151]).
 // On the engaged path the return is nullopt and its payload is left
-// uninitialised (only the engaged byte, asserted 0, is defined); the
-// SAW harness therefore checks that path with a partial postcondition.
+// uninitialised (only the engaged byte, asserted 0, is defined); an
+// implementation-level proof of that path would need a partial
+// postcondition. (Implementation-level SAW proof pending.)
 // @coverage abstraction: Cryptol model of KeyStore::provision's returned optional on the fresh-enrolment path.
 keyStoreProvisionRet : [KS_BYTES][8] -> [64][8] -> [72][8]
 keyStoreProvisionRet pre nk = (newKeyStored nk) # [1] # (drop`{145} pre)

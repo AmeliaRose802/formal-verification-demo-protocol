@@ -124,54 +124,6 @@ if (-not $OnlyCryptol) {
             $sawResults += [pscustomobject]@{ Fn = $t; Verdict = $verdict }
         }
     }
-
-    # ── Layer 1b: stateful KeyStore methods ───────────────────────────
-    # The pure decision functions above are value-in/value-out. The
-    # KeyStore lifecycle methods (activate / provision / hasKey /
-    # isActive) are STATEFUL — they mutate or read the object under a
-    # std::mutex and return aggregates through an sret optional. Those
-    # are proven by a dedicated compositional harness
-    # (cpp/saw/keystore_specs.saw) driven by run_keystore.ps1, which
-    # loads the REAL production bitcode of cpp/src/key_store.cpp and
-    # verifies each mangled symbol against the keyStore* Cryptol models.
-    # The KeyStore harness (keystore_specs.saw) is MSVC-ABI specific: it
-    # pins MSVC-mangled symbol names (`?activate@KeyStore@sdep@@...`), the
-    # MSVC CRT mutex primitives (`_Mtx_lock` / `_Mtx_unlock`), and the
-    # 80-byte MSVC `std::mutex` object layout. None of that holds for a
-    # native Linux / libstdc++ build, so these proofs only run on Windows.
-    # Linux CI still proves the pure decision functions (Layer 1 above) and
-    # all Cryptol properties (Layers 3-4); the stateful proofs are covered
-    # by the Windows job.
-    $ksScript      = Join-Path $sawDir 'run_keystore.ps1'
-    $isWindowsHost = $IsWindows -or $env:OS -eq 'Windows_NT'
-    if ((Test-Path $ksScript) -and $isWindowsHost) {
-        $ksArgv = @()
-        if ($SkipBuild) { $ksArgv += '-SkipBuild' }
-        $ksLog = & pwsh -NoProfile -File $ksScript @ksArgv 2>&1 | Out-String
-        Write-Host $ksLog
-        $ksMethods = @(
-            @{ Fn='KeyStore::activate';          Sym='activate' }
-            @{ Fn='KeyStore::provision (fresh)'; Sym='provision (fresh enrolment)' }
-            @{ Fn='KeyStore::provision (TOFU)';  Sym='provision (TOFU lock)' }
-            @{ Fn='KeyStore::hasKey';            Sym='hasKey' }
-            @{ Fn='KeyStore::isActive';          Sym='isActive' }
-        )
-        $ksAllOk = ($ksLog -match 'ALL KEYSTORE PROOFS SUCCEEDED')
-        foreach ($km in $ksMethods) {
-            $verdict = if ($ksAllOk -and ($ksLog -match ("PROVED " + [regex]::Escape($km.Sym)))) {
-                'VERIFIED'
-            } elseif ($ksLog -match 'Counterexample|Proof failed') {
-                'COUNTEREXAMPLE'
-            } else {
-                'ERROR'
-            }
-            $sawResults += [pscustomobject]@{ Fn = $km.Fn; Verdict = $verdict }
-        }
-    } elseif (-not $isWindowsHost) {
-        Write-Host '  (skipping stateful KeyStore proofs: keystore_specs.saw is MSVC-ABI specific; covered by the Windows job)' -ForegroundColor DarkGray
-    } else {
-        Write-Warning "Missing $ksScript — skipping stateful KeyStore proofs"
-    }
 }
 
 # ──────────────────────────────────────────────────────────────────────
