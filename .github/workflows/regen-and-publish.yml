@@ -27,9 +27,10 @@
 #   so the docs always render with the newest renderer and its native
 #   `--pipeline` orchestrator.
 # - saw-spec-gen (the spec generator) is likewise consumed as a *published
-#   binary* from its GitHub Release (pinned via SAW_SPEC_GEN_VERSION below)
-#   and driven through its native `verify-cpp` CLI command. The workflow
-#   therefore needs no saw-spec-gen checkout, no from-source `cargo build`,
+#   binary* from its GitHub Release (also tracking the *latest* release,
+#   resolved at run time via the GitHub API) and driven through its native
+#   `verify-cpp` CLI command. The workflow therefore needs no saw-spec-gen
+#   checkout, no from-source `cargo build`,
 #   and none of the PowerShell wrappers (verify.ps1 / scripts/vendor/
 #   pipeline.ps1): it drives pretty-specs' native `--pipeline` (which calls
 #   `verify-cpp` itself) directly in the "Regenerate docs" step below.
@@ -56,14 +57,9 @@ permissions:
   pages: write
   id-token: write
 
-# Published spec-generator binary. saw-spec-gen stays pinned (bump tag +
-# digest together); pretty-specs tracks the latest crystal-cryptal release
-# (resolved at run time — see the download step), so no version/digest pin.
-env:
-  # Published spec-generator binary, driven via its `verify-cpp` CLI.
-  # Bump the tag and digest together when upgrading.
-  SAW_SPEC_GEN_VERSION: v0.1.0
-  SAW_SPEC_GEN_SHA256: 9131d6fda82a50d7f542d1400a9710835b5a7bd1c9ff266f87385e3b5e5a99d4
+# Both tools track the latest published release (the tag is resolved at run
+# time via the GitHub API — see the download steps), so there's no version
+# or digest pin to maintain.
 
 # Share the Pages concurrency group with pages.yml so the two never try to
 # deploy at the same time. Don't cancel an in-flight deployment.
@@ -118,20 +114,25 @@ jobs:
           & .tools/bin/pretty-specs --version
           if ($LASTEXITCODE -ne 0) { throw "pretty-specs --version failed (exit $LASTEXITCODE)" }
 
-      - name: Download saw-spec-gen ${{ env.SAW_SPEC_GEN_VERSION }} (published binary)
+      - name: Download saw-spec-gen (latest published binary)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $ErrorActionPreference = 'Stop'
-          $ver   = $env:SAW_SPEC_GEN_VERSION
+          $repo = 'AmeliaRose802/saw-spec-gen'
+
+          # Resolve the newest release tag at run time (no version pin). A token
+          # raises the API rate limit and works for public-repo release reads.
+          $headers = @{ 'User-Agent' = 'demo_protocol-ci'; 'Accept' = 'application/vnd.github+json' }
+          if ($env:GH_TOKEN) { $headers['Authorization'] = "Bearer $env:GH_TOKEN" }
+          $rel = Invoke-RestMethod -UseBasicParsing -Headers $headers -Uri "https://api.github.com/repos/$repo/releases/latest"
+          $ver = $rel.tag_name
+          Write-Host "Latest saw-spec-gen release: $ver"
+
           $asset = 'saw-spec-gen-linux-x86_64.tar.gz'
-          $url   = "https://github.com/AmeliaRose802/saw-spec-gen/releases/download/$ver/$asset"
+          $url   = "https://github.com/$repo/releases/download/$ver/$asset"
           New-Item -ItemType Directory -Force -Path .tools/saw-spec-gen, .tools/bin | Out-Null
           Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile ".tools/$asset"
-
-          # Verify against the pinned digest so a moved/retagged asset can't slip in.
-          $actual = (Get-FileHash ".tools/$asset" -Algorithm SHA256).Hash.ToLower()
-          if ($actual -ne $env:SAW_SPEC_GEN_SHA256) {
-            throw "saw-spec-gen asset sha256 mismatch: got $actual expected $($env:SAW_SPEC_GEN_SHA256)"
-          }
 
           tar -xzf ".tools/$asset" -C .tools/saw-spec-gen
           $found = @(Get-ChildItem -Recurse -File -Path .tools/saw-spec-gen -Filter saw-spec-gen)
