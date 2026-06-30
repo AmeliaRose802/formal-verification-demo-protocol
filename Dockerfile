@@ -8,7 +8,8 @@
 #   - PowerShell 7.6.2 (verify_all.ps1 and per-language run.ps1 are pwsh)
 #   - Rust stable with `llvm-tools-preview` (matching-version llvm-as for
 #     the Rust pipeline's bitcode-reassembly step)
-#   - saw-spec-gen (prebuilt release tarball; pinned by SAW_SPEC_GEN_TAG)
+#   - saw-spec-gen (prebuilt release tarball; tracks latest release by
+#     default — saw-spec-gen auto-cuts a release on every merge to master)
 #
 # Tools are dropped at the same paths ci-install.ps1 uses
 # ($HOME/.demo_protocol/{llvm,saw,bin}) so the layout is identical to a
@@ -31,7 +32,11 @@ ARG SAW_UBUNTU_VERSION=24.04
 ARG LLVM_VERSION=20.1.6
 ARG PWSH_VERSION=7.6.2
 ARG RUST_TOOLCHAIN=stable
-ARG SAW_SPEC_GEN_TAG=v0.1.0
+# saw-spec-gen auto-cuts a patch release on every merge to master, so
+# "latest" always tracks the newest published binary (matches the
+# default in scripts/ci-install.ps1, keeping Linux/Windows in sync).
+# Pin to a specific tag (e.g. v0.1.1) only to freeze a known-good build.
+ARG SAW_SPEC_GEN_TAG=latest
 
 ENV DEBIAN_FRONTEND=noninteractive \
     LANG=C.UTF-8 \
@@ -99,12 +104,12 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
 # binary. We download the official release tarball from GitHub:
 #   https://github.com/AmeliaRose802/saw-spec-gen/releases/tag/${SAW_SPEC_GEN_TAG}
 # The tarball contains a single binary at archive root (no parent dir),
-# so we extract straight into /root/.demo_protocol/bin/. The v0.1.0
+# so we extract straight into /root/.demo_protocol/bin/. The release
 # Linux binary is built against GLIBC 2.39, which ubuntu:24.04 ships.
 #
 # SAW_SPEC_GEN_TAG controls which release to pull:
 #   - "latest"  → resolves via releases/latest/download/...
-#   - anything else (e.g. "v0.1.0") → that specific tag
+#   - anything else (e.g. "v0.1.1") → that specific tag
 RUN mkdir -p /root/.demo_protocol/bin \
  && if [ "${SAW_SPEC_GEN_TAG}" = "latest" ]; then \
         ssg_url="https://github.com/AmeliaRose802/saw-spec-gen/releases/latest/download/saw-spec-gen-linux-x86_64.tar.gz"; \
