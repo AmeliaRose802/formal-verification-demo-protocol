@@ -8,8 +8,8 @@
 #   - PowerShell 7.6.2 (verify_all.ps1 and per-language run.ps1 are pwsh)
 #   - Rust stable with `llvm-tools-preview` (matching-version llvm-as for
 #     the Rust pipeline's bitcode-reassembly step)
-#   - saw-spec-gen (prebuilt release tarball; tracks latest release by
-#     default — saw-spec-gen auto-cuts a release on every merge to master)
+#   - saw-spec-gen (prebuilt release tarball; pinned to an explicit
+#     release tag for reproducible builds + correct buildx layer caching)
 #
 # Tools are dropped at the same paths ci-install.ps1 uses
 # ($HOME/.demo_protocol/{llvm,saw,bin}) so the layout is identical to a
@@ -20,8 +20,8 @@
 # Built and published by .github/workflows/publish-ci-image.yml to:
 #   ghcr.io/ameliarose802/formal-verification-demo-protocol-ci:latest
 #
-# Bump SAW_VERSION / LLVM_VERSION / PWSH_VERSION here when scripts/ci-install.ps1
-# pins are bumped, then re-run the publish workflow.
+# Bump SAW_VERSION / LLVM_VERSION / PWSH_VERSION / SAW_SPEC_GEN_TAG here when
+# scripts/ci-install.ps1 pins are bumped, then re-run the publish workflow.
 
 FROM ubuntu:24.04
 
@@ -32,11 +32,14 @@ ARG SAW_UBUNTU_VERSION=24.04
 ARG LLVM_VERSION=20.1.6
 ARG PWSH_VERSION=7.6.2
 ARG RUST_TOOLCHAIN=stable
+# Pin saw-spec-gen to an explicit release tag. "latest" is deliberately
+# NOT used: it's a moving target that doesn't change the buildx layer
+# cache key, so a stale binary would be served on rebuild. An explicit
+# tag also keeps Windows CI (which version-keys its toolchain cache)
+# in sync — bump this together with DEMO_SSG_VERSION in verify.yml.
 # saw-spec-gen auto-cuts a patch release on every merge to master, so
-# "latest" always tracks the newest published binary (matches the
-# default in scripts/ci-install.ps1, keeping Linux/Windows in sync).
-# Pin to a specific tag (e.g. v0.1.1) only to freeze a known-good build.
-ARG SAW_SPEC_GEN_TAG=latest
+# bump to the newest vX.Y.Z to adopt new features (e.g. v0.1.1 = --config).
+ARG SAW_SPEC_GEN_TAG=v0.1.1
 
 ENV DEBIAN_FRONTEND=noninteractive \
     LANG=C.UTF-8 \
