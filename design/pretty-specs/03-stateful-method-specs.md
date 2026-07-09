@@ -112,6 +112,47 @@ capability. What is missing is saw-spec-gen *emitting* it.
    *no-revert* spec from the already-Active precondition. A single
    `--state-invariant isActive:monotone` flag could expand to both.
 
+## Blockers found when the proof was actually attempted (Jun 2026)
+
+Items 1–4 above are about *emitting the pre/post spec*. But a WIP harness
+(`cpp/saw/_ks_probe/`) that hand-wrote that spec and ran SAW against the real
+`key_store.bc` exposed three further generator gaps — all about what happens when
+SAW *executes the body*, which the lock-guarded `activate` does on every path
+(`std::scoped_lock lock(mu_);`). None are SAW-prover limitations; each is a
+missing piece of saw-spec-gen's **override generation**.
+
+5. **Pin declare-only status primitives to a success sentinel.**
+   `bitcode_overrides.rs` emits `_Mtx_lock` / `_Mtx_unlock` overrides with a
+   *fresh symbolic* `[32]` return. The solver picks `rv = -1`, so
+   `_Mutex_base::lock` takes its error path → `_Throw_Cpp_error` → LLVM
+   `unreachable` → the subgoal fails. The generator needs a curated "return the
+   success sentinel" rule for known status primitives (`0` = `_Thrd_success`),
+   or a sidecar flag to pin a declare-only override's return value.
+
+6. **Abstract *defined* STL wrappers as no-op `assume_spec`s.** `std::scoped_lock`'s
+   ctor (`??0?$scoped_lock@...`) and dtor are **defined** in the bitcode, so the
+   extern-override scan never replaces them. SAW steps into the ctor →
+   `mutex::lock()` → `_Verify_ownership_levels` does a memory load on
+   uninitialized symbolic mutex storage → "Error during memory load." The
+   generator has no notion of "treat this *defined* STL helper as an abstract
+   no-op." It needs an **opt-in override list for defined functions**
+   (e.g. `--assume-noop ??0?$scoped_lock@...`) so the lock/unlock pair becomes
+   memory-neutral, matching the modeling assumption that the mutex bytes are
+   opaque.
+
+7. **A faithful `memcmp` model that matches interior pointers.** The id check
+   `key_->keyId != keyId` lowers to `Uuid::operator==` → `std::array<u8,16>::==`
+   → `std::equal` → `memcmp`, which is declare-only and gets a fresh return. For
+   the id-match subgoal the C++ result must equal the Cryptol `ksIdMatch` (byte
+   equality of `[80..96)` vs `keyId`). The generator needs a `memcmp` override
+   returning `0` iff the two buffers are equal — and crucially it must match
+   **interior pointers** (the stored `Uuid` lives at `this+80`, not at the head
+   of an allocation), which is the genuinely hard part of SAW override matching.
+
+The first cut in §"Suggested scope" sidesteps 5–7 by targeting a lock-free
+plain-struct state at `-O1`; a complete `activate` proof against the real
+mutex-guarded body requires all three.
+
 ## Suggested scope (smallest useful step)
 
 A `--stateful` mode that, given:
@@ -137,6 +178,11 @@ fixture.
 - The generator path is general enough that any non-`const` mutating method with
   a declared pre/post model gets a stateful spec instead of being dropped to
   ⚠️ R3.
+- For a proof against the **real mutex-guarded body** (not the lock-free
+  `-O1` plain-struct fixture), the generator also auto-supplies the three
+  override pieces from §"Blockers found": success-sentinel lock primitives,
+  no-op `scoped_lock` ctor/dtor, and an interior-pointer `memcmp` — so no
+  hand-edited override list is needed.
 
 ## Honest caveats
 
@@ -149,3 +195,9 @@ fixture.
   `std::optional`'s engaged flag at `-O0` is the same heap-types wall. The
   `-O1`-inlined-state workaround keeps this tractable for the demo but should be
   documented as a modeling assumption, not hidden.
+- **The lock plumbing is a separate wall from the spec form (items 5–7).** Even
+  with a perfect pre/post spec, SAW won't get through `activate`'s body until the
+  `scoped_lock` / `_Mtx_*` / `memcmp` overrides are generated. The WIP harness in
+  `cpp/saw/_ks_probe/` is the reproduction; it stays untracked until the
+  generator can emit those overrides rather than relying on a hand-massaged
+  `verify.saw`.

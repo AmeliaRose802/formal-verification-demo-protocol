@@ -154,10 +154,19 @@ jobs:
           $ssg    = (Resolve-Path '.tools/bin/saw-spec-gen').Path
 
           $spec      = 'cpp/saw/SDEP_cpp.cry'
-          $impl      = 'cpp/src/decision.cpp'
           $verifyOut = 'verify_out'
           $manifest  = 'proof_manifest.json'
           $docs      = 'docs'
+
+          $implFiles = @(Get-ChildItem -Path 'cpp/src' -Filter '*.cpp' -File | Sort-Object Name)
+          if ($implFiles.Count -eq 0) { throw 'No C++ implementation files found under cpp/src/*.cpp' }
+
+          $implArgs = @()
+          foreach ($f in $implFiles) {
+            $rel = $f.FullName.Replace((Get-Location).Path + [IO.Path]::DirectorySeparatorChar, '')
+            $rel = $rel.Replace('\\', '/')
+            $implArgs += @('--impl', $rel)
+          }
 
           # Clean prior outputs so we never publish a stale mixture.
           Remove-Item -Recurse -Force $verifyOut, $docs, $manifest, pipeline.log -ErrorAction SilentlyContinue
@@ -173,8 +182,9 @@ jobs:
             # (pretty-specs' default unless --strict-on-missing).
             $pipelineArgs = @(
               $spec,
-              '--pipeline',
-              '--impl',             $impl, '--impl-lang', 'cpp',
+              '--pipeline'
+            ) + $implArgs + @(
+              '--impl-lang',        'cpp',
               '--saw-spec-gen',     $ssg,
               '--cxx-include-dir',  'cpp/include',
               '--cxx-standard',     'c++20',

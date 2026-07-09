@@ -185,8 +185,32 @@ getStatus fleetEnabled hasKey keyIsActive keyId =
   , isActive  = keyIsActive
   }
 
+    else (True, False)   // unreachable for well-formed modes
 ////////////////////////////////////////////////////////////////////////////////
+  // 4.5b enforceAccessMSP — MSP-compatible enforceAccess with a configurable
+  // defaultAccess setting matching the InVMAccessControlProfile `defaultAccess`
+  // field ("Allow" | "Deny"). The original `enforceAccess` is equivalent to
+  // `enforceAccessMSP mode decision DA_Allow`.
+  type DefaultAccess = [1]
+  DA_Allow = 0 : DefaultAccess
+  DA_Deny  = 1 : DefaultAccess
+
+  isDefaultAccess : DefaultAccess -> Bit
+  isDefaultAccess d = (d == DA_Allow) \/ (d == DA_Deny)
+
+  enforceAccessMSP :
+    AccessMode -> AccessDecision -> DefaultAccess -> (Bit, Bit)
+  enforceAccessMSP mode decision defaultAccess =
+    if mode == AM_Off then (True, False)
+     | mode == AM_Audit then
+          (if decision == AD_Deny then (True, True) else (True, False))
+     | mode == AM_Enforce then
+          (if decision == AD_Allow  then (True,  False)
+            | decision == AD_Deny   then (False, True)
+           else /* AD_NoRule */     (defaultAccess == DA_Allow, False))
+    else (True, False)   // unreachable for well-formed modes
 // 5. Security properties (P1–P22)
+  // 4.6 getStatus
 ////////////////////////////////////////////////////////////////////////////////
 
 // ---- Category A: Key Lifecycle Safety -------------------------------------

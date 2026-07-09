@@ -3,16 +3,15 @@
 # Consumed by pretty-specs (`--coverage-config`, auto-detected as
 # `coverage.toml` in cwd). Joins the Cryptol model with the real C++
 # implementation inventory emitted by saw-spec-gen and classifies every
-# model function under the 5-badge taxonomy:
+# model function under the 5-badge taxonomy.
 #
 #   ✅ Proven            🔲 Proven (bounded)     🧩 Model abstraction
 #   ⚠️ Implemented, unverified (the gap)        📄 Spec-only
 #
-# The proven decision functions (provisionKey, enrollDevice, authenticate,
-# isValidRequestDate, enforceAccess) and the genuine gaps (getStatus,
-# canonicalizeS) are classified automatically from the proof manifest +
-# inventory. This file only declares the model-side *helpers* that have no
-# standalone implementation, so they don't masquerade as ⚠️ gaps.
+# Proof verdicts come from proof_manifest.json; implementation presence comes
+# from implementation_inventory.json. This file only declares model-side
+# helpers that have no standalone implementation, so they don't masquerade as
+# ⚠️ implemented-but-unverified gaps.
 
 [exclude]
 # Nothing excluded — every modeled function is accounted for on the matrix.

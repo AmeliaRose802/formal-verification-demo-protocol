@@ -72,23 +72,28 @@ gh run watch  # picks the most recent run
 
 ## What `scripts/regen-docs.ps1` actually runs
 
-The script is a thin wrapper around the
-[`pretty-specs`](https://github.com/AmeliaRose802/pretty-specs) pipeline
-(`pipeline.ps1`). The canonical invocation is:
+The script is a thin wrapper around `pretty-specs --pipeline` and now passes
+**all** C++ implementation files (`cpp/src/*.cpp`) as `--impl` inputs so the
+implementation inventory is complete. The equivalent direct invocation shape is:
 
 ```powershell
-& C:\Users\ameliapayne\pretty-specs\pipeline.ps1 `
-    -Spec cpp\saw\SDEP_cpp.cry `
-    -Impl cpp\src\decision.cpp -ImplLang cpp `
-    -CxxIncludeDirs cpp\include -CxxStandard c++20 `
-    -ExtraClangFlags '-fexceptions','-fno-inline' `
-    -PrettySpecs    C:\Users\ameliapayne\pretty-specs\target\release\pretty-specs.exe `
-    -SawSpecGen     C:\Users\ameliapayne\saw-spec-gen\target\release\saw-spec-gen.exe `
-    -SawSpecGenRoot C:\Users\ameliapayne\saw-spec-gen `
-    -Output docs -VerifyOutput verify_out `
-    -ExtraDocs 'extra_docs:Formal Verification' `
-    -Logo assets\sat-pudding.png -Favicon assets\fabicon.png `
-    *>&1 | Tee-Object pipeline.log
+& C:\Users\ameliapayne\pretty-specs\target\release\pretty-specs.exe cpp\saw\SDEP_cpp.cry `
+   --pipeline `
+   --impl cpp\src\auth.cpp `
+   --impl cpp\src\canonical.cpp `
+   --impl cpp\src\controller.cpp `
+   --impl cpp\src\decision.cpp `
+   --impl cpp\src\hmac.cpp `
+   --impl cpp\src\key_store.cpp `
+   --impl cpp\src\uuid.cpp --impl-lang cpp `
+   --saw-spec-gen C:\Users\ameliapayne\saw-spec-gen\target\release\saw-spec-gen.exe `
+   --cxx-include-dir cpp\include --cxx-standard c++20 `
+   --clang-flag -fexceptions --clang-flag -fno-inline `
+   --verify-output verify_out --manifest-output proof_manifest.json `
+   -o docs --docfx `
+   --extra-docs 'extra_docs:Formal Verification' `
+   --logo assets\sat-pudding.png --favicon assets\fabicon.png `
+   *>&1 | Tee-Object pipeline.log
 ```
 
 A few non-obvious bits:
@@ -119,26 +124,16 @@ in `verify_out/` plus the existing `proof_manifest.json`.
 
 ## Expected results
 
-The published site shows about **5 of 21** functions as auto-VERIFIED. That's
-correct, not a regression:
+The docs pipeline and `verify_all.ps1` intentionally measure different scopes:
 
-- 5 functions (`provisionKey`, `enrollDevice`, `authenticate`,
-  `enforceAccess`, `isValidRequestDate`) verify cleanly via the saw-spec-gen
-  auto-generation path.
-- `getStatus` and `canonicalize_lp_{post,ret}` need hand-curated specs in
-  `cpp/saw/custom/` plus `-O1` bitcode tweaks. Those gaps are tracked in the
-  user-memory notes and run separately via `verify_all.ps1`.
-- The remaining ~15 Cryptol top-level names are private helpers
-  (`packPad`, `derivePin`, predicate refinements, etc.) with no
-  implementation counterpart. The pipeline treats them as
-  `status: not_attempted` via saw-spec-gen's `--spec-only-on-missing`
-  switch (default on).
+- `verify_all.ps1` reports the decision surface (`cpp/src/decision.cpp`): 7/7.
+- docs coverage reports the union of model functions and implementation
+   inventory across all `cpp/src/*.cpp` files.
 
-The **README "7/7 SAW C++"** badge comes from `verify_all.ps1` (Layer 1),
-not from `pipeline.ps1`. That script uses hand-curated overrides
-(`cpp/saw/custom/*.saw`) and `-O1` bitcode for the three functions
-auto-gen can't handle. Don't be alarmed by the discrepancy — they're
-measuring different things.
+So after regeneration, a non-zero **Implemented, unverified** count is expected
+until controller/key-store/canonicalization/crypto helpers are proven at
+implementation level. If that bucket is zero while the inventory only includes
+`decision.cpp`, coverage is incomplete.
 
 ## Things that go wrong (and how to fix them)
 

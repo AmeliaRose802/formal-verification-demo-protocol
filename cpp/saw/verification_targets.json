@@ -1,0 +1,9 @@
+[
+  { "Cpp": "authenticate",       "Cry": "authenticate" },
+  { "Cpp": "isValidRequestDate", "Cry": "isValidRequestDate" },
+  { "Cpp": "provisionKey",       "Cry": "provisionKey" },
+  { "Cpp": "enrollDevice",       "Cry": "enrollDevice" },
+  { "Cpp": "enforceAccess",      "Cry": "enforceAccess" },
+  { "Cpp": "getStatus",          "Cry": "getStatus", "Bc": "O1" },
+  { "Cpp": "canonicalize_lp",    "Cry": "canonicalize_lp_ret" }
+]

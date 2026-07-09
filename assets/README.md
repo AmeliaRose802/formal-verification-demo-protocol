@@ -26,7 +26,13 @@ wired in. To invoke pretty-specs directly:
 # From the repo root
 & C:\Users\ameliapayne\pretty-specs\target\release\pretty-specs.exe cpp\saw\SDEP_cpp.cry `
     --pipeline `
-    --impl cpp\src\decision.cpp --impl-lang cpp `
+    --impl cpp\src\auth.cpp `
+    --impl cpp\src\canonical.cpp `
+    --impl cpp\src\controller.cpp `
+    --impl cpp\src\decision.cpp `
+    --impl cpp\src\hmac.cpp `
+    --impl cpp\src\key_store.cpp `
+    --impl cpp\src\uuid.cpp --impl-lang cpp `
     --saw-spec-gen C:\Users\ameliapayne\saw-spec-gen\target\release\saw-spec-gen.exe `
     --cxx-include-dir cpp\include --cxx-standard c++20 `
     --clang-flag -fexceptions --clang-flag -fno-inline `

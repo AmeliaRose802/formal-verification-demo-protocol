@@ -14,7 +14,7 @@ The pipeline is four cooperating layers; together they transfer a security prope
 
 | Layer | Tool | Obligation | Source |
 |-------|------|------------|--------|
-| 1 | SAW + Z3 | Every C++ decision function in [cpp/include/sdep/](cpp/include/sdep/) is behaviorally equivalent to its Cryptol shim | [cpp/saw/SDEP_cpp.cry](cpp/saw/SDEP_cpp.cry) |
+| 1 | SAW + Z3 | The seven decision-surface functions in [cpp/src/decision.cpp](cpp/src/decision.cpp) are behaviorally equivalent to their Cryptol shims | [cpp/saw/SDEP_cpp.cry](cpp/saw/SDEP_cpp.cry) |
 | 2 | SAW + Z3 | Every pure decision function in [rust/src/lib.rs](rust/src/lib.rs) is behaviorally equivalent to its Cryptol shim | [rust/saw/SDEP_rust.cry](rust/saw/SDEP_rust.cry) |
 | 3 | Cryptol + Z3 | Every `property` declaration in the spec module holds | [cryptol/SDEP.cry](cryptol/SDEP.cry) |
 | 4 | Cryptol + Z3 (negative) | Every `property` in the gaps module **must produce a counterexample** — a Q.E.D. there means the spec has silently closed a documented gap | [cryptol/SDEP_gaps.cry](cryptol/SDEP_gaps.cry) |
@@ -93,12 +93,14 @@ SDEP's byte-level canonicalization (length-prefixed framing in [`canonLenPrefixe
 
 See the rendered site for the current per-function and per-property verdicts. The headline numbers from the last full run:
 
-- Layer 1 (C++ ≡ Cryptol): 7/7 target functions verified
+- Layer 1 (C++ decision surface ≡ Cryptol): 7/7 target functions verified
 - Layer 2 (Rust ≡ Cryptol): 6/6 pure decision functions verified
 - Layer 3 (Cryptol properties): 29/29 properties verified
 - Layer 4 (negative gaps): 6/6 gaps exhibited as expected
 
 Counterexamples found by the proofs during development (e.g. signed-overflow in `isValidRequestDate` for timestamps near `INT64_MIN`) are recorded in [FINDINGS.md](FINDINGS.md).
+
+Coverage transparency note: the 7/7 figure above is intentionally scoped to the decision-surface targets in `cpp/src/decision.cpp`. The full implementation inventory (all `cpp/src/*.cpp`) is reported on the rendered Coverage Matrix page so implemented-but-unverified functions are explicitly listed.
 
 ---
 

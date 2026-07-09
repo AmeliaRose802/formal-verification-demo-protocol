@@ -107,15 +107,14 @@ foreach ($t in @(
 # versioned saw-spec-gen.toml beside this script — keyed by the Cryptol fn
 # name and applied via `--config` below — instead of a hand-coded
 # `ExtraArgs` array here.
-$targets = @(
-    @{ Cpp = 'authenticate';        Cry = 'authenticate'            }
-    @{ Cpp = 'isValidRequestDate';  Cry = 'isValidRequestDate'      }
-    @{ Cpp = 'provisionKey';        Cry = 'provisionKey'            }
-    @{ Cpp = 'enrollDevice';        Cry = 'enrollDevice'            }
-    @{ Cpp = 'enforceAccess';       Cry = 'enforceAccess'           }
-    @{ Cpp = 'getStatus';           Cry = 'getStatus'; Bc = 'O1'    }
-    @{ Cpp = 'canonicalize_lp';     Cry = 'canonicalize_lp_ret'     }
-)
+$targetsFile = Join-Path $here 'verification_targets.json'
+if (-not (Test-Path $targetsFile)) {
+    throw "Missing verification target manifest: $targetsFile"
+}
+$targets = Get-Content -Raw $targetsFile | ConvertFrom-Json
+if (-not $targets -or $targets.Count -eq 0) {
+    throw "No verification targets found in $targetsFile"
+}
 if ($Only) {
     $targets = $targets | Where-Object { $Only -contains $_.Cpp }
     if (-not $targets) { throw "No matching targets in $($Only -join ',')" }
