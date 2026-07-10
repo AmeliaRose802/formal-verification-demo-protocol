@@ -76,6 +76,12 @@ AD_Allow_b           = 0 : [8]
 AD_Deny_b            = 1 : [8]
 AD_NoRule_b          = 2 : [8]
 
+// CanonHostClass
+CH_Imds_b            = 0 : [8]
+CH_WireServer_b      = 1 : [8]
+CH_Unknown_b         = 2 : [8]
+CH_UserinfoPresent_b = 3 : [8]
+
 ////////////////////////////////////////////////////////////////////////
 // 4.1 provisionKey — LLVM: (i1, i1, i8, i1) -> i8
 ////////////////////////////////////////////////////////////////////////
@@ -288,6 +294,61 @@ canonicalize_lp_post out m nm b nb =
 // a verbatim 1:1 arg mapping (no --cryptol-arg-order flag needed).
 canonicalize_lp_ret : [10][8] -> [4][8] -> [8] -> [4][8] -> [8] -> [64]
 canonicalize_lp_ret _ _ nm _ nb = (zext nm) + (zext nb) + 2
+
+////////////////////////////////////////////////////////////////////////
+// URL host canonicalization — LLVM: (ptr host, i8 hostLen) -> i8
+////////////////////////////////////////////////////////////////////////
+//
+// Mirrors cpp/src/decision.cpp::classifyCanonicalHost. The function
+// lowercases ASCII host bytes, rejects userinfo-smuggling (`@`) in the
+// consumed prefix, and classifies common aliases for IMDS / WireServer.
+
+private
+  asciiLower : [8] -> [8]
+  asciiLower c = if c >= 0x41 /\ c <= 0x5A then c + 32 else c
+
+  hostEqLit10 : [32][8] -> [10][8] -> Bit
+  hostEqLit10 host lit = and [ asciiLower (host @ i) == asciiLower (lit @ i)
+                             | i <- ([0 .. 9] : [10][8]) ]
+
+  hostEqLit13 : [32][8] -> [13][8] -> Bit
+  hostEqLit13 host lit = and [ asciiLower (host @ i) == asciiLower (lit @ i)
+                             | i <- ([0 .. 12] : [13][8]) ]
+
+  hostEqLit15 : [32][8] -> [15][8] -> Bit
+  hostEqLit15 host lit = and [ asciiLower (host @ i) == asciiLower (lit @ i)
+                             | i <- ([0 .. 14] : [15][8]) ]
+
+  hostEqLit18 : [32][8] -> [18][8] -> Bit
+  hostEqLit18 host lit = and [ asciiLower (host @ i) == asciiLower (lit @ i)
+                             | i <- ([0 .. 17] : [18][8]) ]
+
+  hasUserinfo : [32][8] -> [8] -> Bit
+  hasUserinfo host hostLen =
+    or [ (i < hostLen) /\ ((host @ i) == 0x40)
+       | i <- ([0 .. 31] : [32][8]) ]
+
+  isImdsAlias : [32][8] -> [8] -> Bit
+  isImdsAlias host hostLen =
+       (hostLen == 15 /\ hostEqLit15 host "169.254.169.254")
+    \/ (hostLen == 10 /\ hostEqLit10 host "2852039166")
+    \/ (hostLen == 10 /\ hostEqLit10 host "0xa9fea9fe")
+    \/ (hostLen == 18 /\ hostEqLit18 host "[::ffff:a9fe:a9fe]")
+
+  isWireServerAlias : [32][8] -> [8] -> Bit
+  isWireServerAlias host hostLen =
+       (hostLen == 13 /\ hostEqLit13 host "168.63.129.16")
+    \/ (hostLen == 10 /\ hostEqLit10 host "2822734096")
+    \/ (hostLen == 10 /\ hostEqLit10 host "0xa83f8110")
+    \/ (hostLen == 18 /\ hostEqLit18 host "[::ffff:a83f:8110]")
+
+classifyCanonicalHost : [32][8] -> [8] -> [8]
+classifyCanonicalHost host hostLen =
+  if hostLen == 0 \/ hostLen > 32 then CH_Unknown_b
+   | hasUserinfo host hostLen      then CH_UserinfoPresent_b
+   | isImdsAlias host hostLen      then CH_Imds_b
+   | isWireServerAlias host hostLen then CH_WireServer_b
+  else                                  CH_Unknown_b
 
 ////////////////////////////////////////////////////////////////////////
 // Well-formedness predicates over ABI-width enum reps
@@ -816,7 +877,32 @@ property P28_AuthHeaderValueExcludedFromCanonicalization r v1 v2 =
 property P29_VerifierUsesRequestBoundTimestamp r tsFromCaller =
   verifierTimestamp_current r tsFromCaller == r.timestamp
 
-// ---- Category I: Intentional counterexamples ------------------------------
+// ---- Category I: Host canonicalization properties ------------------------
+
+// P33: IMDS host aliases all canonicalize to Destination::Imds.
+property P33_ImdsAliasesCanonicalize =
+     classifyCanonicalHost ("169.254.169.254" # zero : [32][8]) 15 == CH_Imds_b
+  /\ classifyCanonicalHost ("2852039166"      # zero : [32][8]) 10 == CH_Imds_b
+  /\ classifyCanonicalHost ("0xa9fea9fe"      # zero : [32][8]) 10 == CH_Imds_b
+  /\ classifyCanonicalHost ("[::ffff:a9fe:a9fe]" # zero : [32][8]) 18 == CH_Imds_b
+
+// P34: WireServer host aliases all canonicalize to Destination::WireServer.
+property P34_WireAliasesCanonicalize =
+     classifyCanonicalHost ("168.63.129.16"   # zero : [32][8]) 13 == CH_WireServer_b
+  /\ classifyCanonicalHost ("2822734096"      # zero : [32][8]) 10 == CH_WireServer_b
+  /\ classifyCanonicalHost ("0xa83f8110"      # zero : [32][8]) 10 == CH_WireServer_b
+  /\ classifyCanonicalHost ("[::ffff:a83f:8110]" # zero : [32][8]) 18 == CH_WireServer_b
+
+// P35: Userinfo smuggling is rejected before endpoint classification.
+property P35_UserinfoRejected tail =
+  classifyCanonicalHost (("attacker@" # tail) : [32][8]) 12 == CH_UserinfoPresent_b
+
+// P36: Empty or oversized hosts are treated as Unknown.
+property P36_EmptyOrOversizedUnknown host =
+  (classifyCanonicalHost host 0 == CH_Unknown_b)
+  /\ (classifyCanonicalHost host 33 == CH_Unknown_b)
+
+// ---- Category J: Intentional counterexamples ------------------------------
 //
 // The properties in this category are *deliberately wrong*.  They encode
 // tempting-but-false intuitions about the protocol so the rendered docs
@@ -1070,16 +1156,34 @@ property PROV5_MutexPreserved pre nk =
 // Both take the lock, read the optional, and return a bool without
 // mutating the object. hasKey() reports whether a key is engaged;
 // isActive() reports engaged AND the key's isActive flag.
+//
+// The implementation materializes C++ bool from stored bytes via i8->i1
+// truncation in LLVM (low-bit projection), not a strict byte == 1 test.
+// To match implementation behavior for fully symbolic object images, model
+// bool fields as low-bit views.
+private
+  boolOfByte : [8] -> Bit
+  // Cryptol indexes words MSB-first (`@ 0` is bit 7), while LLVM i8->i1
+  // truncation keeps the LSB. Use `@ 7` to mirror the implementation.
+  boolOfByte b = (b @ 7) == 1
+
 // @coverage abstraction: model of KeyStore::hasKey() (optional has_value).
-ksHasKey : [KS_BYTES][8] -> Bit
-ksHasKey pre = (pre @ ks_off_engaged) == 1
+keyStoreHasKeyRet : [KS_BYTES][8] -> Bit
+keyStoreHasKeyRet pre = boolOfByte (pre @ ks_off_engaged)
 
 // @coverage abstraction: model of KeyStore::isActive() (engaged && key_->isActive).
-ksIsActive : [KS_BYTES][8] -> Bit
-ksIsActive pre = ((pre @ ks_off_engaged) == 1) /\ ((pre @ ks_off_isActive) == 1)
+keyStoreIsActiveRet : [KS_BYTES][8] -> Bit
+keyStoreIsActiveRet pre = boolOfByte (pre @ ks_off_engaged) /\ boolOfByte (pre @ ks_off_isActive)
 
 // ACC1: an active store necessarily has a key — isActive() implies
 // hasKey(). This couples the two accessors so a caller can rely on
 // isActive() as a strictly stronger check.
 property ACC1_ActiveImpliesHasKey pre =
-  ksIsActive pre ==> ksHasKey pre
+  keyStoreIsActiveRet pre ==> keyStoreHasKeyRet pre
+
+// KeyStore::current returns the optional<EnrollmentKey> stored in `key_`.
+// In the flat KeyStore image this is the trailing 72 bytes:
+//   payload[64] at [80..143], has_value at [144], tail padding [145..151].
+// Model as an exact slice copy from the object image.
+keyStoreCurrentRet : [KS_BYTES][8] -> [72][8]
+keyStoreCurrentRet pre = drop`{80} pre
