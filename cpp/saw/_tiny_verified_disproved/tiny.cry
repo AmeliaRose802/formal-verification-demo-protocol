@@ -1,0 +1,5 @@
+module tiny where
+
+// Shared spec used for BOTH implementations.
+readNested_spec : {n} (fin n, 1 <= n) => [n][8] -> [8]
+readNested_spec x = x @ 0

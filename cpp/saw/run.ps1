@@ -99,29 +99,22 @@ foreach ($t in @(
 #                                 constructors fold into the caller as
 #                                 plain byte stores.)
 #
-# Cryptol fns canonicalize_lp_ret + canonicalize_lp_post model the two
-# halves of an output-pointer + return-value function: -CryRet feeds
-# `--cryptol-fn` (return value) and -CryPost feeds `--cryptol-fn-out`
-# (post-state of the output buffer).  saw-spec-gen wires these together
-# via `--out-buffer-param`/`--in-buffer-size`/`--max-len-precond`.
-$targets = @(
-    @{ Cpp = 'authenticate';        Cry = 'authenticate'            }
-    @{ Cpp = 'isValidRequestDate';  Cry = 'isValidRequestDate'      }
-    @{ Cpp = 'provisionKey';        Cry = 'provisionKey'            }
-    @{ Cpp = 'enrollDevice';        Cry = 'enrollDevice'            }
-    @{ Cpp = 'enforceAccess';       Cry = 'enforceAccess'           }
-    @{ Cpp = 'getStatus';           Cry = 'getStatus'; Bc = 'O1'    }
-    @{ Cpp = 'canonicalize_lp';     Cry = 'canonicalize_lp_ret';
-       CryPost = 'canonicalize_lp_post';
-       ExtraArgs = @(
-           '--in-buffer-size',    'm=4',
-           '--in-buffer-size',    'b=4',
-           '--out-buffer-param',  'out=10',
-           '--cryptol-fn-out',    'out=canonicalize_lp_post',
-           '--max-len-precond',   'nm=4',
-           '--max-len-precond',   'nb=4'
-       ) }
-)
+# canonicalize_lp is an output-pointer + return-value function modelled by
+# two Cryptol fns: `canonicalize_lp_ret` (return value) feeds `--cryptol-fn`
+# and `canonicalize_lp_post` (post-state of the output buffer) feeds
+# `--cryptol-fn-out`.  All of its per-function spec shaping (in-buffer-size /
+# out-buffer-param / cryptol-fn-out / max-len-precond) now lives in the
+# versioned saw-spec-gen.toml beside this script — keyed by the Cryptol fn
+# name and applied via `--config` below — instead of a hand-coded
+# `ExtraArgs` array here.
+$targetsFile = Join-Path $here 'verification_targets.json'
+if (-not (Test-Path $targetsFile)) {
+    throw "Missing verification target manifest: $targetsFile"
+}
+$targets = Get-Content -Raw $targetsFile | ConvertFrom-Json
+if (-not $targets -or $targets.Count -eq 0) {
+    throw "No verification targets found in $targetsFile"
+}
 if ($Only) {
     $targets = $targets | Where-Object { $Only -contains $_.Cpp }
     if (-not $targets) { throw "No matching targets in $($Only -join ',')" }
@@ -155,11 +148,12 @@ $incAbs  = (Resolve-Path '..\include').Path
 # actual bitcode, so its `llvm_verify` symbol strings always match
 # whichever target produced the bitcode.
 #
-# Earlier we tried forcing windows-msvc on Linux + standalone libc++,
-# but libc++'s __config notices `_MSC_VER` from the target triple and
-# pulls in MSVC's `<vcruntime_exception.h>` which doesn't exist on
-# Linux. Using each host's native C++ stdlib avoids the whole shim
-# tarball-of-Windows-CRT-headers problem.
+# Do NOT force windows-msvc on Linux: libc++'s headers branch on the
+# target triple, see `_WIN32` / `_MSC_VER`, and pull in MSVC-only
+# headers (`<vcruntime_exception.h>`) plus the Windows thread backend
+# (`__thread/support/windows.h`, `::timespec`) that don't exist on a
+# Linux toolchain, so the bitcode build aborts. Each host's native C++
+# stdlib avoids the whole tarball-of-Windows-CRT-headers problem.
 $clangTarget = if ($IsWindows -or $env:OS -eq 'Windows_NT') {
     'x86_64-pc-windows-msvc'
 } else {
@@ -244,6 +238,7 @@ foreach ($t in $targets) {
         '--cryptol-spec', (Join-Path $outDir 'SDEP_cpp.cry'),
         '--function',     $cppName,
         '--cryptol-fn',   $cryName,
+        '--config',       (Join-Path $here 'saw-spec-gen.toml'),
         '--output',       $outDir
     )
     if ($t.ExtraArgs) { $genArgs += $t.ExtraArgs }
@@ -273,6 +268,24 @@ foreach ($t in $targets) {
             ($precondText.TrimEnd() + "`n`n" + $marker)
         Set-Content -Path $verifyPath -Value $verifyText -NoNewline
         Write-Host "  injected precondition from $precondFile" -ForegroundColor DarkGray
+    }
+
+    # WORKAROUND (saw-spec-gen gen-verify ordering bug):
+    # For a sibling-length buffer `(T* buf, size_t len)`, gen-verify emits an
+    # auto upper-bound precond `llvm_precond {{ (len : [64]) <= N }};` inline at
+    # the point it processes `buf` -- but the `len` fresh-var is not declared
+    # until *after* the buffer block, so SAW aborts with
+    # `Value not in scope: len`.  That auto bound is always redundant here
+    # because the config's `max_len_precond` (saw-spec-gen.toml) injects the
+    # real, correctly-placed `` `K >= len `` precond further down.  Strip the
+    # out-of-order block.
+    $verifyPath = Join-Path $outDir 'verify.saw'
+    $verifyText = Get-Content -Raw $verifyPath
+    $deBugged = $verifyText -replace `
+        '(?m)^[ \t]*//[ \t]*TODO\[saw-spec-gen\]: _In_reads_\(\w+\)[^\r\n]*\r?\n(?:[ \t]*//[^\r\n]*\r?\n)*[ \t]*llvm_precond \{\{ \(\w+ : \[64\]\) <= \d+ \}\};[ \t]*\r?\n', ''
+    if ($deBugged -ne $verifyText) {
+        Set-Content -Path $verifyPath -Value $deBugged -NoNewline
+        Write-Host "  stripped out-of-order sibling-length precond (gen-verify bug)" -ForegroundColor DarkGray
     }
 
     # saw-spec-gen scans the entire bitcode for polymorphic STL types

@@ -36,4 +36,9 @@ getStatus(bool fleetEnabled,
           bool keyIsActive,
           const Uuid& keyId) noexcept;
 
+// Canonical endpoint classifier over common host aliases.
+[[nodiscard]] CanonHostClass
+classifyCanonicalHost(const std::uint8_t* host,
+                      std::uint8_t hostLen) noexcept;
+
 } // namespace sdep

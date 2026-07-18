@@ -1,4 +1,4 @@
-// Secure Device Enrollment Protocol (SDEP) — Attacker-visible gaps.
+// Secure Device Enrollment Protocol (SDEP) ΓÇö Attacker-visible gaps.
 //
 // This module mechanises security obligations the protocol's decision
 // logic DOES NOT meet. Every `property` here is expected to FAIL when
@@ -9,22 +9,22 @@
 // fixed without forgetting one. `prove_gaps.ps1` runs them and PASSES
 // when every property fails with a counterexample; if a future change
 // closes a gap, the corresponding property starts proving Q.E.D. and
-// the script flips the entry to "FIXED — close the gap row in the docs site".
+// the script flips the entry to "FIXED ΓÇö close the gap row in the docs site".
 //
 // Mapping to the "Known Gaps" section of the rendered docs site:
 //
-//   G30  Provision has no caller authentication           §6.1
-//   G31  Provision response code is an active-key oracle  §6.2
-//   G32  getStatus reveals state to unauthenticated calls §6.3
-//   G33  Activation response code is a keyId oracle       §6.4
-//   G34  Claims are checked by name, not by value         §6.5
-//   G35  HMAC accepts a zero/low-entropy key              §6.6
+//   G30  Provision has no caller authentication           ┬º6.1
+//   G31  Provision response code is an active-key oracle  ┬º6.2
+//   G32  getStatus reveals state to unauthenticated calls ┬º6.3
+//   G33  Activation response code is a keyId oracle       ┬º6.4
+//   G34  Claims are checked by name, not by value         ┬º6.5
+//   G35  HMAC accepts a zero/low-entropy key              ┬º6.6
 //
 // Stateful gaps that are NOT Cryptol-expressible (documented only):
 //
-//   G36  No nonce / no replay-window state                §6.7
-//   G37  Provision endpoint has no method check           §6.8
-//   G38  constant_time_equals is not control-flow proven  §6.9
+//   G36  No nonce / no replay-window state                ┬º6.7
+//   G37  Provision endpoint has no method check           ┬º6.8
+//   G38  constant_time_equals is not control-flow proven  ┬º6.9
 //
 // The file imports SDEP so the "secure" reference functions can be
 // compared to the actual production decision functions directly.
@@ -39,7 +39,7 @@ import SDEP
 // to them without having to expose them at SDEP's public API surface (which
 // would weaken the spec module's encapsulation just to satisfy this
 // regression file). The bodies are intentionally identical to SDEP.cry's
-// own definitions — keep them in sync if you change SDEP.cry.
+// own definitions ΓÇö keep them in sync if you change SDEP.cry.
 ////////////////////////////////////////////////////////////////////////////////
 
 // from `private` block around line 89 in SDEP.cry
@@ -55,15 +55,15 @@ isValidSignature key req providedSig =
   hmacSha256 key req == providedSig
 
 ////////////////////////////////////////////////////////////////////////////////
-// G30 — Provision has no caller authentication.
+// G30 ΓÇö Provision has no caller authentication.
 //
 // `provisionKey` takes `validRequest` (a flag computed from headers
-// only — X-Fleet-Metadata, X-Fleet-Auth-Scheme), `vaultResult`, and
+// only ΓÇö X-Fleet-Metadata, X-Fleet-Auth-Scheme), `vaultResult`, and
 // `keyIsActive`. There is no AuthResult input. The C++ controller's
 // `handle_provision` likewise never inspects a signature or claims for
 // POST /enroll/key. Anyone on the link-local network (the spec's only
 // transport restriction) can drive the key store from "no key" to
-// "provisional" with attacker-controlled secret material — then race
+// "provisional" with attacker-controlled secret material ΓÇö then race
 // the device to activate. The attacker becomes the device.
 //
 // `secureProvisionKey` below is what the function SHOULD have been:
@@ -96,7 +96,7 @@ property G30_ProvisionRequiresAuth
                               keyIsActive authResult
 
 ////////////////////////////////////////////////////////////////////////////////
-// G31 — Provision response code is an active-key oracle.
+// G31 ΓÇö Provision response code is an active-key oracle.
 //
 // Two `provisionKey` invocations that agree on every input *except*
 // `keyIsActive` return different ProvisionResults: `Succeeded` (200)
@@ -119,7 +119,7 @@ property G31_ProvisionResponseLeaksActiveState
             == provisionKey fleetEnabled validRequest vaultResult True
 
 ////////////////////////////////////////////////////////////////////////////////
-// G32 — getStatus discloses state to unauthenticated callers.
+// G32 ΓÇö getStatus discloses state to unauthenticated callers.
 //
 // `getStatus(fleetEnabled, hasKey, keyIsActive, keyId)` has NO auth
 // input. The C++ `handle_status` matches: anyone hitting GET
@@ -157,7 +157,7 @@ property G32_StatusLeaksToUnauthenticated
     == secureGetStatus fleetEnabled hasKey keyIsActive keyId False
 
 ////////////////////////////////////////////////////////////////////////////////
-// G33 — Activation response code is a keyId oracle.
+// G33 ΓÇö Activation response code is a keyId oracle.
 //
 // Inside `enrollDevice(true, true, _, _)`:
 //
@@ -191,13 +191,13 @@ property G33_ActivationOracleViaResponseCode =
     == enrollDevice True True AR_Unauthenticated AC_Success
 
 ////////////////////////////////////////////////////////////////////////////////
-// G34 — Claims are checked by name, not by value.
+// G34 ΓÇö Claims are checked by name, not by value.
 //
 // `isValidClaims` in cpp/src/auth.cpp walks the JSON object and
 // returns true iff every required claim NAME appears as a top-level
 // key. It does not compare claim values. An attacker who can mint a
-// signed request — for instance, the link-local provisioning attacker
-// from G30 — can place arbitrary values under the required names
+// signed request ΓÇö for instance, the link-local provisioning attacker
+// from G30 ΓÇö can place arbitrary values under the required names
 // (e.g. `{"device-id": "attacker", "tenant": "victim-tenant"}`) and
 // pass the claims check intended to bind the signature to a specific
 // device or tenant.
@@ -238,7 +238,7 @@ property G34_ClaimsValueGap
   claimsValidByName required actual == claimsValidByPair required actual
 
 ////////////////////////////////////////////////////////////////////////////////
-// G35 — HMAC accepts a zero / low-entropy key.
+// G35 ΓÇö HMAC accepts a zero / low-entropy key.
 //
 // Nothing in `provisionKey`, the key vault layer, or the abstract
 // `hmacSha256` model constrains the key's entropy. A vault bug or
@@ -250,14 +250,105 @@ property G34_ClaimsValueGap
 // spec does not require it.
 //
 // Note: this property uses the SAME abstract HMAC algebra as P8/P9,
-// so the cex is purely structural — it shows that the spec admits
+// so the cex is purely structural ΓÇö it shows that the spec admits
 // the degenerate key. A real countermeasure must live above the
 // Cryptol model.
 ////////////////////////////////////////////////////////////////////////////////
 
 // EXPECTED VERDICT: FAIL.
-// Counterexample: any r — LHS = True (zero key verifies its own tag),
+// Counterexample: any r ΓÇö LHS = True (zero key verifies its own tag),
 // RHS = False (the obligation the spec should enforce).
 property G35_HmacZeroKeyAccepted (r : Request) =
   isValidSignature (zero : HmacKey) r (hmacSha256 (zero : HmacKey) r)
     == False
+
+////////////////////////////////////////////////////////////////////////////////
+// G39-G40 -- Canonicalization non-injectivity (newline-concatenation).
+//
+// The current canonicalizePayload encodes variable-length fields with '\n'
+// (0x0a) as a delimiter -- matching the Azure MSP / GuestProxyAgent approach.
+// This encoding is NOT injective: a 0x0a byte inside a field value shifts the
+// apparent boundary, producing the same byte stream for two distinct requests.
+//
+// G39 is the two-field version (e.g. method|body). G40 is the record-list
+// version (e.g. header list encoded as name:value\nname:value...).
+// Both are expected to FAIL; the counterexample is the concrete attack.
+//
+// These functions re-implement the current production encoder so the
+// properties are self-contained. (Private functions in SDEP.cry cannot
+// be imported by this module.)
+////////////////////////////////////////////////////////////////////////////////
+
+private
+
+  // Normalization predicate: buf[i] == 0 for i >= len.
+  lpFieldNormalized : LpField -> Bit
+  lpFieldNormalized f =
+    (f.len <= (`FL : [IW])) /\
+    and [ (i >= f.len) ==> ((f.buf @ i) == 0)
+        | i <- ([0 .. FL - 1] : [FL][IW]) ]
+
+  lpZeroField : LpField
+  lpZeroField = { len = 0, buf = zero }
+
+  // Newline-concatenation encoder for two variable-length fields.
+  // Packs f's live bytes, then 0x0a, then g's live bytes, then zeros.
+  // The delimiter position is data-dependent (f.len), so a 0x0a byte inside
+  // f shifts where g appears, creating a collision with a different (f, g).
+  encodeNewline2 : LpField -> LpField -> [2 * FL + 2][8]
+  encodeNewline2 f g =
+      [ byteAt i | i <- ([0 .. 2 * FL + 1] : [2 * FL + 2][IW]) ]
+    where
+      nl = 0x0a : [8]
+      byteAt : [IW] -> [8]
+      byteAt i =
+        if i < f.len                           then f.buf @ (i % (`FL : [IW]))
+         | i == f.len                          then nl
+         | i <= f.len + g.len                  then g.buf @ ((i - f.len - 1) % (`FL : [IW]))
+        else                                        0
+
+  // Record-list newline encoder: records joined by 0x0a (no count tag).
+  // A 0x0a inside a record value parses as a spurious record boundary.
+  itemsNormalized_g : [IW] -> LpField -> LpField -> Bit
+  itemsNormalized_g c a0 a1 =
+    (c <= (`MaxItems : [IW])) /\
+    lpFieldNormalized a0 /\ lpFieldNormalized a1 /\
+    ((c < 1) ==> (a0 == lpZeroField)) /\
+    ((c < 2) ==> (a1 == lpZeroField))
+
+  encodeNewlineRecs : [IW] -> LpField -> LpField -> [RecBufLen][8]
+  encodeNewlineRecs c a0 a1 =
+      [ byteAt i | i <- ([0 .. RecBufLen - 1] : [RecBufLen][IW]) ]
+    where
+      nl = 0x0a : [8]
+      byteAt : [IW] -> [8]
+      byteAt i =
+        if  (c >= 1) /\ (i < a0.len)                              then a0.buf @ (i % (`FL : [IW]))
+         | (c >= 1) /\ (c >= 2) /\ (i == a0.len)                  then nl
+         | (c >= 2) /\ (i > a0.len) /\ (i <= a0.len + a1.len)     then a1.buf @ ((i - a0.len - 1) % (`FL : [IW]))
+        else                                                            0
+
+// G39: The newline-concatenation encoder for two fields is NOT injective.
+// Any 0x0a byte inside field_A shifts the apparent boundary into field_B.
+//
+// Concrete counterexample Z3 finds:
+//   f  = {len=1, buf=[0x0a, 0, 0, 0]}  g  = {len=0, buf=[0, 0, 0, 0]}
+//   f' = {len=0, buf=[0, 0, 0, 0]}     g' = {len=1, buf=[0x0a, 0, 0, 0]}
+//   Both encode to [0x0a, 0x0a, 0, ...].
+//
+// EXPECTED VERDICT: FAIL.
+property G39_NewlineConcatTwoFieldsNotInjective f g f' g' =
+  ( lpFieldNormalized f /\ lpFieldNormalized g /\
+    lpFieldNormalized f' /\ lpFieldNormalized g' ) ==>
+  ((f, g) != (f', g')) ==>
+    encodeNewline2 f g != encodeNewline2 f' g'
+
+// G40: The newline-separated record-list encoder is NOT injective.
+// A 0x0a inside a record value parses as a record boundary, forging an
+// extra record -- the classic "header smuggling" attack.
+//
+// EXPECTED VERDICT: FAIL.
+property G40_NewlineConcatRecordListNotInjective c1 a1 b1 c2 a2 b2 =
+  ( itemsNormalized_g c1 a1 b1 /\ itemsNormalized_g c2 a2 b2 ) ==>
+  ((c1, a1, b1) != (c2, a2, b2)) ==>
+    encodeNewlineRecs c1 a1 b1 != encodeNewlineRecs c2 a2 b2

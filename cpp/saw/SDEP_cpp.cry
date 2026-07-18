@@ -76,6 +76,12 @@ AD_Allow_b           = 0 : [8]
 AD_Deny_b            = 1 : [8]
 AD_NoRule_b          = 2 : [8]
 
+// CanonHostClass
+CH_Imds_b            = 0 : [8]
+CH_WireServer_b      = 1 : [8]
+CH_Unknown_b         = 2 : [8]
+CH_UserinfoPresent_b = 3 : [8]
+
 ////////////////////////////////////////////////////////////////////////
 // 4.1 provisionKey — LLVM: (i1, i1, i8, i1) -> i8
 ////////////////////////////////////////////////////////////////////////
@@ -243,11 +249,14 @@ getStatus fleetEnabled hasKey keyIsActive keyId preBytes =
 //
 // to `out`, leaving bytes at positions >= 2+nm+nb unchanged. The SAW spec
 // (auto-generated under cpp/saw/out_canonicalize_lp/ via saw-spec-gen
-// gen-verify with --max-len-precond nm=4 / nb=4) runs at MAX_LEN = 4 —
+// gen-verify, with the buffer shaping incl. max_len_precond nm=4 / nb=4
+// carried in cpp/saw/saw-spec-gen.toml) runs at MAX_LEN = 4 —
 // the smallest bound that still exercises the loop induction. It composes
-// with P24 (FieldLen = 16) up to min(4, 16) = 4: SAW proves the C++
-// implements the byte layout for nm,nb <= 4, and P24 proves that byte
-// layout is injective at any FieldLen >= 4. Wall-clock SMT timings on
+// with P23 (the two-field length-prefix roundtrip, FieldLen = 4): SAW
+// proves the C++ writes the [nm][m][nb][b] byte layout for nm,nb <= 4,
+// and P23 proves that exact layout is injective by exhibiting a decoder
+// that recovers (m,nm,b,nb) from the bytes — so the length tags are
+// load-bearing, not the field widths. Wall-clock SMT timings on
 // commodity hardware (Z3 4.x): MAX_LEN=4 ~ seconds (current),
 // MAX_LEN=8 ~ 10s, MAX_LEN=12 ~ 2 min, MAX_LEN=16 ~ 13 min. To lift the
 // bound entirely use `llvm_invariant`.
@@ -285,6 +294,61 @@ canonicalize_lp_post out m nm b nb =
 // a verbatim 1:1 arg mapping (no --cryptol-arg-order flag needed).
 canonicalize_lp_ret : [10][8] -> [4][8] -> [8] -> [4][8] -> [8] -> [64]
 canonicalize_lp_ret _ _ nm _ nb = (zext nm) + (zext nb) + 2
+
+////////////////////////////////////////////////////////////////////////
+// URL host canonicalization — LLVM: (ptr host, i8 hostLen) -> i8
+////////////////////////////////////////////////////////////////////////
+//
+// Mirrors cpp/src/decision.cpp::classifyCanonicalHost. The function
+// lowercases ASCII host bytes, rejects userinfo-smuggling (`@`) in the
+// consumed prefix, and classifies common aliases for IMDS / WireServer.
+
+private
+  asciiLower : [8] -> [8]
+  asciiLower c = if c >= 0x41 /\ c <= 0x5A then c + 32 else c
+
+  hostEqLit10 : [32][8] -> [10][8] -> Bit
+  hostEqLit10 host lit = and [ asciiLower (host @ i) == asciiLower (lit @ i)
+                             | i <- ([0 .. 9] : [10][8]) ]
+
+  hostEqLit13 : [32][8] -> [13][8] -> Bit
+  hostEqLit13 host lit = and [ asciiLower (host @ i) == asciiLower (lit @ i)
+                             | i <- ([0 .. 12] : [13][8]) ]
+
+  hostEqLit15 : [32][8] -> [15][8] -> Bit
+  hostEqLit15 host lit = and [ asciiLower (host @ i) == asciiLower (lit @ i)
+                             | i <- ([0 .. 14] : [15][8]) ]
+
+  hostEqLit18 : [32][8] -> [18][8] -> Bit
+  hostEqLit18 host lit = and [ asciiLower (host @ i) == asciiLower (lit @ i)
+                             | i <- ([0 .. 17] : [18][8]) ]
+
+  hasUserinfo : [32][8] -> [8] -> Bit
+  hasUserinfo host hostLen =
+    or [ (i < hostLen) /\ ((host @ i) == 0x40)
+       | i <- ([0 .. 31] : [32][8]) ]
+
+  isImdsAlias : [32][8] -> [8] -> Bit
+  isImdsAlias host hostLen =
+       (hostLen == 15 /\ hostEqLit15 host "169.254.169.254")
+    \/ (hostLen == 10 /\ hostEqLit10 host "2852039166")
+    \/ (hostLen == 10 /\ hostEqLit10 host "0xa9fea9fe")
+    \/ (hostLen == 18 /\ hostEqLit18 host "[::ffff:a9fe:a9fe]")
+
+  isWireServerAlias : [32][8] -> [8] -> Bit
+  isWireServerAlias host hostLen =
+       (hostLen == 13 /\ hostEqLit13 host "168.63.129.16")
+    \/ (hostLen == 10 /\ hostEqLit10 host "2822734096")
+    \/ (hostLen == 10 /\ hostEqLit10 host "0xa83f8110")
+    \/ (hostLen == 18 /\ hostEqLit18 host "[::ffff:a83f:8110]")
+
+classifyCanonicalHost : [32][8] -> [8] -> [8]
+classifyCanonicalHost host hostLen =
+  if hostLen == 0 \/ hostLen > 32 then CH_Unknown_b
+   | hasUserinfo host hostLen      then CH_UserinfoPresent_b
+   | isImdsAlias host hostLen      then CH_Imds_b
+   | isWireServerAlias host hostLen then CH_WireServer_b
+  else                                  CH_Unknown_b
 
 ////////////////////////////////////////////////////////////////////////
 // Well-formedness predicates over ABI-width enum reps
@@ -372,28 +436,154 @@ private
 // 4.9 Length-prefixed canonicalization (for P23, P24, P25)
 ////////////////////////////////////////////////////////////////////////
 
-// Field length in bytes for the length-prefixed canonicalizer
-// (bounded-model parameter; production uses `std::size_t` fields).
-type FieldLen = 16
+// ── Variable-length-within-a-bound canonicalization model (P23-P25) ──────
+//
+// This is an HONEST bounded model of the production length-prefix framing
+// in cpp/src/canonical.cpp. The earlier revision of this model encoded
+// each field at a FIXED width (`[nm] # m # [nb] # b` with m,b : [16][8]).
+// Under a fixed width the field boundaries come from the *type widths*,
+// so decomposition is trivially unique and the length tags do NO work —
+// the "injectivity" was vacuous w.r.t. the actual security mechanism.
+//
+// Here each field's bytes occupy only the first `len` positions of its
+// slot and the encoder packs the next field IMMEDIATELY after, so the
+// position of the second tag depends on the first length. The ONLY way to
+// recover the boundaries is to READ the length tag — exactly what the
+// production parser does and exactly what makes the framing collision-
+// resistant. Injectivity is therefore proven the honest way, via a
+// decoder and a decode∘encode roundtrip (`decode (encode x) == x`), which
+// forces the tag to be load-bearing.
+//
+// FIDELITY CAVEAT. The production encoder (canonicalizePayload /
+// canonicalizeHeaders / canonicalizeQuery in cpp/src/canonical.cpp) uses a
+// 64-bit big-endian tag over std::size_t-length fields and is UNVERIFIED
+// at the implementation level. This is a fixed-bound DESIGN-level proof
+// (8-bit tag, FieldLen = 4, <= 2 records), not a binary proof; the
+// structural argument it exhibits extends to the production widths but is
+// not mechanically transported to them here.
 
-// Index/length width in bits. One byte holds any length up to FieldLen = 16,
-// matching the 8-bit tag used by the bounded canonicalizer.
+// Max bytes per field/record-item in the bounded model
+// (production: std::size_t).
+type FieldLen = 4
+
+// Length-tag / index width in bits. One byte addresses any length <= 255.
+// Shared with the structured request model below.
 type IndexWidth = 8
+
+// A bounded variable-length field: a logical length `len` and a fixed-size
+// storage buffer `buf`. "Normalized" means bytes past `len` are zero, so
+// two fields differing only in unused padding are the same logical value
+// (any collision the solver finds is therefore real).
+type LpField = { len : [IndexWidth], buf : [FieldLen][8] }
+
+// Number of length-prefixed items a record-list (header / query MAP) may
+// carry in the bounded model. Two is enough to exhibit boundary-shifting
+// and record add/drop ("smuggling") collisions.
+type MaxItems  = 2
+
+// Total bytes of the record-list encoding: a count tag plus, per item, a
+// length tag and its FieldLen-byte slot.
+type RecBufLen = 1 + MaxItems * (1 + FieldLen)
 
 private
 
-  // @coverage abstraction: well-formedness predicate for the bounded length-prefixed canonicalization model used by P23-P25.
-  canonNormalized : [IndexWidth] -> [FieldLen][8] -> Bit
-  canonNormalized n b =
-      and [ (i >= n) ==> ((b @ i) == 0)
-          | i <- ([0 .. FieldLen - 1] : [FieldLen][IndexWidth]) ]
+  // @coverage abstraction: zero/empty length-prefixed field — initial value for the bounded canonicalization model.
+  lpZeroField : LpField
+  lpZeroField = { len = 0, buf = zero }
 
-  // Bounded model writes a one-byte length tag followed by the FieldLen-byte
-  // field buffer. Production uses a 64-bit big-endian tag, but the
-  // injectivity argument that P23-P25 rely on is identical at any width.
-  // @coverage abstraction: bounded length-prefixed encoding model standing in for the production canonicalizer's byte layout.
-  canonLenPrefixed : [IndexWidth] -> [FieldLen][8] -> [IndexWidth] -> [FieldLen][8] -> [2 * FieldLen + 2][8]
-  canonLenPrefixed nm m nb b = [nm] # m # [nb] # b
+  // @coverage abstraction: well-formedness predicate (len in range, tail zero-padded) for a bounded length-prefixed field.
+  lpFieldNormalized : LpField -> Bit
+  lpFieldNormalized f =
+    (f.len <= (`FieldLen : [IndexWidth])) /\
+    and [ (i >= f.len) ==> ((f.buf @ i) == 0)
+        | i <- ([0 .. FieldLen - 1] : [FieldLen][IndexWidth]) ]
+
+  // ---- Two-field length-prefix encoder/decoder (top-level payload) ------
+  // encodeLP2 writes  [f.len] f.buf[0..f.len)  [g.len] g.buf[0..g.len)
+  // then zero-pads. The position of g's tag is f.len + 1, so the f|g
+  // boundary is determined by the tag, not by the slot width. This is the
+  // exact byte layout the SAW-verified `canonicalize_lp` emits.
+  // @coverage abstraction: bounded two-field length-prefixed encoder standing in for the production canonicalizer byte layout.
+  encodeLP2 : LpField -> LpField -> [2 * FieldLen + 2][8]
+  encodeLP2 f g =
+      [ byteAt i | i <- ([0 .. 2 * FieldLen + 1] : [2 * FieldLen + 2][IndexWidth]) ]
+    where
+      nf   = f.len
+      ng   = g.len
+      gTag = nf + 1                    // position of g's length tag
+      byteAt : [IndexWidth] -> [8]
+      byteAt i =
+        if  i == 0                                    then nf
+         | (i >= 1)        /\ (i <= nf)                then f.buf @ ((i - 1)        % (`FieldLen : [IndexWidth]))
+         |  i == gTag                                  then ng
+         | (i >= gTag + 1) /\ (i < gTag + 1 + ng)      then g.buf @ ((i - gTag - 1) % (`FieldLen : [IndexWidth]))
+        else                                                0
+
+  // decodeLP2 reads the tag, takes exactly that many bytes, reads the next
+  // tag, and so on. Data-dependent indices are clamped `% bl` so the
+  // symbolic access stays in range; for normalized inputs the clamp is the
+  // identity. `decodeLP2 (encodeLP2 f g) == (f, g)` is P23.
+  // @coverage abstraction: bounded two-field length-prefixed decoder; round-trip with encodeLP2 underpins P23-P25.
+  decodeLP2 : [2 * FieldLen + 2][8] -> (LpField, LpField)
+  decodeLP2 buf = (f, g)
+    where
+      bl   = (`(2 * FieldLen + 2) : [IndexWidth])
+      nf   = buf @ 0
+      fbuf = [ if j < nf then buf @ ((1 + j) % bl) else 0
+             | j <- ([0 .. FieldLen - 1] : [FieldLen][IndexWidth]) ]
+      ng   = buf @ ((nf + 1) % bl)
+      gbuf = [ if j < ng then buf @ ((nf + 2 + j) % bl) else 0
+             | j <- ([0 .. FieldLen - 1] : [FieldLen][IndexWidth]) ]
+      f = { len = nf, buf = fbuf }
+      g = { len = ng, buf = gbuf }
+
+  // ---- Record-list encoder/decoder (header / query MAP) -----------------
+  // A header/query map serializes as a count tag followed by a sequence of
+  // length-prefixed items: <count> <len0> bytes0 <len1> bytes1 ... . This
+  // is the shape behind the classic "header smuggling" collision — under
+  // the old separator encoding a value byte could fake a record boundary
+  // and inject an extra record. Length + count tags make boundaries AND the
+  // number of records recoverable only by READING the tags.
+  // @coverage abstraction: well-formedness predicate for a bounded record-list (count tag + length-prefixed items).
+  itemsNormalized : [IndexWidth] -> LpField -> LpField -> Bit
+  itemsNormalized c a0 a1 =
+    (c <= (`MaxItems : [IndexWidth])) /\
+    lpFieldNormalized a0 /\ lpFieldNormalized a1 /\
+    ((c < 1) ==> (a0 == lpZeroField)) /\
+    ((c < 2) ==> (a1 == lpZeroField))
+
+  // @coverage abstraction: bounded record-list encoder (count + length-prefixed items) modeling header/query MAP serialization.
+  encodeRecs : [IndexWidth] -> LpField -> LpField -> [RecBufLen][8]
+  encodeRecs c a0 a1 =
+      [ byteAt i | i <- ([0 .. RecBufLen - 1] : [RecBufLen][IndexWidth]) ]
+    where
+      l0 = a0.len
+      l1 = a1.len
+      t0 = 1                           // item0 tag position
+      t1 = 2 + l0                      // item1 tag position (immediately after item0)
+      byteAt : [IndexWidth] -> [8]
+      byteAt i =
+        if  i == 0                                        then c
+         | (c >= 1) /\ (i == t0)                          then l0
+         | (c >= 1) /\ (i >= t0 + 1) /\ (i < t0 + 1 + l0) then a0.buf @ ((i - t0 - 1) % (`FieldLen : [IndexWidth]))
+         | (c >= 2) /\ (i == t1)                          then l1
+         | (c >= 2) /\ (i >= t1 + 1) /\ (i < t1 + 1 + l1) then a1.buf @ ((i - t1 - 1) % (`FieldLen : [IndexWidth]))
+        else                                                   0
+
+  // @coverage abstraction: bounded record-list decoder; round-trip with encodeRecs underpins the record smuggling-collision proofs.
+  decodeRecs : [RecBufLen][8] -> ([IndexWidth], LpField, LpField)
+  decodeRecs buf = (c, a0, a1)
+    where
+      rl    = (`(RecBufLen) : [IndexWidth])
+      c     = buf @ 0
+      l0    = if c >= 1 then buf @ 1 else 0
+      a0buf = [ if (c >= 1) /\ (j < l0) then buf @ ((2 + j) % rl) else 0
+              | j <- ([0 .. FieldLen - 1] : [FieldLen][IndexWidth]) ]
+      l1    = if c >= 2 then buf @ ((2 + l0) % rl) else 0
+      a1buf = [ if (c >= 2) /\ (j < l1) then buf @ ((2 + l0 + 1 + j) % rl) else 0
+              | j <- ([0 .. FieldLen - 1] : [FieldLen][IndexWidth]) ]
+      a0 = { len = l0, buf = a0buf }
+      a1 = { len = l1, buf = a1buf }
 
 ////////////////////////////////////////////////////////////////////////
 // 4.10 Structured Request model (for P28, P29)
@@ -625,36 +815,40 @@ property P22_ActivationIoFailureIsInternalError activationResult =
           == ER_InternalError_b
 
 // ---- Category F: Canonicalization byte-injectivity ------------------------
+//
+// These three properties prove the length-prefix framing is byte-injective
+// the HONEST way: each exhibits a DECODER and shows it inverts the encoder,
+// so the length/count tags must be read to recover field boundaries. (The
+// earlier fixed-width `canonLenPrefixed` model proved nothing about the
+// tags — its boundaries came from the type widths.) All three are bounded
+// (FieldLen = 4, <= 2 records); the production encoder remains unverified.
 
-// P23: Distinct normalized requests have distinct canonical byte streams.
-property P23_DistinctRequestsHaveDistinctCanonicalBytes
-    nm1 m1 nb1 b1 nm2 m2 nb2 b2 =
-  ( (nm1 <= (`FieldLen : [IndexWidth])) /\ (nb1 <= (`FieldLen : [IndexWidth])) /\
-    (nm2 <= (`FieldLen : [IndexWidth])) /\ (nb2 <= (`FieldLen : [IndexWidth])) /\
-    canonNormalized nm1 m1 /\ canonNormalized nb1 b1 /\
-    canonNormalized nm2 m2 /\ canonNormalized nb2 b2 /\
-    canonLenPrefixed nm1 m1 nb1 b1 == canonLenPrefixed nm2 m2 nb2 b2 )
-    ==> ((nm1, m1, nb1, b1) == (nm2, m2, nb2, b2))
+// P23: Two adjacent variable-length fields decode back to themselves, so
+// distinct (normalized) requests have distinct canonical byte streams.
+// This is the top-level method|body framing the SAW-verified
+// canonicalize_lp emits; the tag, not the slot width, marks the boundary.
+property P23_DistinctRequestsHaveDistinctCanonicalBytes f g =
+  ( lpFieldNormalized f /\ lpFieldNormalized g )
+    ==> (decodeLP2 (encodeLP2 f g) == (f, g))
 
-// P24: Distinct normalized header lists have distinct canonical byte streams.
-property P24_DistinctHeadersHaveDistinctCanonicalBytes
-    nm1 m1 nb1 b1 nm2 m2 nb2 b2 =
-  ( (nm1 <= (`FieldLen : [IndexWidth])) /\ (nb1 <= (`FieldLen : [IndexWidth])) /\
-    (nm2 <= (`FieldLen : [IndexWidth])) /\ (nb2 <= (`FieldLen : [IndexWidth])) /\
-    canonNormalized nm1 m1 /\ canonNormalized nb1 b1 /\
-    canonNormalized nm2 m2 /\ canonNormalized nb2 b2 /\
-    canonLenPrefixed nm1 m1 nb1 b1 == canonLenPrefixed nm2 m2 nb2 b2 )
-    ==> ((nm1, m1, nb1, b1) == (nm2, m2, nb2, b2))
+// P24: A header MAP (count-prefixed list of length-prefixed items) decodes
+// back to itself, so distinct normalized header lists have distinct
+// canonical byte streams. The roundtrip forces both the per-item length
+// tags and the record count to be load-bearing — closing the header-
+// smuggling gap where a value byte faked a record boundary.
+property P24_DistinctHeadersHaveDistinctCanonicalBytes c a0 a1 =
+  itemsNormalized c a0 a1
+    ==> (decodeRecs (encodeRecs c a0 a1) == (c, a0, a1))
 
-// P25: Distinct normalized query lists have distinct canonical byte streams.
-property P25_DistinctQueriesHaveDistinctCanonicalBytes
-    nm1 m1 nb1 b1 nm2 m2 nb2 b2 =
-  ( (nm1 <= (`FieldLen : [IndexWidth])) /\ (nb1 <= (`FieldLen : [IndexWidth])) /\
-    (nm2 <= (`FieldLen : [IndexWidth])) /\ (nb2 <= (`FieldLen : [IndexWidth])) /\
-    canonNormalized nm1 m1 /\ canonNormalized nb1 b1 /\
-    canonNormalized nm2 m2 /\ canonNormalized nb2 b2 /\
-    canonLenPrefixed nm1 m1 nb1 b1 == canonLenPrefixed nm2 m2 nb2 b2 )
-    ==> ((nm1, m1, nb1, b1) == (nm2, m2, nb2, b2))
+// P25: The query MAP reuses the BYTE-IDENTICAL `encodeRecs` encoder as the
+// header map (P24). This isolates the "can't add or drop a record" half of
+// the smuggling guarantee: two normalized record-lists that serialize to
+// the same bytes must carry the same number of records, so an attacker
+// cannot smuggle an extra query parameter in (or out).
+property P25_DistinctQueriesHaveDistinctCanonicalBytes c1 a1 b1 c2 a2 b2 =
+  ( itemsNormalized c1 a1 b1 /\ itemsNormalized c2 a2 b2 /\
+    encodeRecs c1 a1 b1 == encodeRecs c2 a2 b2 )
+    ==> (c1 == c2)
 
 // ---- Category G: enforceAccess matrix-coverage closures -------------------
 
@@ -683,7 +877,32 @@ property P28_AuthHeaderValueExcludedFromCanonicalization r v1 v2 =
 property P29_VerifierUsesRequestBoundTimestamp r tsFromCaller =
   verifierTimestamp_current r tsFromCaller == r.timestamp
 
-// ---- Category I: Intentional counterexamples ------------------------------
+// ---- Category I: Host canonicalization properties ------------------------
+
+// P33: IMDS host aliases all canonicalize to Destination::Imds.
+property P33_ImdsAliasesCanonicalize =
+     classifyCanonicalHost ("169.254.169.254" # zero : [32][8]) 15 == CH_Imds_b
+  /\ classifyCanonicalHost ("2852039166"      # zero : [32][8]) 10 == CH_Imds_b
+  /\ classifyCanonicalHost ("0xa9fea9fe"      # zero : [32][8]) 10 == CH_Imds_b
+  /\ classifyCanonicalHost ("[::ffff:a9fe:a9fe]" # zero : [32][8]) 18 == CH_Imds_b
+
+// P34: WireServer host aliases all canonicalize to Destination::WireServer.
+property P34_WireAliasesCanonicalize =
+     classifyCanonicalHost ("168.63.129.16"   # zero : [32][8]) 13 == CH_WireServer_b
+  /\ classifyCanonicalHost ("2822734096"      # zero : [32][8]) 10 == CH_WireServer_b
+  /\ classifyCanonicalHost ("0xa83f8110"      # zero : [32][8]) 10 == CH_WireServer_b
+  /\ classifyCanonicalHost ("[::ffff:a83f:8110]" # zero : [32][8]) 18 == CH_WireServer_b
+
+// P35: Userinfo smuggling is rejected before endpoint classification.
+property P35_UserinfoRejected tail =
+  classifyCanonicalHost (("attacker@" # tail) : [32][8]) 12 == CH_UserinfoPresent_b
+
+// P36: Empty or oversized hosts are treated as Unknown.
+property P36_EmptyOrOversizedUnknown host =
+  (classifyCanonicalHost host 0 == CH_Unknown_b)
+  /\ (classifyCanonicalHost host 33 == CH_Unknown_b)
+
+// ---- Category J: Intentional counterexamples ------------------------------
 //
 // The properties in this category are *deliberately wrong*.  They encode
 // tempting-but-false intuitions about the protocol so the rendered docs
@@ -728,3 +947,243 @@ property P32_AuthenticatedImpliesEnrolled fleetEnabled validMetadata activationR
   ( fleetEnabled /\ validMetadata ) ==>
     enrollDevice fleetEnabled validMetadata
                      AR_Authenticated_b activationResult == ER_Succeeded_b
+
+////////////////////////////////////////////////////////////////////////
+// 4.10  KeyStore::activate — stateful object-transition model
+////////////////////////////////////////////////////////////////////////
+//
+// This is the whole-object view of the production state machine in
+// cpp/src/key_store.cpp:
+//
+//   ActivationResult KeyStore::activate(const Uuid& keyId) {
+//     std::scoped_lock lock(mu_);
+//     if (!key_.has_value())        return ActivationResult::IoFailure;
+//     if (key_->keyId != keyId)     return ActivationResult::IoFailure;
+//     if (key_->isActive)           return ActivationResult::AlreadyActive;
+//     key_->isActive = true;
+//     return ActivationResult::Success;
+//   }
+//
+// The functions below model the SEQUENTIAL transition: the `KeyStore`
+// object is treated as the flat 152-byte image laid out by the MSVC ABI,
+// and one call to `activate` is EXPECTED to agree with them for both the
+// returned `ActivationResult` byte AND the resulting object image. This
+// is a Cryptol-level model only — an implementation-level SAW proof
+// (saw-spec-gen cannot yet generate stateful mutating-`this` specs) is
+// future work; see the CONCURRENCY CAVEAT below.
+//
+// Byte layout of the `KeyStore` object (confirmed via -fdump-record-
+// layouts and the -O1 LLVM IR):
+//
+//   [  0,  80)  std::mutex mu_         (opaque; recursion counter @ 76)
+//   [ 80,  96)  key_->keyId   (Uuid, 16 bytes)
+//   [ 96, 128)  key_->secret  (32 bytes)
+//   [128]       key_->isActive   (bool, 0/1)
+//   [136, 144)  key_->createdAt  (int64)
+//   [144]       key_._Has_value  (optional engaged flag, 0/1)
+//
+// CONCURRENCY CAVEAT. The `std::scoped_lock` is out of scope: this
+// Cryptol model captures the single-threaded transition the body
+// performs once the lock is held, and the KS1-KS4 properties are proven
+// about that model. An implementation-level SAW proof tying it to the
+// C++ body is future work; there the mutex bytes would be treated as
+// opaque and the lock/unlock calls modeled as memory-neutral no-ops.
+
+// Offsets into the 152-byte KeyStore image.
+type KS_BYTES   = 152
+// @coverage abstraction: byte offset of key_->keyId in the KeyStore object image; an addressing constant for the model, not executable code.
+ks_off_keyId    = 80 : Integer   // start of key_->keyId (16 bytes)
+// @coverage abstraction: byte offset of key_->isActive in the KeyStore object image; an addressing constant for the model, not executable code.
+ks_off_isActive = 128 : Integer  // key_->isActive byte
+// @coverage abstraction: byte offset of the optional engaged flag in the KeyStore object image; an addressing constant for the model, not executable code.
+ks_off_engaged  = 144 : Integer  // optional engaged flag
+
+// Predicates the body reads out of the pre-state object image `pre`
+// together with the requested key id `kid`.
+// @coverage abstraction: model predicate reading the KeyStore object image — stands in for the C++ field reads.
+ksEngaged : [KS_BYTES][8] -> Bit
+ksEngaged pre = (pre @ ks_off_engaged) == 1
+
+// @coverage abstraction: model predicate (isActive byte) standing in for the C++ field read.
+ksWasActive : [KS_BYTES][8] -> Bit
+ksWasActive pre = (pre @ ks_off_isActive) == 1
+
+// @coverage abstraction: model predicate (keyId equality) standing in for the C++ Uuid::operator==.
+ksIdMatch : [KS_BYTES][8] -> [16][8] -> Bit
+ksIdMatch pre kid = (take`{16} (drop`{80} pre)) == kid
+
+// Returned ActivationResult byte — structurally identical to the C++
+// branch ladder, same branch order.
+// @coverage abstraction: Cryptol model of KeyStore::activate's result ladder; implementation-level SAW proof pending.
+keyStoreActivateRet : [KS_BYTES][8] -> [16][8] -> [8]
+keyStoreActivateRet pre kid =
+  if ~ (ksEngaged pre)      then AC_IoFailure_b
+   | ~ (ksIdMatch pre kid)  then AC_IoFailure_b
+   | ksWasActive pre        then AC_AlreadyActive_b
+  else                           AC_Success_b
+
+// Post-state object image. The body mutates EXACTLY one byte — the
+// `isActive` flag — and only on a matching activation of an inactive
+// key; every other byte (mutex, keyId, secret, createdAt, engaged) is
+// carried through unchanged. This is the monotone "latch": once set,
+// `isActive` is never cleared by `activate`.
+// @coverage abstraction: Cryptol model of KeyStore::activate's post-state (one-byte isActive latch); implementation-level SAW proof pending.
+keyStoreActivatePost : [KS_BYTES][8] -> [16][8] -> [KS_BYTES][8]
+keyStoreActivatePost pre kid =
+  update pre ks_off_isActive newActive
+  where
+    newActive = if (ksEngaged pre) /\ (ksIdMatch pre kid) /\ ~(ksWasActive pre)
+                then 1
+                else pre @ ks_off_isActive
+
+// ── Cryptol properties (design-level corollaries, provable by :prove) ──
+
+// KS1: the isActive latch is monotone — activate never clears an
+// already-active key, regardless of which key id is presented.
+property KS1_ActivateLatchMonotone pre kid =
+  ((pre @ ks_off_isActive) <= 1) ==>
+    (keyStoreActivatePost pre kid @ ks_off_isActive)
+      >= (pre @ ks_off_isActive)
+
+// KS2: a successful Success result implies the key is active afterwards,
+// and AlreadyActive implies it was active before (and stays active).
+property KS2_SuccessImpliesActive pre kid =
+  ((pre @ ks_off_isActive) <= 1) /\ ((pre @ ks_off_engaged) <= 1) ==>
+    (keyStoreActivateRet pre kid == AC_Success_b ==>
+        (keyStoreActivatePost pre kid @ ks_off_isActive) == 1) /\
+    (keyStoreActivateRet pre kid == AC_AlreadyActive_b ==>
+        (keyStoreActivatePost pre kid @ ks_off_isActive) == 1)
+
+// KS3: activate only ever touches the isActive byte — every other byte
+// of the object image is preserved (frame condition). Stated as: the
+// slice before byte 128 and the slice after byte 128 are both carried
+// through unchanged.
+property KS3_OnlyIsActiveChanges pre kid =
+  (take`{128} (keyStoreActivatePost pre kid) == take`{128} pre) /\
+  (drop`{129} (keyStoreActivatePost pre kid) == drop`{129} pre)
+
+// KS4: IoFailure (no key / wrong key) leaves isActive completely
+// unchanged — a failed activation has no side effect on the flag.
+property KS4_IoFailureNoEffect pre kid =
+  (keyStoreActivateRet pre kid == AC_IoFailure_b) ==>
+    (keyStoreActivatePost pre kid @ ks_off_isActive)
+      == (pre @ ks_off_isActive)
+
+// ── KeyStore::provision — Trust-On-First-Use (TOFU) enrollment ─────────
+//
+// `provision(EnrollmentKey newKey) -> optional<EnrollmentKey>` is the
+// other half of the KeyStore lifecycle: it installs the FIRST key into
+// an empty store and is otherwise inert. Its body (held under the same
+// scoped_lock, modelled as a memory-neutral no-op here) does:
+//
+//   if key_ already engaged           -> return nullopt, store UNCHANGED
+//   else  newKey.isActive := false;   -> store newKey, engage; return Some
+//
+// This is the TOFU latch: once any key exists, provision can never
+// overwrite it (re-enrolment must go through the wipe path, out of
+// scope). The freshly stored key is always written INACTIVE — activation
+// is a separate, explicit step (`activate`), so provisioning alone never
+// yields a usable (active) credential.
+//
+// EnrollmentKey is a 64-byte POD: keyId@0 (16) · secret@16 (32) ·
+// isActive@48 (bool) · createdAt@56 (i64). Inside the KeyStore optional
+// it sits at object offset 80, so its isActive lands at 80+48 = 128 and
+// the optional engaged flag at 80+64 = 144 (consistent with activate).
+
+// @coverage abstraction: byte offset of EnrollmentKey.isActive within the 64-byte key record.
+ek_off_isActive = 48 : Integer
+
+// The body forces the incoming key INACTIVE before storing it.
+// @coverage abstraction: model of the `newKey.isActive = false` write the body performs prior to storing.
+newKeyStored : [64][8] -> [64][8]
+newKeyStored nk = update nk ek_off_isActive 0
+
+// Post-state object image. On the engaged (TOFU-locked) path nothing
+// changes; on the empty path the 64-byte (inactivated) key is written
+// into the optional payload at offset 80 and the engaged flag at 144 is
+// set. Bytes 0..79 (mutex) and 145..151 (tail padding) are preserved.
+// @coverage abstraction: Cryptol model of KeyStore::provision's post-state; implementation-level SAW proof pending.
+keyStoreProvisionPost : [KS_BYTES][8] -> [64][8] -> [KS_BYTES][8]
+keyStoreProvisionPost pre nk =
+  if (pre @ ks_off_engaged) == 1
+  then pre
+  else (take`{80} pre) # (newKeyStored nk) # [1] # (drop`{145} pre)
+
+// Returned optional<EnrollmentKey> image (72 bytes: 64-byte payload ·
+// engaged@64 · 7 bytes tail). ONLY meaningful on the empty (fresh) path,
+// where the body memcpy's the just-stored 72-byte optional out of the
+// object — so the tail bytes mirror the object's tail (pre[145..151]).
+// On the engaged path the return is nullopt and its payload is left
+// uninitialised (only the engaged byte, asserted 0, is defined); an
+// implementation-level proof of that path would need a partial
+// postcondition. (Implementation-level SAW proof pending.)
+// @coverage abstraction: Cryptol model of KeyStore::provision's returned optional on the fresh-enrolment path.
+keyStoreProvisionRet : [KS_BYTES][8] -> [64][8] -> [72][8]
+keyStoreProvisionRet pre nk = (newKeyStored nk) # [1] # (drop`{145} pre)
+
+// ── Cryptol properties (provable by :prove) ───────────────────────────
+
+// PROV1: TOFU frame condition — provisioning into an already-engaged
+// store is a no-op on the object image (the existing key is never
+// overwritten).
+property PROV1_TofuFrame pre nk =
+  ((pre @ ks_off_engaged) == 1) ==>
+    (keyStoreProvisionPost pre nk == pre)
+
+// PROV2: a freshly provisioned key is always stored INACTIVE — provision
+// alone never produces an active credential.
+property PROV2_FreshKeyInactive pre nk =
+  ((pre @ ks_off_engaged) == 0) ==>
+    ((keyStoreProvisionPost pre nk @ ks_off_isActive) == 0)
+
+// PROV3: provisioning into an empty store engages it (sets the optional
+// flag), so a subsequent provision hits the TOFU lock.
+property PROV3_FreshEngages pre nk =
+  ((pre @ ks_off_engaged) == 0) ==>
+    ((keyStoreProvisionPost pre nk @ ks_off_engaged) == 1)
+
+// PROV4: the returned key (fresh path) is itself inactive — the caller
+// receives a provisional, not-yet-usable credential.
+property PROV4_ReturnedKeyInactive pre nk =
+  (keyStoreProvisionRet pre nk @ ek_off_isActive) == 0
+
+// PROV5: provision never touches the mutex bytes (object offsets 0..79),
+// on either path — the lock region is carried through verbatim.
+property PROV5_MutexPreserved pre nk =
+  take`{80} (keyStoreProvisionPost pre nk) == take`{80} pre
+
+// ── KeyStore read accessors — hasKey() / isActive() ───────────────────
+// Both take the lock, read the optional, and return a bool without
+// mutating the object. hasKey() reports whether a key is engaged;
+// isActive() reports engaged AND the key's isActive flag.
+//
+// The implementation materializes C++ bool from stored bytes via i8->i1
+// truncation in LLVM (low-bit projection), not a strict byte == 1 test.
+// To match implementation behavior for fully symbolic object images, model
+// bool fields as low-bit views.
+private
+  boolOfByte : [8] -> Bit
+  // Cryptol indexes words MSB-first (`@ 0` is bit 7), while LLVM i8->i1
+  // truncation keeps the LSB. Use `@ 7` to mirror the implementation.
+  boolOfByte b = (b @ 7) == 1
+
+// @coverage abstraction: model of KeyStore::hasKey() (optional has_value).
+keyStoreHasKeyRet : [KS_BYTES][8] -> Bit
+keyStoreHasKeyRet pre = boolOfByte (pre @ ks_off_engaged)
+
+// @coverage abstraction: model of KeyStore::isActive() (engaged && key_->isActive).
+keyStoreIsActiveRet : [KS_BYTES][8] -> Bit
+keyStoreIsActiveRet pre = boolOfByte (pre @ ks_off_engaged) /\ boolOfByte (pre @ ks_off_isActive)
+
+// ACC1: an active store necessarily has a key — isActive() implies
+// hasKey(). This couples the two accessors so a caller can rely on
+// isActive() as a strictly stronger check.
+property ACC1_ActiveImpliesHasKey pre =
+  keyStoreIsActiveRet pre ==> keyStoreHasKeyRet pre
+
+// KeyStore::current returns the optional<EnrollmentKey> stored in `key_`.
+// In the flat KeyStore image this is the trailing 72 bytes:
+//   payload[64] at [80..143], has_value at [144], tail padding [145..151].
+// Model as an exact slice copy from the object image.
+keyStoreCurrentRet : [KS_BYTES][8] -> [72][8]
+keyStoreCurrentRet pre = drop`{80} pre

@@ -17,26 +17,29 @@ update `_appLogoPath` / `_appFaviconPath` to match.
 
 ## How to rebuild with branding
 
+The canonical wrapper is [`../scripts/regen-docs.ps1`](../scripts/regen-docs.ps1)
+— just run `pwsh -NoProfile -File scripts/regen-docs.ps1`. It drives
+pretty-specs' native `--pipeline` orchestrator with the branding flags already
+wired in. To invoke pretty-specs directly:
+
 ```powershell
 # From the repo root
-& C:\Users\ameliapayne\pretty-specs\pipeline.ps1 `
-    -Spec cryptol\SDEP.cry `
-    -Impl cpp\src\decision.cpp -ImplLang cpp `
-    -CxxIncludeDirs cpp\include -CxxStandard c++20 `
-    -ExtraClangFlags '-fexceptions','-fno-inline' `
-    -PrettySpecs C:\Users\ameliapayne\pretty-specs\target\release\pretty-specs.exe `
-    -SawSpecGen   C:\Users\ameliapayne\saw-spec-gen\target\release\saw-spec-gen.exe `
-    -SawSpecGenRoot C:\Users\ameliapayne\saw-spec-gen `
-    -Output docs -VerifyOutput verify_out `
-    -Logo    assets\sat-pudding.png `
-    -Favicon assets\fabicon.png
+& C:\Users\ameliapayne\pretty-specs\target\release\pretty-specs.exe cpp\saw\SDEP_cpp.cry `
+    --pipeline `
+    --impl cpp\src\decision.cpp --impl-lang cpp `
+    --saw-spec-gen C:\Users\ameliapayne\saw-spec-gen\target\release\saw-spec-gen.exe `
+    --cxx-include-dir cpp\include --cxx-standard c++20 `
+    --clang-flag=-fexceptions --clang-flag=-fno-inline `
+    -o docs --verify-output verify_out --docfx `
+    --logo    assets\sat-pudding.png `
+    --favicon assets\fabicon.png
 ```
 
-`-Logo` and `-Favicon` are optional — omit them for a plain build.
+`--logo` and `--favicon` are optional — omit them for a plain build.
 
-The pipeline driver passes `-SpecOnlyOnMissing` to `saw-spec-gen gen-verify` by
+The native pipeline passes `--spec-only-on-missing` to `saw-spec-gen` by
 default so that private Cryptol-only helpers (e.g. `packPad`, `derivePin`, the
 ABI extractor lemmas, etc.) — which by design have no separate C++
 implementation symbol — show up in the rendered docs as "not attempted /
-spec-only helper" rather than as red `error` entries. Pass
-`-SpecOnlyOnMissing:$false` to restore the old strict-error behaviour.
+spec-only helper" rather than as red `error` entries. Pass `--strict-on-missing`
+to restore the old strict-error behaviour.

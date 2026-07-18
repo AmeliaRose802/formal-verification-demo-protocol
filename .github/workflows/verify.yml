@@ -1,14 +1,15 @@
-name: Verify (SAW + Cryptol)
+name: Verify (SAW + Cryptol + TLA+)
 
-# Runs the four-layer demo_protocol verification on every PR and on
+# Runs the five-layer demo_protocol verification on every PR and on
 # pushes to main, on both Ubuntu and Windows runners.
 #
-# The 4 layers (see verify_all.ps1 for the full contract):
+# The 5 layers (see verify_all.ps1 for the full contract):
 #   1. SAW + Z3 — C++ decision functions ≡ Cryptol byte-width model
 #   2. SAW + Z3 — Rust decision functions ≡ Cryptol byte-width model
 #   3. Cryptol + Z3 — every `property` in cpp/saw/SDEP_cpp.cry holds
 #   4. Cryptol + Z3 — every gap in cryptol/SDEP_gaps.cry still produces
 #      a counterexample (= the documented attacker-visible gap is real)
+#   5. TLA+ TLC — abstract temporal MSP/SDEP state-machine checks
 #
 # Layer 2 (Rust) runs in its own `verify-rust-linux` job with
 # `continue-on-error: true` so its WIP status doesn't fail the
@@ -18,7 +19,7 @@ name: Verify (SAW + Cryptol)
 # main jobs.
 #
 # Toolchain (installed by scripts/ci-install.ps1, cached per-OS):
-#   LLVM 20.1.6, SAW 1.5 with bundled solvers, saw-spec-gen (latest),
+#   LLVM 20.1.6, SAW 1.5 with bundled solvers, saw-spec-gen (pinned tag),
 #   plus the in-workflow Rust stable toolchain (Rust job only).
 
 on:
@@ -28,6 +29,7 @@ on:
       - 'cpp/**'
       - 'rust/**'
       - 'cryptol/**'
+      - 'tla/**'
       - 'verify_all.ps1'
       - 'scripts/ci-install.ps1'
       - 'Dockerfile'
@@ -39,6 +41,7 @@ on:
       - 'cpp/**'
       - 'rust/**'
       - 'cryptol/**'
+      - 'tla/**'
       - 'verify_all.ps1'
       - 'scripts/ci-install.ps1'
       - 'Dockerfile'
@@ -248,6 +251,13 @@ jobs:
       # is the only thing that invalidates the cache.
       DEMO_LLVM_VERSION: '20.1.6'
       DEMO_SAW_VERSION: '1.5'
+      # saw-spec-gen release tag to install + embed in its cache key.
+      # MUST be an explicit tag, not 'latest': saw-spec-gen auto-cuts a
+      # release on every merge (PR #53), so 'latest' moves without any
+      # file change and the version-keyed cache below would never
+      # invalidate (stale binary -> e.g. missing --config). Keep this in
+      # sync with SAW_SPEC_GEN_TAG in the Dockerfile.
+      DEMO_SSG_VERSION: 'v0.1.12'
       # Cache-key generation suffix. Bump to invalidate all toolchain
       # caches without changing a tool version (e.g. corrupted cache).
       DEMO_CACHE_REV: 'v1'
@@ -281,20 +291,21 @@ jobs:
           path: ~/.demo_protocol/saw
           key: windows-demo_protocol-saw-${{ env.DEMO_SAW_VERSION }}-${{ env.DEMO_CACHE_REV }}
 
-      # saw-spec-gen tracks `latest` by default; its cache is small
-      # (<100 MB) so we key it on the installer-script hash. Cheap to
-      # rebuild when invalidated, and gets refreshed any time the
-      # script changes (which is also when a tag bump would land).
+      # saw-spec-gen is pinned to DEMO_SSG_VERSION (an explicit release
+      # tag) and the cache is keyed on it, mirroring the LLVM/SAW pattern
+      # above. A tag bump is the only thing that invalidates this cache —
+      # critical because saw-spec-gen tracks releases, not the installer
+      # script, so hashing ci-install.ps1 would miss new releases.
       - name: Restore saw-spec-gen cache
         id: restore-ssg
         uses: actions/cache/restore@v4
         with:
           path: ~/.demo_protocol/bin
-          key: windows-demo_protocol-ssg-${{ hashFiles('scripts/ci-install.ps1') }}-${{ env.DEMO_CACHE_REV }}
+          key: windows-demo_protocol-ssg-${{ env.DEMO_SSG_VERSION }}-${{ env.DEMO_CACHE_REV }}
 
       - name: Install verification toolchain
         shell: pwsh
-        run: pwsh -NoProfile -File scripts/ci-install.ps1 -WriteGithubPath -LlvmVersion $env:DEMO_LLVM_VERSION -SawVersion $env:DEMO_SAW_VERSION
+        run: pwsh -NoProfile -File scripts/ci-install.ps1 -WriteGithubPath -LlvmVersion $env:DEMO_LLVM_VERSION -SawVersion $env:DEMO_SAW_VERSION -SawSpecGenTag $env:DEMO_SSG_VERSION
 
       # Split restore/save so the (slow) tool install is still cached
       # even when verification itself fails. `if: always() && cache-hit

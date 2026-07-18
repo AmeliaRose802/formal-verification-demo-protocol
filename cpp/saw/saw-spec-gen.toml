@@ -1,0 +1,56 @@
+# saw-spec-gen project config for the SDEP C++ verification driver.
+#
+# Per-function spec-shaping used to live as a hand-coded `ExtraArgs`
+# PowerShell array in run.ps1 (invisible in review, easy to typo). As of
+# crystal-cryptal / saw-spec-gen's config-over-cli-flags change it lives
+# here instead: a versioned, reviewable TOML that diffs cleanly.
+#
+# Tables are keyed by the *Cryptol* function name passed via
+# `--cryptol-fn` (resolution order: per-function config -> global config
+# -> CLI flag). run.ps1 points gen-verify at this file with `--config`.
+
+# canonicalize_lp — output-pointer + return-value function.
+#   --cryptol-fn      canonicalize_lp_ret   (return value: 2 + nm + nb)
+#   --cryptol-fn-out  canonicalize_lp_post  (post-state of the out buffer)
+#
+# The two input buffers m/b are 4-byte allocations; `out` is the 10-byte
+# (2 + 2*MAX_LEN) output buffer.  `max_len_precond` pins each length to
+# the buffer width: saw-spec-gen's max-len-from-Cryptol-width inference
+# recognises the (m, nm) sibling pair and bounds nm on its own, but it
+# does not pair (b, nb), so nb still needs an explicit bound here. Listing
+# both keeps the proof's domain (nm,nb <= 4) declared and review-visible
+# rather than depending on a partial inference.
+[functions.canonicalize_lp_ret]
+in_buffer_size   = ["m=4", "b=4"]
+out_buffer_param = ["out=10"]
+cryptol_fn_out   = ["out=canonicalize_lp_post"]
+max_len_precond  = ["nm=4", "nb=4"]
+
+[functions.classifyCanonicalHost]
+in_buffer_size  = ["host=32"]
+max_len_precond = ["hostLen=32"]
+
+# key_store stateful methods (MSVC C++ ABI):
+#   - hidden `this` object state is modeled as an out-buffer for mutating ops,
+#   - keyId is a fixed-size UUID byte buffer.
+[functions.keyStoreActivateRet]
+out_buffer_param = ["this=152"]
+cryptol_fn_out   = ["this=keyStoreActivatePost"]
+in_buffer_size   = ["keyId=16"]
+
+[functions.keyStoreProvisionRet]
+out_buffer_param = ["this=152"]
+cryptol_fn_out   = ["this=keyStoreProvisionPost"]
+in_buffer_size   = ["keyId=16"]
+
+# key_store read-only accessors:
+# - const methods still consume a pointer to `this` (152-byte object image)
+# - no post-state out buffer
+[functions.keyStoreHasKeyRet]
+in_buffer_size = ["this=152"]
+
+[functions.keyStoreIsActiveRet]
+in_buffer_size = ["this=152"]
+
+[functions.keyStoreCurrentRet]
+in_buffer_size = ["this=152"]

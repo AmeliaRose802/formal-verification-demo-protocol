@@ -10,14 +10,15 @@ The **rendered docs site** (Cryptol model + per-function and per-property pages,
 
 ## What is proven
 
-The pipeline is four cooperating layers; together they transfer a security property proven over the Cryptol spec to a guarantee about the compiled binary.
+The pipeline is five cooperating layers; together they transfer a security property proven over the Cryptol spec to a guarantee about the compiled binary and check temporal state-machine safety at the model level.
 
 | Layer | Tool | Obligation | Source |
-|-------|------|------------|--------|
-| 1 | SAW + Z3 | Every C++ decision function in [cpp/include/sdep/](cpp/include/sdep/) is behaviorally equivalent to its Cryptol shim | [cpp/saw/SDEP_cpp.cry](cpp/saw/SDEP_cpp.cry) |
+| ----- | ---- | ---------- | ------ |
+| 1 | SAW + Z3 | The seven decision-surface functions in [cpp/src/decision.cpp](cpp/src/decision.cpp) are behaviorally equivalent to their Cryptol shims | [cpp/saw/SDEP_cpp.cry](cpp/saw/SDEP_cpp.cry) |
 | 2 | SAW + Z3 | Every pure decision function in [rust/src/lib.rs](rust/src/lib.rs) is behaviorally equivalent to its Cryptol shim | [rust/saw/SDEP_rust.cry](rust/saw/SDEP_rust.cry) |
 | 3 | Cryptol + Z3 | Every `property` declaration in the spec module holds | [cryptol/SDEP.cry](cryptol/SDEP.cry) |
 | 4 | Cryptol + Z3 (negative) | Every `property` in the gaps module **must produce a counterexample** — a Q.E.D. there means the spec has silently closed a documented gap | [cryptol/SDEP_gaps.cry](cryptol/SDEP_gaps.cry) |
+| 5 | TLA+ TLC | Abstract MSP/SDEP temporal model satisfies lifecycle and policy invariants (auto-skips if Java / `tla2tools.jar` is absent) | [tla/MSP.tla](tla/MSP.tla) |
 
 A property's guarantee transfers to the binary only if **every function it mentions** carries a SAW equivalence proof. Each rendered property page surfaces this transitively as an *Implementation equivalence* callout.
 
@@ -26,13 +27,15 @@ A property's guarantee transfers to the binary only if **every function it menti
 ## Quick start
 
 ```pwsh
-# Full pipeline (rebuilds bitcode, runs all 4 layers)
+# Full pipeline (rebuilds bitcode, runs all 5 layers)
 pwsh ./verify_all.ps1
 
 # Faster iteration
 pwsh ./verify_all.ps1 -SkipBuild       # reuse cached bitcode
 pwsh ./verify_all.ps1 -OnlyCryptol     # skip SAW layers
 pwsh ./verify_all.ps1 -OnlySaw         # skip Cryptol layers
+pwsh ./verify_all.ps1 -SkipTla         # skip TLA+ Layer 5
+pwsh ./verify_all.ps1 -OnlyTla         # run only TLA+ Layer 5
 pwsh ./verify_all.ps1 -SkipGaps        # skip Layer 4
 pwsh ./verify_all.ps1 -SkipRust        # skip Layer 2
 ```
@@ -43,8 +46,12 @@ Prerequisites: [SAW](https://github.com/GaloisInc/saw-script) (1.5+), [Cryptol](
 
 ## Repository layout
 
-```
-verify_all.ps1                Four-layer verification driver
+```text
+verify_all.ps1                Five-layer verification driver
+tla/
+    MSP.tla                   TLA+ model (temporal MSP/SDEP state machine)
+    MSP.cfg                   TLC model-checker config
+    run.ps1                   Layer 5 TLC driver
 docfx.json                    DocFX config — drives the published site
 cryptol/
     SDEP.cry                  Cryptol spec module (types + properties)
@@ -77,7 +84,7 @@ docs/                         DocFX source (generated from Cryptol)
 - [pretty-specs](https://github.com/AmeliaRose802/pretty-specs) — renders Cryptol modules to DocFX-flavored Markdown with per-function and per-property cross-references; emits the contents of [docs/](docs/).
 - [saw-spec-gen](https://github.com/AmeliaRose802/saw-spec-gen) — auto-generates SAW spec scaffolding from clang AST and `mir-json` so Layer 1 and Layer 2 specs stay aligned with the C++/Rust ABIs.
 
-The full doc-regeneration + verification pipeline (`pipeline.ps1` from `pretty-specs`) drives the verifiers above and rewrites [docs/](docs/) on every run; the GitHub Actions workflow at [.github/workflows/pages.yml](.github/workflows/pages.yml) then renders that into the published site.
+The full doc-regeneration + verification pipeline (pretty-specs' native `--pipeline`, wrapped by [scripts/regen-docs.ps1](scripts/regen-docs.ps1)) drives the verifiers above and rewrites [docs/](docs/) on every run; the GitHub Actions workflow at [.github/workflows/pages.yml](.github/workflows/pages.yml) then renders that into the published site.
 
 ---
 
@@ -93,12 +100,14 @@ SDEP's byte-level canonicalization (length-prefixed framing in [`canonLenPrefixe
 
 See the rendered site for the current per-function and per-property verdicts. The headline numbers from the last full run:
 
-- Layer 1 (C++ ≡ Cryptol): 7/7 target functions verified
+- Layer 1 (C++ decision surface ≡ Cryptol): 7/7 target functions verified
 - Layer 2 (Rust ≡ Cryptol): 6/6 pure decision functions verified
 - Layer 3 (Cryptol properties): 29/29 properties verified
 - Layer 4 (negative gaps): 6/6 gaps exhibited as expected
 
 Counterexamples found by the proofs during development (e.g. signed-overflow in `isValidRequestDate` for timestamps near `INT64_MIN`) are recorded in [FINDINGS.md](FINDINGS.md).
+
+Coverage transparency note: the 7/7 figure above is intentionally scoped to the decision-surface targets in `cpp/src/decision.cpp`. The full implementation inventory (all `cpp/src/*.cpp`) is reported on the rendered Coverage Matrix page so implemented-but-unverified functions are explicitly listed.
 
 ---
 

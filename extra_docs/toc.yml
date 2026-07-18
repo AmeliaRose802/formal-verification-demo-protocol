@@ -14,3 +14,5 @@
   href: sdep-in-action.md
 - name: Regenerate & Publish
   href: regenerate-and-publish.md
+- name: TLA+ Model Checking
+  href: tla-plus-model-checking.md

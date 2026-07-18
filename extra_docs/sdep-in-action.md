@@ -49,7 +49,7 @@ Out of scope unless separately modeled and verified:
 
 SAW works by symbolically executing code all the way to the end, then handing the resulting formula to Z3. That is great for straight-line decision logic, but it runs into trouble the moment a loop can run an unbounded number of times. If the trip count depends on a symbolic value, there is no single formula to hand off — the symbolic executor would have to unroll the loop forever.
 
-Some of the SDEP functions do have loops. The request canonicalization helpers (the length-prefixed encoders like `canonicalize_lp` and `canonLenPrefixed`) walk over input bytes field by field. To verify them we bound the input so the loop has a fixed, finite trip count. Concretely we fix a maximum length `MAX_LEN = K`, and SAW unrolls the loop `K` times into ordinary straight-line code that Z3 can reason about.
+Some of the SDEP functions do have loops. The request canonicalization helpers (the length-prefixed encoders like `canonicalize_lp` and the bounded `encodeLP2`/`encodeRecs` model encoders) walk over input bytes field by field. To verify them we bound the input so the loop has a fixed, finite trip count. Concretely we fix a maximum length `MAX_LEN = K`, and SAW unrolls the loop `K` times into ordinary straight-line code that Z3 can reason about.
 
 The trade-off is that the proof only covers inputs up to that bound. A proof at `MAX_LEN = 16` says nothing about a 17-byte input. So we pick a bound that covers the real protocol's field sizes and treat anything beyond it as out of scope.
 

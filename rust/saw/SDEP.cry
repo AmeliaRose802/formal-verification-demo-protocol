@@ -354,73 +354,167 @@ property P22_ActivationIoFailureIsInternalError activationResult =
 // at every field length >= 2.)
 //
 // FIX. The encoder now prepends each variable-length field with its byte
-// length (a fixed-width unsigned length tag). A parser reads exactly the
-// declared number of bytes for each field, so no byte inside any field can
-// be mistaken for a boundary. P23 below proves injectivity of this encoder.
+// length (an unsigned length tag). A parser reads exactly the declared
+// number of bytes for each field, so no byte inside any field can be
+// mistaken for a boundary. P23 below proves injectivity of this encoder by
+// exhibiting a DECODER and proving decode∘encode = id — which only holds
+// because the decoder reads the tag to find each boundary (the tag is
+// load-bearing). P24/P25 do the same for the header/query record-list.
 //
 // SCOPE OF THIS PROOF (bounded model checking).
 // Cryptol + Z3 bit-blasts a fixed-size formula and hands it to SAT; there is
-// no loop induction. The proof is over two fields of up to FL = 16 bytes
-// each. It covers every concrete configuration at that size; the structural
-// argument (a fixed-width length tag uniquely determines field boundaries)
-// extends to arbitrary n and is what the production C++ / Rust encoders
-// implement with a 64-bit big-endian length tag. A native-induction prover
-// (Dafny / F* / Lean / Coq) or a SAW Hoare-logic proof over the loop in
-// canonicalizePayload would extend the bound to all n.
+// no loop induction. The proof is over two variable-length fields of up to
+// FL = 4 bytes each (P23) and a count-prefixed list of up to 2 such items
+// (P24/P25). It covers every concrete configuration at those bounds; the
+// structural argument (a length tag uniquely determines each field's extent,
+// regardless of its width) is what the production C++ / Rust encoders
+// implement with a 64-bit big-endian tag — but those encoders are UNVERIFIED
+// at the implementation level. A native-induction prover (Dafny / F* / Lean /
+// Coq) or a SAW Hoare-logic proof over the loop in canonicalizePayload would
+// extend the bound to all n.
 ////////////////////////////////////////////////////////////////////////////////
 
 // Field length in bytes (parameter for the bounded model).
-type FL = 16
+type FL = 4
 
 // Index/length width: one byte is more than enough for FL <= 127.
 type IW = 8
 
-// A field is normalized iff bytes at indices >= n are zero. This is the
-// invariant the C++ / Rust code maintains implicitly (it only reads the
-// first n bytes); making it explicit keeps logically-distinct requests
-// distinct as Cryptol values, so any collision the solver finds is a *real*
-// one.
-canonNormalized : [IW] -> [FL][8] -> Bit
-canonNormalized n b =
-    and [ (i >= n) ==> ((b @ i) == 0)
+// A bounded variable-length field: a logical length `len` and a fixed-size
+// storage buffer `buf`. "Normalized" means bytes past `len` are zero, so
+// two fields that differ only in unused padding are the same logical value
+// and any collision the solver finds is a *real* one.
+type LpField = { len : [IW], buf : [FL][8] }
+
+// Number of length-prefixed items a record-list (header / query MAP) may
+// carry in the bounded model, and the total bytes of its encoding.
+type MaxItems  = 2
+type RecBufLen = 1 + MaxItems * (1 + FL)
+
+private
+
+  lpZeroField : LpField
+  lpZeroField = { len = 0, buf = zero }
+
+  lpFieldNormalized : LpField -> Bit
+  lpFieldNormalized f =
+    (f.len <= (`FL : [IW])) /\
+    and [ (i >= f.len) ==> ((f.buf @ i) == 0)
         | i <- ([0 .. FL - 1] : [FL][IW]) ]
 
-// Length-prefixed canonicalization. Each variable-length field is preceded
-// by its length tag: a parser reads the tag, then exactly that many bytes,
-// then the next tag, then exactly that many bytes. No byte inside any field
-// can be misread as a boundary, so the encoding is structurally injective.
+// Length-prefix canonicalization, modelled HONESTLY. The earlier model
+// concatenated FIXED-width fields (`[nm] # m # [nb] # b` with m,b : [16][8]);
+// there the boundaries came from the type widths, so decomposition was
+// trivially unique and the length tags did NO work. Here each field's bytes
+// occupy only the first `len` positions of its slot and the encoder packs
+// the next field IMMEDIATELY after, so the second tag's position depends on
+// the first length. Recovering the boundaries REQUIRES reading the tag, and
+// we prove injectivity the honest way: via a decoder and a decode∘encode
+// roundtrip (`decode (encode x) == x`), which forces the tag to be
+// load-bearing.
 //
-// The Cryptol bound uses an 8-bit length tag (sufficient for FL <= 255);
-// production uses a 64-bit big-endian tag (sufficient for any std::size_t /
-// usize field). The injectivity argument is identical for both widths.
-canonLenPrefixed : [IW] -> [FL][8] -> [IW] -> [FL][8] -> [2 * FL + 2][8]
-canonLenPrefixed nm m nb b = [nm] # m # [nb] # b
+// This bounded model uses an 8-bit tag, FL = 4, and <= 2 records. The
+// production encoders (canonicalize_payload / canonicalize_headers /
+// canonicalize_query) use a 64-bit big-endian tag over usize-length fields
+// and are UNVERIFIED at the implementation level; the structural argument
+// extends to those widths but is not mechanically transported to them here.
+private
 
-// P23: Distinct normalized requests have distinct canonical byte streams.
-// (Length-prefixed canonicalization is byte-injective.)
-// EXPECTED VERDICT: PASS. This is the safety property the production
-// canonicalizer satisfies after the delimiter -> length-prefix fix.
-property P23_DistinctRequestsHaveDistinctCanonicalBytes
-    nm1 m1 nb1 b1 nm2 m2 nb2 b2 =
-  ( (nm1 <= (`FL : [IW])) /\ (nb1 <= (`FL : [IW])) /\
-    (nm2 <= (`FL : [IW])) /\ (nb2 <= (`FL : [IW])) /\
-    canonNormalized nm1 m1 /\ canonNormalized nb1 b1 /\
-    canonNormalized nm2 m2 /\ canonNormalized nb2 b2 /\
-    canonLenPrefixed nm1 m1 nb1 b1 == canonLenPrefixed nm2 m2 nb2 b2 )
-    ==> ((nm1, m1, nb1, b1) == (nm2, m2, nb2, b2))
+  // encodeLP2 writes [f.len] f.buf[0..f.len) [g.len] g.buf[0..g.len), then
+  // zero-pads; decodeLP2 reads each tag and takes exactly that many bytes.
+  // Data-dependent indices are clamped `% bl` to stay in range (identity for
+  // normalized inputs).
+  encodeLP2 : LpField -> LpField -> [2 * FL + 2][8]
+  encodeLP2 f g =
+      [ byteAt i | i <- ([0 .. 2 * FL + 1] : [2 * FL + 2][IW]) ]
+    where
+      nf   = f.len
+      ng   = g.len
+      gTag = nf + 1
+      byteAt : [IW] -> [8]
+      byteAt i =
+        if  i == 0                                    then nf
+         | (i >= 1)        /\ (i <= nf)                then f.buf @ ((i - 1)        % (`FL : [IW]))
+         |  i == gTag                                  then ng
+         | (i >= gTag + 1) /\ (i < gTag + 1 + ng)      then g.buf @ ((i - gTag - 1) % (`FL : [IW]))
+        else                                                0
+
+  decodeLP2 : [2 * FL + 2][8] -> (LpField, LpField)
+  decodeLP2 buf = (f, g)
+    where
+      bl   = (`(2 * FL + 2) : [IW])
+      nf   = buf @ 0
+      fbuf = [ if j < nf then buf @ ((1 + j) % bl) else 0
+             | j <- ([0 .. FL - 1] : [FL][IW]) ]
+      ng   = buf @ ((nf + 1) % bl)
+      gbuf = [ if j < ng then buf @ ((nf + 2 + j) % bl) else 0
+             | j <- ([0 .. FL - 1] : [FL][IW]) ]
+      f = { len = nf, buf = fbuf }
+      g = { len = ng, buf = gbuf }
+
+  // Record-list (header / query MAP): a count tag followed by a sequence of
+  // length-prefixed items <count> <len0> bytes0 <len1> bytes1 ... . This is
+  // the shape behind the classic "header smuggling" collision; length +
+  // count tags make boundaries AND the record count recoverable only by
+  // reading the tags.
+  itemsNormalized : [IW] -> LpField -> LpField -> Bit
+  itemsNormalized c a0 a1 =
+    (c <= (`MaxItems : [IW])) /\
+    lpFieldNormalized a0 /\ lpFieldNormalized a1 /\
+    ((c < 1) ==> (a0 == lpZeroField)) /\
+    ((c < 2) ==> (a1 == lpZeroField))
+
+  encodeRecs : [IW] -> LpField -> LpField -> [RecBufLen][8]
+  encodeRecs c a0 a1 =
+      [ byteAt i | i <- ([0 .. RecBufLen - 1] : [RecBufLen][IW]) ]
+    where
+      l0 = a0.len
+      l1 = a1.len
+      t0 = 1
+      t1 = 2 + l0
+      byteAt : [IW] -> [8]
+      byteAt i =
+        if  i == 0                                        then c
+         | (c >= 1) /\ (i == t0)                          then l0
+         | (c >= 1) /\ (i >= t0 + 1) /\ (i < t0 + 1 + l0) then a0.buf @ ((i - t0 - 1) % (`FL : [IW]))
+         | (c >= 2) /\ (i == t1)                          then l1
+         | (c >= 2) /\ (i >= t1 + 1) /\ (i < t1 + 1 + l1) then a1.buf @ ((i - t1 - 1) % (`FL : [IW]))
+        else                                                   0
+
+  decodeRecs : [RecBufLen][8] -> ([IW], LpField, LpField)
+  decodeRecs buf = (c, a0, a1)
+    where
+      rl    = (`(RecBufLen) : [IW])
+      c     = buf @ 0
+      l0    = if c >= 1 then buf @ 1 else 0
+      a0buf = [ if (c >= 1) /\ (j < l0) then buf @ ((2 + j) % rl) else 0
+              | j <- ([0 .. FL - 1] : [FL][IW]) ]
+      l1    = if c >= 2 then buf @ ((2 + l0) % rl) else 0
+      a1buf = [ if (c >= 2) /\ (j < l1) then buf @ ((2 + l0 + 1 + j) % rl) else 0
+              | j <- ([0 .. FL - 1] : [FL][IW]) ]
+      a0 = { len = l0, buf = a0buf }
+      a1 = { len = l1, buf = a1buf }
+
+// P23: Two adjacent variable-length fields decode back to themselves, so
+// distinct normalized requests have distinct canonical byte streams. This
+// is the top-level method|body framing the SAW-verified canonicalize_lp
+// emits; the tag, not the slot width, marks the f|g boundary.
+// EXPECTED VERDICT: PASS. The safety property the production canonicalizer
+// satisfies after the delimiter -> length-prefix fix.
+property P23_DistinctRequestsHaveDistinctCanonicalBytes f g =
+  ( lpFieldNormalized f /\ lpFieldNormalized g )
+    ==> (decodeLP2 (encodeLP2 f g) == (f, g))
 
 ////////////////////////////////////////////////////////////////////////////////
 // 6.b Sub-canonicalizer injectivity — Tier-1 follow-up to P23.
 //
-// The P23 fix length-prefixes the FIVE TOP-LEVEL fields of the canonical
-// payload (method | body | canonHeaders | path | canonQuery). The inner
-// canonicalizers `canonicalize_headers` and `canonicalize_query` now use
-// the SAME length-prefix scheme for every individual name and value they
-// emit (an 8-byte big-endian length tag followed by the raw bytes), so
-// they are structurally byte-injective in their input map by the same
-// argument that proves P23: a parser reads <tag, name, tag, value> in
-// fixed order with no byte inside any name or value capable of being
-// misread as a record boundary.
+// The header and query canonicalizers serialize a MAP as a count tag
+// followed by a sequence of length-prefixed items
+// (<count> <len0> bytes0 <len1> bytes1 ...). The model below (`encodeRecs`
+// / `decodeRecs`) proves that encoding byte-injective the same honest way
+// P23 does: a decoder reads the count and each length tag and recovers the
+// exact record list, so both the per-item boundaries AND the record count
+// are tag-determined.
 //
 // Historical note: an earlier revision joined records with '\n' (headers)
 // or '&' (query) and fields inside each record with ':' / '='. That
@@ -430,32 +524,26 @@ property P23_DistinctRequestsHaveDistinctCanonicalBytes
 // encoding were exhibited in rust/tests/validate_canon_gaps.rs.
 ////////////////////////////////////////////////////////////////////////////////
 
-// P24: Distinct normalized header lists have distinct canonical byte
-// streams. (`canonicalize_headers` is byte-injective in the header map.)
-// The production encoder length-prefixes every name and value with an
-// 8-byte big-endian tag (same shape as canonicalizePayload), so distinct
-// normalized header records produce distinct canonical byte streams.
+// P24: A header MAP (count-prefixed list of length-prefixed items) decodes
+// back to itself, so distinct normalized header lists have distinct
+// canonical byte streams. The roundtrip forces both the per-item length
+// tags and the record count to be load-bearing — closing the header-
+// smuggling gap where a value byte faked a record boundary.
 // EXPECTED VERDICT: PASS — the encoding closes the smuggling gap.
-property P24_DistinctHeadersHaveDistinctCanonicalBytes nm1 m1 nb1 b1 nm2 m2 nb2 b2 =
-  ( (nm1 <= (`FL : [IW])) /\ (nb1 <= (`FL : [IW])) /\
-    (nm2 <= (`FL : [IW])) /\ (nb2 <= (`FL : [IW])) /\
-    canonNormalized nm1 m1 /\ canonNormalized nb1 b1 /\
-    canonNormalized nm2 m2 /\ canonNormalized nb2 b2 /\
-    canonLenPrefixed nm1 m1 nb1 b1 == canonLenPrefixed nm2 m2 nb2 b2 )
-    ==> ((nm1, m1, nb1, b1) == (nm2, m2, nb2, b2))
+property P24_DistinctHeadersHaveDistinctCanonicalBytes c a0 a1 =
+  itemsNormalized c a0 a1
+    ==> (decodeRecs (encodeRecs c a0 a1) == (c, a0, a1))
 
-// P25: Distinct normalized query lists have distinct canonical byte
-// streams. (`canonicalize_query` is byte-injective in the query map.)
-// Same length-prefix shape; no separators are needed because the length
-// tag uniquely marks each record boundary.
+// P25: The query MAP reuses the BYTE-IDENTICAL `encodeRecs` encoder as the
+// header map (P24). This isolates the "can't add or drop a record" half of
+// the smuggling guarantee: two normalized record-lists that serialize to
+// the same bytes must carry the same number of records, so an attacker
+// cannot smuggle an extra query parameter in (or out).
 // EXPECTED VERDICT: PASS.
-property P25_DistinctQueriesHaveDistinctCanonicalBytes nm1 m1 nb1 b1 nm2 m2 nb2 b2 =
-  ( (nm1 <= (`FL : [IW])) /\ (nb1 <= (`FL : [IW])) /\
-    (nm2 <= (`FL : [IW])) /\ (nb2 <= (`FL : [IW])) /\
-    canonNormalized nm1 m1 /\ canonNormalized nb1 b1 /\
-    canonNormalized nm2 m2 /\ canonNormalized nb2 b2 /\
-    canonLenPrefixed nm1 m1 nb1 b1 == canonLenPrefixed nm2 m2 nb2 b2 )
-    ==> ((nm1, m1, nb1, b1) == (nm2, m2, nb2, b2))
+property P25_DistinctQueriesHaveDistinctCanonicalBytes c1 a1 b1 c2 a2 b2 =
+  ( itemsNormalized c1 a1 b1 /\ itemsNormalized c2 a2 b2 /\
+    encodeRecs c1 a1 b1 == encodeRecs c2 a2 b2 )
+    ==> (c1 == c2)
 
 ////////////////////////////////////////////////////////////////////////////////
 // 6.c enforceAccess matrix-coverage gap — Tier-3 follow-up.

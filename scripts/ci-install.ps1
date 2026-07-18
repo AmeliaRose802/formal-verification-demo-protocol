@@ -11,7 +11,7 @@
     Tools installed:
       - LLVM ${LlvmVersion} (clang, llvm-as, opt, llvm-link)        → $HOME/.demo_protocol/llvm
       - SAW ${SawVersion} with bundled solvers (saw, cryptol, z3)   → $HOME/.demo_protocol/saw
-      - saw-spec-gen (latest release; binary used by both run.ps1s)  → $HOME/.demo_protocol/bin
+            - saw-spec-gen (pinned release tag; binary used by both run.ps1s)  → $HOME/.demo_protocol/bin
 
     Tools assumed to already be on PATH (installed by the workflow):
       - pwsh, rustc, cargo, rustup
@@ -30,7 +30,7 @@
     https://github.com/llvm/llvm-project/releases.
 
 .PARAMETER SawSpecGenTag
-    saw-spec-gen release tag to install (default: 'latest'). Pulled
+    saw-spec-gen release tag to install (default: 'v0.1.12'). Pulled
     from https://github.com/AmeliaRose802/saw-spec-gen/releases.
 
 .PARAMETER Force
@@ -46,7 +46,7 @@
 param(
     [string] $SawVersion    = '1.5',
     [string] $LlvmVersion   = '20.1.6',
-    [string] $SawSpecGenTag = 'latest',
+    [string] $SawSpecGenTag = 'v0.1.12',
     [switch] $Force,
     [switch] $WriteGithubPath
 )
