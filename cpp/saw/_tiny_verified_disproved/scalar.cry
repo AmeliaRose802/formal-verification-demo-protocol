@@ -1,0 +1,4 @@
+module scalar where
+
+id_spec : [8] -> [8]
+id_spec x = x

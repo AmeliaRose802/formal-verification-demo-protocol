@@ -1,14 +1,15 @@
-name: Verify (SAW + Cryptol)
+name: Verify (SAW + Cryptol + TLA+)
 
-# Runs the four-layer demo_protocol verification on every PR and on
+# Runs the five-layer demo_protocol verification on every PR and on
 # pushes to main, on both Ubuntu and Windows runners.
 #
-# The 4 layers (see verify_all.ps1 for the full contract):
+# The 5 layers (see verify_all.ps1 for the full contract):
 #   1. SAW + Z3 — C++ decision functions ≡ Cryptol byte-width model
 #   2. SAW + Z3 — Rust decision functions ≡ Cryptol byte-width model
 #   3. Cryptol + Z3 — every `property` in cpp/saw/SDEP_cpp.cry holds
 #   4. Cryptol + Z3 — every gap in cryptol/SDEP_gaps.cry still produces
 #      a counterexample (= the documented attacker-visible gap is real)
+#   5. TLA+ TLC — abstract temporal MSP/SDEP state-machine checks
 #
 # Layer 2 (Rust) runs in its own `verify-rust-linux` job with
 # `continue-on-error: true` so its WIP status doesn't fail the
@@ -18,7 +19,7 @@ name: Verify (SAW + Cryptol)
 # main jobs.
 #
 # Toolchain (installed by scripts/ci-install.ps1, cached per-OS):
-#   LLVM 20.1.6, SAW 1.5 with bundled solvers, saw-spec-gen (latest),
+#   LLVM 20.1.6, SAW 1.5 with bundled solvers, saw-spec-gen (pinned tag),
 #   plus the in-workflow Rust stable toolchain (Rust job only).
 
 on:
@@ -28,6 +29,7 @@ on:
       - 'cpp/**'
       - 'rust/**'
       - 'cryptol/**'
+      - 'tla/**'
       - 'verify_all.ps1'
       - 'scripts/ci-install.ps1'
       - 'Dockerfile'
@@ -39,6 +41,7 @@ on:
       - 'cpp/**'
       - 'rust/**'
       - 'cryptol/**'
+      - 'tla/**'
       - 'verify_all.ps1'
       - 'scripts/ci-install.ps1'
       - 'Dockerfile'
@@ -254,7 +257,7 @@ jobs:
       # file change and the version-keyed cache below would never
       # invalidate (stale binary -> e.g. missing --config). Keep this in
       # sync with SAW_SPEC_GEN_TAG in the Dockerfile.
-      DEMO_SSG_VERSION: 'v0.1.1'
+      DEMO_SSG_VERSION: 'v0.1.12'
       # Cache-key generation suffix. Bump to invalidate all toolchain
       # caches without changing a tool version (e.g. corrupted cache).
       DEMO_CACHE_REV: 'v1'

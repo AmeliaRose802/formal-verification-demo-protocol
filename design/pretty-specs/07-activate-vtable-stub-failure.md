@@ -1,4 +1,4 @@
-# One-pager: why `activate` still fails after #57
+# One-pager: historical vtable-stub blocker on `activate` (now resolved locally)
 
 **Audience:** saw-spec-gen team  
 **Context date:** 2026-07-09  
@@ -6,16 +6,30 @@
 
 ## Executive summary
 
-The recent #57 fix is present and working for its intended regression test, but
-`activate` still fails in this repro because generation emits an `Unknown`
-vtable artifact that is internally inconsistent:
+This note records a blocker that was real when written, but it is no longer the
+first live blocker in the current local build.
+
+At the time, `activate` failed because generation emitted an `Unknown`
+vtable artifact that was internally inconsistent:
 
 - `verify.saw` requires loading `vtable_stubs.bc`
 - generation only emits `vtable_stubs.ll`
 - that `.ll` cannot assemble because it references undefined symbols:
   `@unknown__destroy_stub` and `@unknown__delete_this_stub`
 
-So verification fails before we reach the actual function proof obligations.
+So verification failed before reaching the actual function proof obligations.
+
+## Current status (2026-07-09)
+
+This specific blocker appears resolved in the current local saw-spec-gen build:
+
+- no `vtable_stubs.*` artifact is emitted for the current `activate` repro,
+- generated `verify.saw` uses the single-module path,
+- verification proceeds into SAW symbolic execution and now fails later at the
+  mutex ownership-level helper path (`_Verify_ownership_levels`).
+
+So this note should now be read as historical context, not as the current
+front-of-queue blocker.
 
 ## Are we using the locally compiled fixed binary?
 
@@ -56,7 +70,7 @@ Manual assembly confirms invalid IR:
 
 ## Why this still happens even after #57
 
-#57 correctly gates many incidental-polymorphism cases (its e2e regression case
+Issue #57 correctly gates many incidental-polymorphism cases (its e2e regression case
 passes), but this repro appears to take a different path:
 
 - some `Unknown` class/vtable setup is still emitted,

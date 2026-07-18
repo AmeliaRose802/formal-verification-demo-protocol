@@ -25,3 +25,32 @@ in_buffer_size   = ["m=4", "b=4"]
 out_buffer_param = ["out=10"]
 cryptol_fn_out   = ["out=canonicalize_lp_post"]
 max_len_precond  = ["nm=4", "nb=4"]
+
+[functions.classifyCanonicalHost]
+in_buffer_size  = ["host=32"]
+max_len_precond = ["hostLen=32"]
+
+# key_store stateful methods (MSVC C++ ABI):
+#   - hidden `this` object state is modeled as an out-buffer for mutating ops,
+#   - keyId is a fixed-size UUID byte buffer.
+[functions.keyStoreActivateRet]
+out_buffer_param = ["this=152"]
+cryptol_fn_out   = ["this=keyStoreActivatePost"]
+in_buffer_size   = ["keyId=16"]
+
+[functions.keyStoreProvisionRet]
+out_buffer_param = ["this=152"]
+cryptol_fn_out   = ["this=keyStoreProvisionPost"]
+in_buffer_size   = ["keyId=16"]
+
+# key_store read-only accessors:
+# - const methods still consume a pointer to `this` (152-byte object image)
+# - no post-state out buffer
+[functions.keyStoreHasKeyRet]
+in_buffer_size = ["this=152"]
+
+[functions.keyStoreIsActiveRet]
+in_buffer_size = ["this=152"]
+
+[functions.keyStoreCurrentRet]
+in_buffer_size = ["this=152"]

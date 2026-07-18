@@ -44,6 +44,14 @@ enum class AccessMode : std::uint8_t { Off, Audit, Enforce };
 
 enum class AccessDecision : std::uint8_t { Allow, Deny, NoRule };
 
+// Bounded host canonicalization class used by URL route-matching helpers.
+enum class CanonHostClass : std::uint8_t {
+    Imds,
+    WireServer,
+    Unknown,
+    UserinfoPresent,
+};
+
 // Result of enforceAccess (§4.5).
 struct EnforceOutcome {
     bool allowed;

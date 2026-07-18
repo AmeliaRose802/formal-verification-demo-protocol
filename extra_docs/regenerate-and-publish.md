@@ -72,23 +72,17 @@ gh run watch  # picks the most recent run
 
 ## What `scripts/regen-docs.ps1` actually runs
 
-The script is a thin wrapper around `pretty-specs --pipeline` and now passes
-**all** C++ implementation files (`cpp/src/*.cpp`) as `--impl` inputs so the
-implementation inventory is complete. The equivalent direct invocation shape is:
+The script is a thin wrapper around `pretty-specs --pipeline` and passes the
+canonical decision-function translation unit (`cpp/src/decision.cpp`) as the
+`--impl` input. The equivalent direct invocation shape is:
 
 ```powershell
 & C:\Users\ameliapayne\pretty-specs\target\release\pretty-specs.exe cpp\saw\SDEP_cpp.cry `
    --pipeline `
-   --impl cpp\src\auth.cpp `
-   --impl cpp\src\canonical.cpp `
-   --impl cpp\src\controller.cpp `
-   --impl cpp\src\decision.cpp `
-   --impl cpp\src\hmac.cpp `
-   --impl cpp\src\key_store.cpp `
-   --impl cpp\src\uuid.cpp --impl-lang cpp `
+   --impl cpp\src\decision.cpp --impl-lang cpp `
    --saw-spec-gen C:\Users\ameliapayne\saw-spec-gen\target\release\saw-spec-gen.exe `
    --cxx-include-dir cpp\include --cxx-standard c++20 `
-   --clang-flag -fexceptions --clang-flag -fno-inline `
+   --clang-flag=-fexceptions --clang-flag=-fno-inline `
    --verify-output verify_out --manifest-output proof_manifest.json `
    -o docs --docfx `
    --extra-docs 'extra_docs:Formal Verification' `

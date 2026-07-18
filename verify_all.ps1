@@ -1,6 +1,6 @@
 # End-to-end SDEP verification.
 #
-# Four-layer proof obligation:
+# Five-layer proof obligation:
 #   (1) SAW + Z3: every C++ decision function in cpp/include/sdep/*.hpp
 #       is behaviorally equivalent to its byte-width Cryptol model in
 #       cpp/saw/SDEP_cpp.cry.
@@ -17,6 +17,9 @@
 #       NOT meet — each must DISPROVE with a counterexample. A
 #       Q.E.D. there means the gap was silently closed and the
 #       "Known Gaps" row in the rendered docs site must be updated.
+#   (5) TLA+ TLC model checking (optional): the abstract MSP/SDEP state
+#       machine in tla/MSP.tla satisfies key temporal safety properties.
+#       This layer auto-skips when Java or tla2tools.jar is not present.
 #
 # Layer 2 currently still references SDEP_rust.cry; the Rust↔property
 # chain will be unified in a follow-up.
@@ -26,6 +29,8 @@
 #   pwsh ./verify_all.ps1 -SkipBuild    # reuse cached bitcode
 #   pwsh ./verify_all.ps1 -OnlyCryptol  # skip both SAW layers
 #   pwsh ./verify_all.ps1 -OnlySaw      # skip the Cryptol layers
+#   pwsh ./verify_all.ps1 -SkipTla       # skip Layer 5
+#   pwsh ./verify_all.ps1 -OnlyTla       # run only Layer 5
 #   pwsh ./verify_all.ps1 -SkipGaps     # skip Layer 4
 #   pwsh ./verify_all.ps1 -SkipRust     # skip Layer 2
 
@@ -34,12 +39,22 @@ param(
     [switch] $SkipBuild,
     [switch] $OnlyCryptol,
     [switch] $OnlySaw,
+    [switch] $SkipTla,
+    [switch] $OnlyTla,
     [switch] $SkipGaps,
     [switch] $SkipRust
 )
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
+
+$runTlaOnly = $OnlyTla.IsPresent
+if ($runTlaOnly) {
+    $OnlyCryptol = $true
+    $OnlySaw     = $true
+    $SkipRust    = $true
+    $SkipGaps    = $true
+}
 
 # Auto-source the toolchain env file written by scripts/ci-install.ps1
 # if the user hasn't already set the per-tool env vars in this shell.
@@ -64,6 +79,7 @@ $sawResults     = @()   # objects: @{ Fn=...; Verdict=... }
 $rustResults    = @()   # objects: @{ Fn=...; Verdict=... }
 $cryptolResults = @()   # objects: @{ Property=...; Verdict=...; Detail=... }
 $gapResults     = @()   # objects: @{ Property=...; Verdict=...; Detail=... }
+$tlaResults     = @()   # objects: @{ Check=...; Verdict=...; Detail=... }
 
 # ──────────────────────────────────────────────────────────────────────
 # Layer 1: SAW — C++ ≡ Cryptol byte-width model
@@ -87,7 +103,7 @@ if (-not $OnlyCryptol) {
     # far more reliable than scraping the Format-Table output.
     $targets = @('authenticate','isValidRequestDate','provisionKey',
                  'enrollDevice','enforceAccess','getStatus',
-                 'canonicalize_lp')
+                 'canonicalize_lp','classifyCanonicalHost')
 
     # Functions blocked by an open saw-spec-gen bug (see
     # SAW_SPEC_GEN_BUG_REPORT_*.md). These are tracked as KNOWN-BUG
@@ -245,7 +261,6 @@ if (-not $OnlySaw -and -not $SkipGaps) {
 
     $gapLog = & pwsh -NoProfile -File $gapScript 2>&1 | Out-String
     Write-Host $gapLog
-    $gapExit = $LASTEXITCODE
 
     foreach ($line in $gapLog -split '\r?\n') {
         if ($line -match '^\s+(G[A-Za-z0-9_]+)\s+(EXPECTED-FAIL|UNEXPECTED-PASS)\b(.*)$') {
@@ -253,6 +268,48 @@ if (-not $OnlySaw -and -not $SkipGaps) {
                 Property = $matches[1]
                 Verdict  = $matches[2]
                 Detail   = $matches[3].Trim()
+            }
+        }
+    }
+}
+
+# ──────────────────────────────────────────────────────────────────────
+# Layer 5: TLA+ TLC — abstract temporal model checking
+# ──────────────────────────────────────────────────────────────────────
+if (-not $SkipTla -and ($runTlaOnly -or (-not $OnlySaw -and -not $OnlyCryptol))) {
+    Write-Banner 'Layer 5: TLA+ TLC  —  MSP/SDEP temporal safety model'
+
+    $tlaScript = Join-Path $root 'tla\run.ps1'
+    if (-not (Test-Path $tlaScript)) {
+        $tlaResults += [pscustomobject]@{
+            Check   = 'MSP.tla'
+            Verdict = 'SKIPPED'
+            Detail  = 'missing tla/run.ps1'
+        }
+    } else {
+        $tlaLog = & pwsh -NoProfile -File $tlaScript 2>&1 | Out-String
+        Write-Host $tlaLog
+        $tlaExit = $LASTEXITCODE
+
+        if ($tlaLog -match 'TLA_RESULT:\s*SKIPPED') {
+            $tlaResults += [pscustomobject]@{
+                Check   = 'MSP.tla'
+                Verdict = 'SKIPPED'
+                Detail  = 'tooling not configured (see tla/README.md)'
+            }
+        }
+        elseif ($tlaExit -eq 0 -and $tlaLog -match 'TLA_RESULT:\s*PASS') {
+            $tlaResults += [pscustomobject]@{
+                Check   = 'MSP.tla'
+                Verdict = 'VERIFIED'
+                Detail  = 'TLC reported no invariant/property errors'
+            }
+        }
+        else {
+            $tlaResults += [pscustomobject]@{
+                Check   = 'MSP.tla'
+                Verdict = 'ERROR'
+                Detail  = 'TLC failure (inspect tla/tlc_run.log)'
             }
         }
     }
@@ -327,6 +384,21 @@ if (-not $OnlySaw -and -not $SkipGaps) {
     }
 }
 
+if ($tlaResults.Count -gt 0) {
+    Write-Host ''
+    Write-Host 'Layer 5 — TLA+ TLC (temporal model checking):' -ForegroundColor Cyan
+    foreach ($r in $tlaResults) {
+        $color = switch ($r.Verdict) {
+            'VERIFIED' { 'Green' }
+            'SKIPPED'  { 'Yellow' }
+            default    { 'Red' }
+        }
+        $line = '  {0,-45} {1}' -f $r.Check, $r.Verdict
+        if ($r.Detail) { $line += "   $($r.Detail)" }
+        Write-Host $line -ForegroundColor $color
+    }
+}
+
 $sawPass = ($sawResults     | Where-Object Verdict -eq 'VERIFIED').Count
 $sawBug  = ($sawResults     | Where-Object Verdict -eq 'KNOWN-BUG').Count
 $sawFail = ($sawResults     | Where-Object { $_.Verdict -ne 'VERIFIED' -and $_.Verdict -ne 'KNOWN-BUG' }).Count
@@ -338,6 +410,9 @@ $cryExp  = ($cryptolResults | Where-Object Verdict -eq 'EXPECTED-FAIL').Count
 $cryUnx  = ($cryptolResults | Where-Object Verdict -eq 'UNEXPECTED-PASS').Count
 $gapExp  = ($gapResults     | Where-Object Verdict -eq 'EXPECTED-FAIL').Count
 $gapUnx  = ($gapResults     | Where-Object Verdict -eq 'UNEXPECTED-PASS').Count
+$tlaPass = ($tlaResults     | Where-Object Verdict -eq 'VERIFIED').Count
+$tlaSkip = ($tlaResults     | Where-Object Verdict -eq 'SKIPPED').Count
+$tlaFail = ($tlaResults     | Where-Object Verdict -eq 'ERROR').Count
 
 Write-Host ''
 Write-Host ('  SAW C++  : {0} verified, {1} known saw-spec-gen bug, {2} not verified' -f $sawPass, $sawBug, $sawFail) -ForegroundColor Cyan
@@ -350,6 +425,10 @@ if (-not $SkipGaps) {
     Write-Host ('  Gaps     : {0} exhibited (expected), {1} unexpectedly closed' `
                 -f $gapExp, $gapUnx) -ForegroundColor Cyan
 }
+if ($tlaResults.Count -gt 0) {
+    Write-Host ('  TLA+ TLC : {0} verified, {1} skipped, {2} failed' `
+                -f $tlaPass, $tlaSkip, $tlaFail) -ForegroundColor Cyan
+}
 
-if (($sawFail + $rusFail + $cryFail + $cryUnx + $gapUnx) -gt 0) { exit 1 }
+if (($sawFail + $rusFail + $cryFail + $cryUnx + $gapUnx + $tlaFail) -gt 0) { exit 1 }
 exit 0

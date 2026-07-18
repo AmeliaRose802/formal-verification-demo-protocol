@@ -26,16 +26,13 @@ Set-Location (Split-Path $PSScriptRoot -Parent)
 # Clean prior outputs so we never publish a stale mixture.
 Remove-Item -Recurse -Force verify_out, docs, proof_manifest.json, pipeline.log -ErrorAction SilentlyContinue
 
-# Build the implementation inventory from ALL C++ production files so coverage
-# reflects the whole implementation surface (not just decision.cpp).
-$implFiles = @(Get-ChildItem -Path 'cpp\src' -Filter '*.cpp' -File | Sort-Object Name)
-if ($implFiles.Count -eq 0) {
-    throw 'No C++ implementation files found under cpp/src/*.cpp'
-}
-
-$implArgs = @()
-foreach ($f in $implFiles) {
-    $implArgs += @('--impl', $f.FullName)
+# Temporary pipeline workaround:
+# pretty-specs currently mis-associates functions when `--impl` points at the
+# whole `cpp/src` directory. For SDEP_cpp.cry's decision functions we must bind
+# verification to the TU that actually defines those symbols.
+$implFile = Join-Path (Get-Location) 'cpp\src\decision.cpp'
+if (-not (Test-Path $implFile)) {
+    throw "Missing implementation file: $implFile"
 }
 
 # `--docfx` is passed explicitly: the native pipeline (unlike the old
@@ -45,14 +42,14 @@ foreach ($f in $implFiles) {
 # --strict-on-missing is set).
 $pipelineArgs = @(
     'cpp\saw\SDEP_cpp.cry',
-    '--pipeline'
-) + $implArgs + @(
+    '--pipeline',
+    '--impl', $implFile,
     '--impl-lang', 'cpp',
     '--saw-spec-gen', $SawSpecGen,
     '--cxx-include-dir', 'cpp\include',
     '--cxx-standard', 'c++20',
-    '--clang-flag', '-fexceptions',
-    '--clang-flag', '-fno-inline',
+    '--clang-flag=-fexceptions',
+    '--clang-flag=-fno-inline',
     '--verify-output', 'verify_out',
     '--manifest-output', 'proof_manifest.json',
     '-o', 'docs',

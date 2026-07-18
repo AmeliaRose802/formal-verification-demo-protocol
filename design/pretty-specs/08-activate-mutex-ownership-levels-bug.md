@@ -15,6 +15,14 @@ symbolic execution with:
 
 This is now the first blocker after vtable cleanup.
 
+Additional repros on 2026-07-09 show the same failure shape for:
+
+- `KeyStore::hasKey`
+- `KeyStore::isActive`
+
+So this is not only an `activate` problem; it is the current live blocker for
+the mutex-guarded KeyStore methods that traverse `_Mutex_base` helpers.
+
 ## What changed (and what did not)
 
 ### Fixed

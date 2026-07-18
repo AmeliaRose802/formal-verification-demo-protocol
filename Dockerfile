@@ -38,8 +38,10 @@ ARG RUST_TOOLCHAIN=stable
 # tag also keeps Windows CI (which version-keys its toolchain cache)
 # in sync — bump this together with DEMO_SSG_VERSION in verify.yml.
 # saw-spec-gen auto-cuts a patch release on every merge to master, so
-# bump to the newest vX.Y.Z to adopt new features (e.g. v0.1.1 = --config).
-ARG SAW_SPEC_GEN_TAG=v0.1.1
+# bump to the newest vX.Y.Z to adopt new features (v0.1.12 includes
+# aggregate-by-value classification, optnone-strip promotion fallback,
+# fixed-length memcmp override fidelity, and the sret alias initializes fix).
+ARG SAW_SPEC_GEN_TAG=v0.1.12
 
 ENV DEBIAN_FRONTEND=noninteractive \
     LANG=C.UTF-8 \
@@ -112,7 +114,7 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
 #
 # SAW_SPEC_GEN_TAG controls which release to pull:
 #   - "latest"  → resolves via releases/latest/download/...
-#   - anything else (e.g. "v0.1.1") → that specific tag
+#   - anything else (e.g. "v0.1.12") → that specific tag
 RUN mkdir -p /root/.demo_protocol/bin \
  && if [ "${SAW_SPEC_GEN_TAG}" = "latest" ]; then \
         ssg_url="https://github.com/AmeliaRose802/saw-spec-gen/releases/latest/download/saw-spec-gen-linux-x86_64.tar.gz"; \

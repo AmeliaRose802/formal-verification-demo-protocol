@@ -10,14 +10,15 @@ The **rendered docs site** (Cryptol model + per-function and per-property pages,
 
 ## What is proven
 
-The pipeline is four cooperating layers; together they transfer a security property proven over the Cryptol spec to a guarantee about the compiled binary.
+The pipeline is five cooperating layers; together they transfer a security property proven over the Cryptol spec to a guarantee about the compiled binary and check temporal state-machine safety at the model level.
 
 | Layer | Tool | Obligation | Source |
-|-------|------|------------|--------|
+| ----- | ---- | ---------- | ------ |
 | 1 | SAW + Z3 | The seven decision-surface functions in [cpp/src/decision.cpp](cpp/src/decision.cpp) are behaviorally equivalent to their Cryptol shims | [cpp/saw/SDEP_cpp.cry](cpp/saw/SDEP_cpp.cry) |
 | 2 | SAW + Z3 | Every pure decision function in [rust/src/lib.rs](rust/src/lib.rs) is behaviorally equivalent to its Cryptol shim | [rust/saw/SDEP_rust.cry](rust/saw/SDEP_rust.cry) |
 | 3 | Cryptol + Z3 | Every `property` declaration in the spec module holds | [cryptol/SDEP.cry](cryptol/SDEP.cry) |
 | 4 | Cryptol + Z3 (negative) | Every `property` in the gaps module **must produce a counterexample** — a Q.E.D. there means the spec has silently closed a documented gap | [cryptol/SDEP_gaps.cry](cryptol/SDEP_gaps.cry) |
+| 5 | TLA+ TLC | Abstract MSP/SDEP temporal model satisfies lifecycle and policy invariants (auto-skips if Java / `tla2tools.jar` is absent) | [tla/MSP.tla](tla/MSP.tla) |
 
 A property's guarantee transfers to the binary only if **every function it mentions** carries a SAW equivalence proof. Each rendered property page surfaces this transitively as an *Implementation equivalence* callout.
 
@@ -26,13 +27,15 @@ A property's guarantee transfers to the binary only if **every function it menti
 ## Quick start
 
 ```pwsh
-# Full pipeline (rebuilds bitcode, runs all 4 layers)
+# Full pipeline (rebuilds bitcode, runs all 5 layers)
 pwsh ./verify_all.ps1
 
 # Faster iteration
 pwsh ./verify_all.ps1 -SkipBuild       # reuse cached bitcode
 pwsh ./verify_all.ps1 -OnlyCryptol     # skip SAW layers
 pwsh ./verify_all.ps1 -OnlySaw         # skip Cryptol layers
+pwsh ./verify_all.ps1 -SkipTla         # skip TLA+ Layer 5
+pwsh ./verify_all.ps1 -OnlyTla         # run only TLA+ Layer 5
 pwsh ./verify_all.ps1 -SkipGaps        # skip Layer 4
 pwsh ./verify_all.ps1 -SkipRust        # skip Layer 2
 ```
@@ -43,8 +46,12 @@ Prerequisites: [SAW](https://github.com/GaloisInc/saw-script) (1.5+), [Cryptol](
 
 ## Repository layout
 
-```
-verify_all.ps1                Four-layer verification driver
+```text
+verify_all.ps1                Five-layer verification driver
+tla/
+    MSP.tla                   TLA+ model (temporal MSP/SDEP state machine)
+    MSP.cfg                   TLC model-checker config
+    run.ps1                   Layer 5 TLC driver
 docfx.json                    DocFX config — drives the published site
 cryptol/
     SDEP.cry                  Cryptol spec module (types + properties)

@@ -26,8 +26,8 @@
 #   so the docs always render with the newest renderer and its native
 #   `--pipeline` orchestrator.
 # - saw-spec-gen (the spec generator) is likewise consumed as a *published
-#   binary* from its GitHub Release (also tracking the *latest* release,
-#   resolved at run time via the GitHub API) and driven through its native
+#   binary* from its GitHub Release (pinned to a specific release tag for
+#   reproducibility) and driven through its native
 #   `verify-cpp` CLI command. The workflow therefore needs no saw-spec-gen
 #   checkout, no from-source `cargo build`,
 #   and none of the PowerShell wrappers (verify.ps1 / scripts/vendor/
@@ -56,9 +56,8 @@ permissions:
   pages: write
   id-token: write
 
-# Both tools track the latest published release (the tag is resolved at run
-# time via the GitHub API — see the download steps), so there's no version
-# or digest pin to maintain.
+# pretty-specs tracks latest (resolved at runtime), while saw-spec-gen is
+# intentionally pinned so pipeline behavior changes only when we bump this tag.
 
 # This is the sole GitHub Pages publisher. The `pages` concurrency group
 # guards against overlapping deploys; don't cancel an in-flight deployment.
@@ -71,6 +70,8 @@ jobs:
   regen:
     name: Regenerate docs (toolchain container)
     runs-on: ubuntu-latest
+    env:
+      SAW_SPEC_GEN_TAG: v0.1.12
     container:
       image: ghcr.io/ameliarose802/formal-verification-demo-protocol-ci:latest
       credentials:
@@ -113,20 +114,12 @@ jobs:
           & .tools/bin/pretty-specs --version
           if ($LASTEXITCODE -ne 0) { throw "pretty-specs --version failed (exit $LASTEXITCODE)" }
 
-      - name: Download saw-spec-gen (latest published binary)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Download saw-spec-gen (v0.1.12)
         run: |
           $ErrorActionPreference = 'Stop'
           $repo = 'AmeliaRose802/saw-spec-gen'
-
-          # Resolve the newest release tag at run time (no version pin). A token
-          # raises the API rate limit and works for public-repo release reads.
-          $headers = @{ 'User-Agent' = 'demo_protocol-ci'; 'Accept' = 'application/vnd.github+json' }
-          if ($env:GH_TOKEN) { $headers['Authorization'] = "Bearer $env:GH_TOKEN" }
-          $rel = Invoke-RestMethod -UseBasicParsing -Headers $headers -Uri "https://api.github.com/repos/$repo/releases/latest"
-          $ver = $rel.tag_name
-          Write-Host "Latest saw-spec-gen release: $ver"
+          $ver  = $env:SAW_SPEC_GEN_TAG
+          Write-Host "Pinned saw-spec-gen release: $ver"
 
           $asset = 'saw-spec-gen-linux-x86_64.tar.gz'
           $url   = "https://github.com/$repo/releases/download/$ver/$asset"
@@ -158,15 +151,12 @@ jobs:
           $manifest  = 'proof_manifest.json'
           $docs      = 'docs'
 
-          $implFiles = @(Get-ChildItem -Path 'cpp/src' -Filter '*.cpp' -File | Sort-Object Name)
-          if ($implFiles.Count -eq 0) { throw 'No C++ implementation files found under cpp/src/*.cpp' }
-
-          $implArgs = @()
-          foreach ($f in $implFiles) {
-            $rel = $f.FullName.Replace((Get-Location).Path + [IO.Path]::DirectorySeparatorChar, '')
-            $rel = $rel.Replace('\\', '/')
-            $implArgs += @('--impl', $rel)
-          }
+          # Temporary pipeline workaround:
+          # pretty-specs currently mis-associates functions when `--impl`
+          # targets the whole cpp/src tree. Bind Step 2 to the TU that owns
+          # the decision-function symbols in SDEP_cpp.cry.
+          $impl = 'cpp/src/decision.cpp'
+          if (-not (Test-Path $impl)) { throw "Missing implementation file: $impl" }
 
           # Clean prior outputs so we never publish a stale mixture.
           Remove-Item -Recurse -Force $verifyOut, $docs, $manifest, pipeline.log -ErrorAction SilentlyContinue
@@ -182,14 +172,14 @@ jobs:
             # (pretty-specs' default unless --strict-on-missing).
             $pipelineArgs = @(
               $spec,
-              '--pipeline'
-            ) + $implArgs + @(
+              '--pipeline',
+              '--impl',            $impl,
               '--impl-lang',        'cpp',
               '--saw-spec-gen',     $ssg,
               '--cxx-include-dir',  'cpp/include',
               '--cxx-standard',     'c++20',
-              '--clang-flag',       '-fexceptions',
-              '--clang-flag',       '-fno-inline',
+              '--clang-flag=-fexceptions',
+              '--clang-flag=-fno-inline',
               '--verify-output',    $verifyOut,
               '--manifest-output',  $manifest,
               '-o',                 $docs,

@@ -1,0 +1,22 @@
+module nested_raw_bytes where
+
+// verify-cpp models `Outer const* o` as a nested byte sequence whose
+// exact outer shape can vary with pointer-length heuristics.  We keep
+// the model polymorphic over both dimensions and read the first byte.
+
+// Correct functional model for the C++ implementation:
+//   return o->inner.flag != 0;
+outerHasData_verified : {n, m} (fin n, fin m, 1 <= n, 1 <= m) => [n][m][8] -> Bit
+outerHasData_verified o = (o @ 0 @ 0) != 0x00
+
+// Intentionally wrong model to force a counterexample.
+outerHasData_disproved : {n, m} (fin n, fin m, 1 <= n, 1 <= m) => [n][m][8] -> Bit
+outerHasData_disproved o = (o @ 0 @ 0) == 0x00
+
+// Byte-returning variant avoids bool-bridge shape issues.
+outerFirstByte_verified : {n, m} (fin n, fin m, 1 <= n, 1 <= m) => [n][m][8] -> [8]
+outerFirstByte_verified o = o @ 0 @ 0
+
+// Intentionally wrong by flipping the low bit.
+outerFirstByte_disproved : {n, m} (fin n, fin m, 1 <= n, 1 <= m) => [n][m][8] -> [8]
+outerFirstByte_disproved o = (o @ 0 @ 0) ^ 0x01

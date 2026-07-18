@@ -1,19 +1,19 @@
 # One-pager: verifying stateful methods (the R3 gap)
 
-**Tool:** saw-spec-gen · **Status:** proposal · **Motivating gap:** `KeyStore::provision` / `KeyStore::activate`
+**Tool:** saw-spec-gen · **Status:** corrected / partially implemented · **Motivating gap:** `KeyStore::provision` / `KeyStore::activate`
 
 ## The gap in one sentence
 
-saw-spec-gen today only generates **pure functional-equivalence** specs —
-`f(x) == model(x)` — so it cannot express a method whose effect is to **mutate
-object state**, which is exactly where this protocol's headline safety invariant
-(P1: *Active is irreversible*) actually lives.
+saw-spec-gen **can** express stateful methods today, but this repo's real
+`KeyStore` methods still are not verified because their concrete STL layout and
+lock/override behavior make the generated proof path fail on this specific
+implementation surface.
 
 ## Why this matters here
 
 The whole point of `KeyStore` is the state machine, not a return value:
 
-```
+```text
 [No Key] --provision--> [Provisional] --activate--> [Active]   (sealed)
 ```
 
@@ -55,12 +55,12 @@ result. But it is given `keyIsActive` as an **input**; it never demonstrates
 that the real object's stored `isActive` bit actually obeys the transition. That
 last mile — "the stored state evolves as the truth table says" — is the R3 gap.
 
-## What SAW can already do (so this is a generator gap, not a prover gap)
+## What SAW and saw-spec-gen can already do
 
 SAW's LLVM frontend natively supports stateful contracts. A hand-written spec
 looks like:
 
-```
+```saw
 let activate_spec = do {
     this <- llvm_alloc (llvm_struct "class.sdep::KeyStore");
     // PRE-state: a provisional key is present
@@ -80,48 +80,59 @@ let activate_spec = do {
 and the dual *negative* spec asserts that from `isActive_pre == 1` the method
 **leaves the bit set** and returns `AlreadyActive`. SAW verifies both against the
 real bitcode. **The prover handles this fine** — there is no missing SAW
-capability. What is missing is saw-spec-gen *emitting* it.
+capability here.
 
-## What saw-spec-gen would need to add
+More importantly, saw-spec-gen now supports this general stateful shape too:
+model the object/`this` pointer as a writable region using the existing
+out-buffer / post-state machinery, so the generated contract allocates the
+region, captures a pre-state value, executes the method, and asserts the
+post-state via a Cryptol post function.
 
-1. **Detect statefulness.** From the clang AST: a non-`const` method on a class
-   with non-static data members, whose body writes a member (or the
-   `[[nodiscard]] bool isActive() const` companion exists). Today the generator
-   treats `this` as just another opaque pointer arg and produces no heap
-   post-conditions.
+## What is still needed for this repo
 
-2. **A pre/post state vocabulary in the spec model.** Let the model author write
-   two Cryptol-level views — `model_pre : State -> Args -> bool` (precondition)
-   and `model_post : State -> Args -> (State, Ret)` (transition) — and have
-   saw-spec-gen wire `this`'s member layout to those `State` fields via
-   `llvm_points_to` on both sides of `llvm_execute_func`. This is the
-   generalization of the existing `--out-buffer-param` / `--cryptol-fn-out`
-   machinery (which already splits a *buffer* into pre/post); here the "buffer"
-   is the object's member region.
+The generic stateful-spec capability exists. What remains is the repo-specific
+last mile:
 
-3. **Member-layout resolution.** Map `KeyStore::key_` (an
-   `std::optional<EnrollmentKey>`) to concrete field offsets. The
-   `optional<EnrollmentKey>` engaged-flag + payload is the same STL-layout
-   problem as R2, so in practice the first cut should target a **plain-struct
-   state** (e.g. a `struct { bool present; bool isActive; Uuid id; }`), or a
-   `-O1` build where the optional is inlined to byte stores — the same
-   workaround already used for `getStatus` / `enforceAccess`.
+1. **Member-layout resolution for the real object.** Map `KeyStore::key_`
+  (`std::optional<EnrollmentKey>`) to concrete field offsets. The
+  `optional<EnrollmentKey>` engaged-flag + payload is the same STL-layout
+  problem as R2, so in practice the first cut should target a **plain-struct
+  state** (e.g. a `struct { bool present; bool isActive; Uuid id; }`), or a
+  `-O1` build where the optional is inlined to byte stores — the same
+  workaround already used for `getStatus` / `enforceAccess`.
 
-4. **Generate the dual obligation.** For an irreversibility invariant, emit the
-   matched pair automatically: the *forward* transition spec **and** the
-   *no-revert* spec from the already-Active precondition. A single
-   `--state-invariant isActive:monotone` flag could expand to both.
+2. **A convenient way to package the dual obligation.** For an irreversibility
+  invariant, we still want the matched pair automatically: the *forward*
+  transition spec **and** the *no-revert* spec from the already-Active
+  precondition. This is now an ergonomics/authoring improvement, not a missing
+  foundational capability.
 
-## Blockers found when the proof was actually attempted (Jun 2026)
+## Blockers found when the proof was actually attempted (updated Jul 2026)
 
-Items 1–4 above are about *emitting the pre/post spec*. But a WIP harness
+The general pre/post spec shape is already supported. But the real demo repros
+still expose follow-on issues after generation succeeds.
+
+Current status of the historical blocker list:
+
+- **status primitive success-sentinel override:** fixed in current local build;
+  `_Mtx_lock` / `_Mtx_unlock` overrides are emitted and applied.
+- **spurious vtable-stub path:** fixed in current local build; no longer the
+  first blocker on `activate`.
+- **mutex ownership-level helper path:** still a real blocker for
+  `activate` / `hasKey` / `isActive`.
+- **`std::optional<EnrollmentKey>` return/layout handling:** still a real
+  blocker for `current` / `provision`.
+- **`memcmp` interior-pointer modeling:** not yet re-hit in the current repros,
+  because the mutex ownership-level failure fires first on `activate`.
+
+A WIP harness
 (`cpp/saw/_ks_probe/`) that hand-wrote that spec and ran SAW against the real
 `key_store.bc` exposed three further generator gaps — all about what happens when
 SAW *executes the body*, which the lock-guarded `activate` does on every path
 (`std::scoped_lock lock(mu_);`). None are SAW-prover limitations; each is a
 missing piece of saw-spec-gen's **override generation**.
 
-5. **Pin declare-only status primitives to a success sentinel.**
+1. **Pin declare-only status primitives to a success sentinel.**
    `bitcode_overrides.rs` emits `_Mtx_lock` / `_Mtx_unlock` overrides with a
    *fresh symbolic* `[32]` return. The solver picks `rv = -1`, so
    `_Mutex_base::lock` takes its error path → `_Throw_Cpp_error` → LLVM
@@ -129,33 +140,51 @@ missing piece of saw-spec-gen's **override generation**.
    success sentinel" rule for known status primitives (`0` = `_Thrd_success`),
    or a sidecar flag to pin a declare-only override's return value.
 
-6. **Abstract *defined* STL wrappers as no-op `assume_spec`s.** `std::scoped_lock`'s
+  **Current status:** fixed in the current local build; the generated proof
+  now applies `_Mtx_lock` / `_Mtx_unlock` overrides successfully.
+
+1. **Abstract *defined* STL wrappers as no-op `assume_spec`s.** `std::scoped_lock`'s
    ctor (`??0?$scoped_lock@...`) and dtor are **defined** in the bitcode, so the
    extern-override scan never replaces them. SAW steps into the ctor →
    `mutex::lock()` → `_Verify_ownership_levels` does a memory load on
    uninitialized symbolic mutex storage → "Error during memory load." The
    generator has no notion of "treat this *defined* STL helper as an abstract
    no-op." It needs an **opt-in override list for defined functions**
-   (e.g. `--assume-noop ??0?$scoped_lock@...`) so the lock/unlock pair becomes
-   memory-neutral, matching the modeling assumption that the mutex bytes are
-   opaque.
+  (e.g. `--assume-noop ??0?$scoped_lock@...`) so the lock/unlock pair becomes
+  memory-neutral, matching the modeling assumption that the mutex bytes are
+  opaque.
 
-7. **A faithful `memcmp` model that matches interior pointers.** The id check
+  **Current status:** still a real blocker in changed form. The current repro
+  gets past `_Mtx_lock/_Mtx_unlock` overrides but still fails inside the
+  defined helper `?_Verify_ownership_levels@_Mutex_base@std@@IEAA_NXZ` with an
+  `Error during memory load`.
+
+1. **A faithful `memcmp` model that matches interior pointers.** The id check
    `key_->keyId != keyId` lowers to `Uuid::operator==` → `std::array<u8,16>::==`
    → `std::equal` → `memcmp`, which is declare-only and gets a fresh return. For
    the id-match subgoal the C++ result must equal the Cryptol `ksIdMatch` (byte
    equality of `[80..96)` vs `keyId`). The generator needs a `memcmp` override
    returning `0` iff the two buffers are equal — and crucially it must match
-   **interior pointers** (the stored `Uuid` lives at `this+80`, not at the head
-   of an allocation), which is the genuinely hard part of SAW override matching.
+  **interior pointers** (the stored `Uuid` lives at `this+80`, not at the head
+  of an allocation), which is the genuinely hard part of SAW override matching.
 
-The first cut in §"Suggested scope" sidesteps 5–7 by targeting a lock-free
-plain-struct state at `-O1`; a complete `activate` proof against the real
-mutex-guarded body requires all three.
+  **Current status:** not yet re-confirmed as the first live blocker in the
+  latest repros, because the proof fails earlier in `_Verify_ownership_levels`.
+
+The current repros refine that story:
+
+- `activate`, `hasKey`, and `isActive` are presently blocked first by mutex
+  ownership-level modeling.
+- `current` and `provision` are presently blocked first by unsupported
+  `std::optional<EnrollmentKey>` type/return handling.
+
+So the two still-live families are mutex-helper abstraction and heterogeneous
+`std::optional` layout/return support.
 
 ## Suggested scope (smallest useful step)
 
-A `--stateful` mode that, given:
+Wire the existing stateful-method support through a concrete `KeyStore` proof
+configuration that, given:
 
 - the method symbol (`KeyStore::activate`),
 - a model file exposing `activate_pre` / `activate_post` over a declared
@@ -176,8 +205,8 @@ fixture.
 - `KeyStore::provision`'s "never overwrite Active / never overwrite Provisional"
   guards are proven the same way.
 - The generator path is general enough that any non-`const` mutating method with
-  a declared pre/post model gets a stateful spec instead of being dropped to
-  ⚠️ R3.
+  a declared pre/post model gets a stateful spec without bespoke hand-written
+  proof scaffolding for the stateful part.
 - For a proof against the **real mutex-guarded body** (not the lock-free
   `-O1` plain-struct fixture), the generator also auto-supplies the three
   override pieces from §"Blockers found": success-sentinel lock primitives,

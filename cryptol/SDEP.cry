@@ -1,9 +1,24 @@
 // Secure Device Enrollment Protocol (SDEP) — Cryptol specification
 //
-// This module specifies the pure decision logic of SDEP and encodes the
-// 22 security properties (P1–P22) as Cryptol `property` declarations
-// suitable for proof with SAW/Z3. The rendered docs site is the
-// human-readable form of the same content.
+// This module specifies the pure decision logic of SDEP and encodes
+// security properties as Cryptol `property` declarations suitable for
+// proof with SAW/Z3. The rendered docs site is the human-readable form.
+// Secure Device Enrollment Protocol (SDEP) — Cryptol specification
+//
+// This module specifies the pure decision logic of SDEP and encodes
+// security properties as Cryptol `property` declarations suitable for
+// proof with SAW/Z3. The rendered docs site is the human-readable form.
+//
+// Property inventory (32 total — all expected to PASS):
+//   P1–P22   Core protocol properties (key lifecycle, auth, access control,
+//            liveness, error handling) — unchanged from original
+//   P26–P27  MSP defaultAccess and enforceAccess matrix coverage
+//            (P23/P24/P25 removed — moved to SDEP_gaps as G39/G40 because
+//             the current newline-concat encoder is NOT injective)
+//   P28–P29  Structured-request canonicalization (auth-header exclusion,
+//            timestamp binding)
+//   P30–P32  Key rotation — MSP keyIncarnationId model
+//   P33–P35  Two-endpoint model — IMDS and WireServer per MSP
 
 module SDEP where
 
@@ -165,6 +180,9 @@ private
     hmacSha256 key req == providedSig
 
 // 4.5 enforceAccess
+//
+// Original SDEP model: AD_NoRule in Enforce mode always allows (implicit
+// Allow default, matching MSP's out-of-the-box configuration).
 enforceAccess : AccessMode -> AccessDecision -> (Bit, Bit)
 enforceAccess mode decision =
   if mode == AM_Off then (True, False)
@@ -176,6 +194,29 @@ enforceAccess mode decision =
          else                          (True,  False))
   else (True, False)   // unreachable for well-formed modes
 
+// 4.5b enforceAccessMSP — MSP-compatible variant with a configurable
+// `defaultAccess` setting, matching the InVMAccessControlProfile field of
+// the same name ("Allow" | "Deny"). The original `enforceAccess` is
+// equivalent to `enforceAccessMSP mode decision DA_Allow`.
+type DefaultAccess = [1]
+DA_Allow = 0 : DefaultAccess
+DA_Deny  = 1 : DefaultAccess
+
+isDefaultAccess : DefaultAccess -> Bit
+isDefaultAccess d = (d == DA_Allow) \/ (d == DA_Deny)
+
+enforceAccessMSP :
+  AccessMode -> AccessDecision -> DefaultAccess -> (Bit, Bit)
+enforceAccessMSP mode decision defaultAccess =
+  if mode == AM_Off then (True, False)
+   | mode == AM_Audit then
+        (if decision == AD_Deny then (True, True) else (True, False))
+   | mode == AM_Enforce then
+        (if decision == AD_Allow  then (True,  False)
+          | decision == AD_Deny   then (False, True)
+         else /* AD_NoRule */     (defaultAccess == DA_Allow, False))
+  else (True, False)   // unreachable for well-formed modes
+
 // 4.6 getStatus
 getStatus : Bit -> Bit -> Bit -> UUID -> EnrollmentStatus
 getStatus fleetEnabled hasKey keyIsActive keyId =
@@ -185,32 +226,70 @@ getStatus fleetEnabled hasKey keyIsActive keyId =
   , isActive  = keyIsActive
   }
 
-    else (True, False)   // unreachable for well-formed modes
+// 4.7 Key rotation — MSP keyIncarnationId model.
+//
+// MSP stores a `keyIncarnationId` integer on the ARM VM model. An operator
+// increments it to force a key reset; the GPA sees the new value on the next
+// KeyStatus poll and treats the existing key as invalid, allowing a fresh
+// provisioning cycle. SDEP models this as a pure function that resets
+// `keyIsActive` to False whenever `newIncarnationId != storedIncarnationId`.
+// The caller then passes the reset value into `provisionKey` (which already
+// checks `keyIsActive`), so the overall rotation safety property is simply
+// that a key which was active IS deactivated by a new incarnation ID.
+type KeyIncarnationId = [32]
+
+resetKeyIfNewIncarnation :
+  Bit -> KeyIncarnationId -> KeyIncarnationId -> Bit
+resetKeyIfNewIncarnation keyIsActive newId storedId =
+  if newId != storedId then False   // new incarnation — treat key as inactive
+  else keyIsActive                   // same incarnation — preserve state
+
+// 4.8 Two-endpoint model — IMDS and WireServer.
+//
+// MSP protects two metadata endpoints:
+//   IMDS        (169.254.169.254:80)  — accessible by all users by default
+//   WireServer  (168.63.129.16:80)   — accessible by admin/root only;
+//                                      the GPA enforces this before any
+//                                      RBAC rule evaluation.
+// Each endpoint carries an independent AccessMode (Disabled / Audit /
+// Enforce) and shares a common DefaultAccess configuration.
+type Endpoint = [1]
+EP_IMDS       = 0 : Endpoint
+EP_WireServer = 1 : Endpoint
+
+isEndpoint : Endpoint -> Bit
+isEndpoint e = (e == EP_IMDS) \/ (e == EP_WireServer)
+
+type EndpointConfig =
+  { imdsMode      : AccessMode
+  , wireMode      : AccessMode
+  , defaultAccess : DefaultAccess
+  }
+
+// The implicit admin check that MSP applies before any RBAC rule for
+// WireServer in Enforce mode: a non-admin caller is denied regardless of
+// what the rule set says.
+wireServerImplicitAdminCheck :
+  Endpoint -> Bit -> AccessDecision -> AccessDecision
+wireServerImplicitAdminCheck endpoint isAdmin decision =
+  if (endpoint == EP_WireServer) /\ (~ isAdmin) then AD_Deny
+  else decision
+
+// Top-level two-endpoint enforcer. Selects the per-endpoint mode from the
+// config, applies the WireServer admin check, then delegates to
+// `enforceAccessMSP`.
+enforceAccessEndpoint :
+  EndpointConfig -> Endpoint -> Bit -> AccessDecision -> (Bit, Bit)
+enforceAccessEndpoint config endpoint isAdmin decision =
+    enforceAccessMSP mode adjustedDecision config.defaultAccess
+  where
+    mode             = if endpoint == EP_IMDS
+                       then config.imdsMode
+                       else config.wireMode
+    adjustedDecision = wireServerImplicitAdminCheck endpoint isAdmin decision
+
 ////////////////////////////////////////////////////////////////////////////////
-  // 4.5b enforceAccessMSP — MSP-compatible enforceAccess with a configurable
-  // defaultAccess setting matching the InVMAccessControlProfile `defaultAccess`
-  // field ("Allow" | "Deny"). The original `enforceAccess` is equivalent to
-  // `enforceAccessMSP mode decision DA_Allow`.
-  type DefaultAccess = [1]
-  DA_Allow = 0 : DefaultAccess
-  DA_Deny  = 1 : DefaultAccess
-
-  isDefaultAccess : DefaultAccess -> Bit
-  isDefaultAccess d = (d == DA_Allow) \/ (d == DA_Deny)
-
-  enforceAccessMSP :
-    AccessMode -> AccessDecision -> DefaultAccess -> (Bit, Bit)
-  enforceAccessMSP mode decision defaultAccess =
-    if mode == AM_Off then (True, False)
-     | mode == AM_Audit then
-          (if decision == AD_Deny then (True, True) else (True, False))
-     | mode == AM_Enforce then
-          (if decision == AD_Allow  then (True,  False)
-            | decision == AD_Deny   then (False, True)
-           else /* AD_NoRule */     (defaultAccess == DA_Allow, False))
-    else (True, False)   // unreachable for well-formed modes
-// 5. Security properties (P1–P22)
-  // 4.6 getStatus
+// 5. Security properties (P1–P35)
 ////////////////////////////////////////////////////////////////////////////////
 
 // ---- Category A: Key Lifecycle Safety -------------------------------------
@@ -338,8 +417,7 @@ property P19_VaultUnavailableIsInternalError activationResult =
     enrollDevice True True AR_VaultUnavailable activationResult
       == ER_InternalError
 
-// P20: An invalid request (validMetadata == False) maps to BadRequest, not
-// Unauthorized — i.e. the BadRequest classification is reachable and distinct.
+// P20: An invalid request (validRequest == False) maps to BadRequest.
 property P20_InvalidRequestIsBadRequest vaultResult keyIsActive =
   isKeyVaultResult vaultResult ==>
     provisionKey True False vaultResult keyIsActive == PR_BadRequest
@@ -351,8 +429,7 @@ property P21_ActivateWithoutMetadataIsUnauthorized authResult activationResult =
       enrollDevice True False authResult activationResult == ER_Unauthorized
 
 // P22: An activation I/O failure maps to InternalError. Any activation
-// result that is neither Success nor AlreadyActive (i.e. an I/O failure)
-// yields InternalError when authentication succeeded.
+// result that is neither Success nor AlreadyActive yields InternalError.
 property P22_ActivationIoFailureIsInternalError activationResult =
   isActivationResult activationResult ==>
     (activationResult != AC_Success) ==>
@@ -370,36 +447,31 @@ property P22_ActivationIoFailureIsInternalError activationResult =
 // shape of real-world signature-confusion vulnerabilities (AWS SigV4
 // ambiguity, HTTP request smuggling).
 //
-// HISTORY. The original SDEP encoder concatenated variable-length fields
-// with a single '\n' delimiter:
+// CURRENT IMPLEMENTATION — newline-concatenation (BROKEN).
+// The encoder joins variable-length fields with a single '\n' (0x0a) delimiter,
+// matching the approach used by the Azure Metadata Security Protocol (MSP)
+// and many other systems:
 //
 //     method '\n' body '\n' canonHeaders '\n' path '\n' canonQuery
 //
-// That encoding is NOT injective: a newline smuggled into the body shifts
-// the parse boundary into the next field, producing identical canonical
-// bytes for distinct requests. (This was P23_CanonConcatInjective in earlier
-// revisions of this file; Z3 exhibits a concrete two-field counterexample
-// at every field length >= 2.)
+// This encoding is NOT injective over variable-length inputs. A '\n' byte
+// smuggled into a field value shifts where the decoder thinks the next field
+// boundary is, producing identical canonical byte streams for two distinct
+// requests. Example collision (bounded model, FL = 4):
 //
-// FIX. The encoder now prepends each variable-length field with its byte
-// length (an unsigned length tag). A parser reads exactly the declared
-// number of bytes for each field, so no byte inside any field can be
-// mistaken for a boundary. P23 below proves injectivity of this encoder by
-// exhibiting a DECODER and proving decode∘encode = id — which only holds
-// because the decoder reads the tag to find each boundary (the tag is
-// load-bearing). P24/P25 do the same for the header/query record-list.
+//     field_A = {len=1, buf=[0x0a, 0, 0, 0]}   field_B = {len=0, buf=[0,0,0,0]}
+//       → packed bytes: 0x0a  0x0a  0x00  ...   (A's byte, then delimiter)
 //
-// SCOPE OF THIS PROOF (bounded model checking).
-// Cryptol + Z3 bit-blasts a fixed-size formula and hands it to SAT; there is
-// no loop induction. The proof is over two variable-length fields of up to
-// FL = 4 bytes each (P23) and a count-prefixed list of up to 2 such items
-// (P24/P25). It covers every concrete configuration at those bounds; the
-// structural argument (a length tag uniquely determines each field's extent,
-// regardless of its width) is what the production C++ / Rust encoders
-// implement with a 64-bit big-endian tag — but those encoders are UNVERIFIED
-// at the implementation level. A native-induction prover (Dafny / F* / Lean /
-// Coq) or a SAW Hoare-logic proof over the loop in canonicalizePayload would
-// extend the bound to all n.
+//     field_A' = {len=0, buf=[0,0,0,0]}         field_B' = {len=1, buf=[0x0a,0,0,0]}
+//       → packed bytes: 0x0a  0x0a  0x00  ...   (delimiter, then B's byte)
+//
+// Both (A, B) and (A', B') are distinct normalized pairs that serialize to
+// the same byte stream. Z3 exhibits this counterexample; see G39/G40 in
+// SDEP_gaps.cry. Those non-injectivity proofs live there because they are
+// expected to FAIL.
+//
+// The bounded-model types below (LpField etc.) are kept in this file so
+// the section-7 structured canonicalizer and SDEP_gaps.cry can share them.
 ////////////////////////////////////////////////////////////////////////////////
 
 // Field length in bytes (parameter for the bounded model).
@@ -409,254 +481,42 @@ type FL = 4
 type IW = 8
 
 // A bounded variable-length field: a logical length `len` and a fixed-size
-// storage buffer `buf`. "Normalized" means bytes past `len` are zero, so
-// two fields that differ only in unused padding are the same logical value
-// and any collision the solver finds is a *real* one.
+// storage buffer `buf`. "Normalized" means bytes past `len` are zero.
 type LpField = { len : [IW], buf : [FL][8] }
 
-// Number of length-prefixed items a record-list (header / query MAP) may
-// carry in the bounded model, and the total bytes of its encoding.
+// Number of newline-separated records in the bounded record-list model.
 type MaxItems  = 2
 type RecBufLen = 1 + MaxItems * (1 + FL)
 
-private
-
-  lpZeroField : LpField
-  lpZeroField = { len = 0, buf = zero }
-
-  lpFieldNormalized : LpField -> Bit
-  lpFieldNormalized f =
-    (f.len <= (`FL : [IW])) /\
-    and [ (i >= f.len) ==> ((f.buf @ i) == 0)
-        | i <- ([0 .. FL - 1] : [FL][IW]) ]
-
-// Length-prefix canonicalization, modelled HONESTLY. The earlier model
-// concatenated FIXED-width fields (`[nm] # m # [nb] # b` with m,b : [16][8]);
-// there the boundaries came from the type widths, so decomposition was
-// trivially unique and the length tags did NO work. Here each field's bytes
-// occupy only the first `len` positions of its slot and the encoder packs
-// the next field IMMEDIATELY after, so the second tag's position depends on
-// the first length. Recovering the boundaries REQUIRES reading the tag, and
-// we prove injectivity the honest way: via a decoder and a decode∘encode
-// roundtrip (`decode (encode x) == x`), which forces the tag to be
-// load-bearing.
-//
-// This bounded model uses an 8-bit tag, FL = 4, and <= 2 records. The
-// production encoders (canonicalize_payload / canonicalize_headers /
-// canonicalize_query) use a 64-bit big-endian tag over usize-length fields
-// and are UNVERIFIED at the implementation level; the structural argument
-// extends to those widths but is not mechanically transported to them here.
-private
-
-  // encodeLP2 writes [f.len] f.buf[0..f.len) [g.len] g.buf[0..g.len), then
-  // zero-pads; decodeLP2 reads each tag and takes exactly that many bytes.
-  // Data-dependent indices are clamped `% bl` to stay in range (identity for
-  // normalized inputs).
-  encodeLP2 : LpField -> LpField -> [2 * FL + 2][8]
-  encodeLP2 f g =
-      [ byteAt i | i <- ([0 .. 2 * FL + 1] : [2 * FL + 2][IW]) ]
-    where
-      nf   = f.len
-      ng   = g.len
-      gTag = nf + 1
-      byteAt : [IW] -> [8]
-      byteAt i =
-        if  i == 0                                    then nf
-         | (i >= 1)        /\ (i <= nf)                then f.buf @ ((i - 1)        % (`FL : [IW]))
-         |  i == gTag                                  then ng
-         | (i >= gTag + 1) /\ (i < gTag + 1 + ng)      then g.buf @ ((i - gTag - 1) % (`FL : [IW]))
-        else                                                0
-
-  decodeLP2 : [2 * FL + 2][8] -> (LpField, LpField)
-  decodeLP2 buf = (f, g)
-    where
-      bl   = (`(2 * FL + 2) : [IW])
-      nf   = buf @ 0
-      fbuf = [ if j < nf then buf @ ((1 + j) % bl) else 0
-             | j <- ([0 .. FL - 1] : [FL][IW]) ]
-      ng   = buf @ ((nf + 1) % bl)
-      gbuf = [ if j < ng then buf @ ((nf + 2 + j) % bl) else 0
-             | j <- ([0 .. FL - 1] : [FL][IW]) ]
-      f = { len = nf, buf = fbuf }
-      g = { len = ng, buf = gbuf }
-
-  // Record-list (header / query MAP): a count tag followed by a sequence of
-  // length-prefixed items <count> <len0> bytes0 <len1> bytes1 ... . This is
-  // the shape behind the classic "header smuggling" collision; length +
-  // count tags make boundaries AND the record count recoverable only by
-  // reading the tags.
-  itemsNormalized : [IW] -> LpField -> LpField -> Bit
-  itemsNormalized c a0 a1 =
-    (c <= (`MaxItems : [IW])) /\
-    lpFieldNormalized a0 /\ lpFieldNormalized a1 /\
-    ((c < 1) ==> (a0 == lpZeroField)) /\
-    ((c < 2) ==> (a1 == lpZeroField))
-
-  encodeRecs : [IW] -> LpField -> LpField -> [RecBufLen][8]
-  encodeRecs c a0 a1 =
-      [ byteAt i | i <- ([0 .. RecBufLen - 1] : [RecBufLen][IW]) ]
-    where
-      l0 = a0.len
-      l1 = a1.len
-      t0 = 1
-      t1 = 2 + l0
-      byteAt : [IW] -> [8]
-      byteAt i =
-        if  i == 0                                        then c
-         | (c >= 1) /\ (i == t0)                          then l0
-         | (c >= 1) /\ (i >= t0 + 1) /\ (i < t0 + 1 + l0) then a0.buf @ ((i - t0 - 1) % (`FL : [IW]))
-         | (c >= 2) /\ (i == t1)                          then l1
-         | (c >= 2) /\ (i >= t1 + 1) /\ (i < t1 + 1 + l1) then a1.buf @ ((i - t1 - 1) % (`FL : [IW]))
-        else                                                   0
-
-  decodeRecs : [RecBufLen][8] -> ([IW], LpField, LpField)
-  decodeRecs buf = (c, a0, a1)
-    where
-      rl    = (`(RecBufLen) : [IW])
-      c     = buf @ 0
-      l0    = if c >= 1 then buf @ 1 else 0
-      a0buf = [ if (c >= 1) /\ (j < l0) then buf @ ((2 + j) % rl) else 0
-              | j <- ([0 .. FL - 1] : [FL][IW]) ]
-      l1    = if c >= 2 then buf @ ((2 + l0) % rl) else 0
-      a1buf = [ if (c >= 2) /\ (j < l1) then buf @ ((2 + l0 + 1 + j) % rl) else 0
-              | j <- ([0 .. FL - 1] : [FL][IW]) ]
-      a0 = { len = l0, buf = a0buf }
-      a1 = { len = l1, buf = a1buf }
-
-// P23: Two adjacent variable-length fields decode back to themselves, so
-// distinct normalized requests have distinct canonical byte streams. This
-// is the top-level method|body framing the SAW-verified canonicalize_lp
-// emits; the tag, not the slot width, marks the f|g boundary.
-// EXPECTED VERDICT: PASS. The safety property the production canonicalizer
-// satisfies after the delimiter -> length-prefix fix.
-property P23_DistinctRequestsHaveDistinctCanonicalBytes f g =
-  ( lpFieldNormalized f /\ lpFieldNormalized g )
-    ==> (decodeLP2 (encodeLP2 f g) == (f, g))
-
 ////////////////////////////////////////////////////////////////////////////////
-// 6.b Sub-canonicalizer injectivity — Tier-1 follow-up to P23.
-//
-// The header and query canonicalizers serialize a MAP as a count tag
-// followed by a sequence of length-prefixed items
-// (<count> <len0> bytes0 <len1> bytes1 ...). The model below (`encodeRecs`
-// / `decodeRecs`) proves that encoding byte-injective the same honest way
-// P23 does: a decoder reads the count and each length tag and recovers the
-// exact record list, so both the per-item boundaries AND the record count
-// are tag-determined.
-//
-// Historical note: an earlier revision joined records with '\n' (headers)
-// or '&' (query) and fields inside each record with ':' / '='. That
-// encoding admitted a header / query smuggling collision (a value
-// containing "\nname:forged" parsed as an extra record under a forged
-// header name). Concrete production-code collisions for that earlier
-// encoding were exhibited in rust/tests/validate_canon_gaps.rs.
+// 6.c MSP defaultAccess and enforceAccess matrix-coverage properties.
 ////////////////////////////////////////////////////////////////////////////////
 
-// P24: A header MAP (count-prefixed list of length-prefixed items) decodes
-// back to itself, so distinct normalized header lists have distinct
-// canonical byte streams. The roundtrip forces both the per-item length
-// tags and the record count to be load-bearing — closing the header-
-// smuggling gap where a value byte faked a record boundary.
-// EXPECTED VERDICT: PASS — the encoding closes the smuggling gap.
-property P24_DistinctHeadersHaveDistinctCanonicalBytes c a0 a1 =
-  itemsNormalized c a0 a1
-    ==> (decodeRecs (encodeRecs c a0 a1) == (c, a0, a1))
-
-// P25: The query MAP reuses the BYTE-IDENTICAL `encodeRecs` encoder as the
-// header map (P24). This isolates the "can't add or drop a record" half of
-// the smuggling guarantee: two normalized record-lists that serialize to
-// the same bytes must carry the same number of records, so an attacker
-// cannot smuggle an extra query parameter in (or out).
-// EXPECTED VERDICT: PASS.
-property P25_DistinctQueriesHaveDistinctCanonicalBytes c1 a1 b1 c2 a2 b2 =
-  ( itemsNormalized c1 a1 b1 /\ itemsNormalized c2 a2 b2 /\
-    encodeRecs c1 a1 b1 == encodeRecs c2 a2 b2 )
-    ==> (c1 == c2)
-
-////////////////////////////////////////////////////////////////////////////////
-// 6.c enforceAccess matrix-coverage gap — Tier-3 follow-up.
-//
-// P11..P14 cover only 5 of the 9 cells of the (AccessMode × AccessDecision)
-// matrix, and P12 only checks the `.0 = allowed` projection (not the
-// `.1 = logged` flag). The two properties below close the matrix.
-// EXPECTED VERDICT: PASS — they document previously-unverified behaviour
-// of the existing model.
-////////////////////////////////////////////////////////////////////////////////
-
-// P26: Access-enforce mode with no matching rule allows silently (matches
-// the spec's implicit fall-through and the C++/Rust impl's `else` branch).
-property P26_EnforceWithoutRuleAllowsSilently =
-  enforceAccess AM_Enforce AD_NoRule == (True, False)
+// P26: In the MSP model, the AD_NoRule outcome in Enforce mode is governed
+// by the `defaultAccess` setting. With DA_Allow the request is silently
+// permitted; with DA_Deny it is silently blocked.
+property P26_EnforceNoRuleRespectsDefaultAccess defaultAccess =
+  isDefaultAccess defaultAccess ==>
+    enforceAccessMSP AM_Enforce AD_NoRule defaultAccess
+      == (defaultAccess == DA_Allow, False)
 
 // P27: Access-audit mode logs IFF the underlying decision is Deny — never
-// on Allow or NoRule. Closes the .1 = logged projection that P12 leaves
-// unspecified.
+// on Allow or NoRule.
 property P27_AuditLogsOnlyOnDenial decision =
   isAccessDecision decision ==>
     (enforceAccess AM_Audit decision).1 == (decision == AD_Deny)
 
 ////////////////////////////////////////////////////////////////////////////////
-// 6.d Tier-2 gaps and what blocks them.
-//
-// The following three properties are real and would meaningfully strengthen
-// the spec, but each is blocked by a distinct obstacle:
-//
-//   (Gap 4)  AUTH-HEADER EXCLUSION
-//            canonicalizePayload must be independent of the
-//            x-fleet-authorization header value.
-//            BLOCKED BY: the `Request = [256]` abstraction. The whole point
-//            of collapsing the canonical bytes into one opaque Cryptol
-//            value was to keep P8/P9 cheap; that collapse erases the
-//            internal structure (headers, etc.) needed to *state* this
-//            property.  STATEMENT (after refactor):
-//              property P_AuthExcluded r v1 v2 =
-//                canonicalize (r withAuth v1) == canonicalize (r withAuth v2)
-//            COST: replace abstract Request with a structured record type
-//            { method, path, headers : [N](Name, Value), body, timestamp }
-//            and rebuild isValidSignature on top of it. One refactor also
-//            unblocks Gap 6.
-//
-//   (Gap 6)  TIMESTAMP BINDING — FIXED.
-//            The timestamp validated by isValidRequestDate is now bound
-//            into the signed canonical bytes: `DeviceRequest::timestamp`
-//            is appended to canonicalizePayload, and `handle_activate`
-//            passes `request.timestamp` (NOT a caller parameter) to
-//            `isValidRequestDate`. Mechanised as
-//            P29_VerifierUsesRequestBoundTimestamp against the structured
-//            `RequestS` model; the historical `requestTimestampUnix`
-//            caller parameter has been removed.
-//
-//   (Gap 5)  CONSTANT-TIME COMPARISON
-//            constant_time_equals must execute the same sequence of basic
-//            blocks regardless of which byte position first differs.
-//            BLOCKED BY: Cryptol's semantic universe. Cryptol is a pure
-//            functional spec language — it describes *values*, not
-//            *executions*. The constant-time and variable-time
-//            implementations of byte-equality are *the same Cryptol
-//            function* (`\a b -> a == b`), so no Cryptol property can tell
-//            them apart. This obligation belongs at the SAW / LLVM level:
-//            symbolic execution of `crypto::constant_time_equals` for
-//            inputs that differ only in *where* they first diverge must
-//            produce the same control-flow trace. SAW can express this via
-//            `crucible_path_condition`-style assertions; it just isn't
-//            wired up here yet.
-////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////
 // 7. Compositional refinement — structured Request model
 //
 // The opaque `Request = [256]` is sufficient for HMAC algebra (P8, P9) but
-// blocks any property that needs to look INSIDE the request. We add a
+// blocks any property that needs to look inside the request. We add a
 // STRUCTURED layer alongside the abstract one. Existing properties P1–P27
 // keep reasoning about `Request = [256]`; new properties P28+ reason about
 // `RequestS`. The two layers are linked by viewing the abstract `Request`
-// as some hash of `canonicalizeS r`; that bridge is documentary — no
-// property below depends on it, so the refinement is purely additive.
+// as some hash of `canonicalizeS r`; that bridge is documentary.
 //
-// Bounded sizes for BMC: 2-byte fields, 2 headers per request. This is
-// small enough to keep Z3 fast (~1s/property) and large enough to exhibit
-// every structural counterexample shape we care about.
+// Bounded sizes: 2-byte fields, 2 headers per request.
 ////////////////////////////////////////////////////////////////////////////////
 
 type FLs = 2     // field length bound, bytes
@@ -673,8 +533,8 @@ private
     and [ (i >= f.len) ==> ((f.buf @ i) == 0)
         | i <- ([0 .. FLs - 1] : [FLs][IW]) ]
 
-// One header is a (name, value) pair plus a flag marking it as the auth
-// header (x-fleet-authorization) so the canonicalizer can exclude it.
+// One header: (name, value) pair plus a flag marking the auth header so
+// the canonicalizer can exclude its value from the signed payload.
 type Header = { name : Field, value : Field, isAuth : Bit }
 
 type RequestS =
@@ -702,9 +562,7 @@ private
   lpField f = [f.len] # f.buf
 
   // Length-prefix a header pair OR emit a constant-size all-zero placeholder
-  // if it is the auth header. Fixed output size keeps canonicalizeS Cryptol-
-  // statable; the placeholder content is irrelevant because the encoder
-  // elides auth headers regardless of their value.
+  // if it is the auth header. Fixed output size keeps canonicalizeS statable.
   lpHeader : Header -> [2 * (1 + FLs)][8]
   lpHeader h = if h.isAuth then zero
                            else (lpField h.name) # (lpField h.value)
@@ -720,14 +578,10 @@ canonicalizeS r =
   # lpField r.path
   # (split r.timestamp : [8][8])
 
-// ---- P28: Auth-header exclusion --------------------------------------------
-//
-// Two requests that differ ONLY in the bytes of their auth header value
-// must produce the same canonical bytes — otherwise the signature would
-// depend on itself.
-//
-// EXPECTED VERDICT: PASS. The encoder's `isAuth` skip enforces this; if a
-// future refactor removes the skip, this property breaks immediately.
+// P28: Auth-header exclusion. Two requests that differ ONLY in the bytes
+// of their auth header value must produce the same canonical bytes —
+// otherwise the signature would depend on itself.
+// EXPECTED VERDICT: PASS.
 property P28_AuthHeaderValueExcludedFromCanonicalization r v1 v2 =
   ( requestNormalized r /\ fieldNormalized v1 /\ fieldNormalized v2 ) ==>
     canonicalizeS { r | hdrs = [ if h.isAuth then { h | value = v1 } else h
@@ -736,26 +590,64 @@ property P28_AuthHeaderValueExcludedFromCanonicalization r v1 v2 =
     canonicalizeS { r | hdrs = [ if h.isAuth then { h | value = v2 } else h
                                 | h <- r.hdrs ] }
 
-// ---- P29: Timestamp binding ------------------------------------------------
-//
-// The timestamp the verifier validates must equal the timestamp inside the
-// signed request — otherwise an attacker can replay a stale signed request
-// with a fresh "current time" supplied by the caller and pass the freshness
-// check despite the signature being over old bytes.
-//
-// The implementation now binds the timestamp into the request: it is a
-// field of `DeviceRequest`, is included in the canonical signed bytes by
-// `canonicalizePayload`, and is the only value `handle_activate` passes
-// to `isValidRequestDate`. The Cryptol model below mirrors that: the
-// verifier extracts `r.timestamp` and the caller-supplied parameter (if
-// any) is unused — a pure transport-layer artefact.
+// P29: Timestamp binding. The verifier extracts the timestamp from the signed
+// request itself — a caller-supplied override cannot forge freshness.
 private
 
   verifierTimestamp_current : RequestS -> Timestamp -> Timestamp
   verifierTimestamp_current r _ = r.timestamp
 
-// EXPECTED VERDICT: PASS — the verifier uses the request-bound timestamp,
-// so a replayed signed request cannot be paired with a fresh "current
-// time" parameter to forge freshness.
+// EXPECTED VERDICT: PASS.
 property P29_VerifierUsesRequestBoundTimestamp r tsFromCaller =
   verifierTimestamp_current r tsFromCaller == r.timestamp
+
+// ---- Category F: Key Rotation (MSP keyIncarnationId model) ----------------
+
+// P30: A new incarnation ID resets an active key to inactive, enabling
+// reprovisioning. This mirrors MSP's `keyIncarnationId` counter increment.
+property P30_NewIncarnationResetsActiveKey keyIsActive newId storedId =
+  newId != storedId ==>
+    resetKeyIfNewIncarnation keyIsActive newId storedId == False
+
+// P31: An unchanged incarnation ID preserves the current key state.
+property P31_SameIncarnationPreservesKeyState keyIsActive id =
+  resetKeyIfNewIncarnation keyIsActive id id == keyIsActive
+
+// P32: After a key reset, provisionKey succeeds on an otherwise valid request.
+// Key rotation unlocks the "key already active" guard.
+property P32_KeyRotationUnblocksProvisioning validRequest vaultResult newId storedId =
+  isKeyVaultResult vaultResult ==>
+    validRequest ==>
+    vaultResult == KV_Ok ==>
+    newId != storedId ==>
+      provisionKey True validRequest vaultResult
+        (resetKeyIfNewIncarnation True newId storedId)
+        == PR_Succeeded
+
+// ---- Category G: Two-endpoint model (MSP IMDS / WireServer) ---------------
+
+// P33: WireServer always denies a non-admin caller in Enforce mode,
+// regardless of the RBAC decision. This is the implicit admin check that
+// MSP applies before any rule evaluation for WireServer.
+property P33_WireServerDeniesNonAdminInEnforce config decision =
+  isAccessMode config.wireMode ==>
+    isAccessDecision decision ==>
+    isDefaultAccess config.defaultAccess ==>
+    config.wireMode == AM_Enforce ==>
+      (enforceAccessEndpoint config EP_WireServer False decision).0 == False
+
+// P34: IMDS does not apply the WireServer implicit admin check. A non-admin
+// caller with an AD_Allow decision is permitted on IMDS.
+property P34_IMDSPermitsNonAdminOnAllow config =
+  isDefaultAccess config.defaultAccess ==>
+  config.imdsMode == AM_Enforce ==>
+    (enforceAccessEndpoint config EP_IMDS False AD_Allow).0 == True
+
+// P35: The IMDS mode and WireServer mode are independent. Changing the
+// WireServer mode to Off does not alter the IMDS Enforce decision.
+property P35_EndpointModesAreIndependent decision isAdmin =
+  isAccessDecision decision ==>
+    enforceAccessEndpoint { imdsMode = AM_Enforce, wireMode = AM_Enforce, defaultAccess = DA_Allow }
+                           EP_IMDS isAdmin decision
+    == enforceAccessEndpoint { imdsMode = AM_Enforce, wireMode = AM_Off, defaultAccess = DA_Allow }
+                              EP_IMDS isAdmin decision

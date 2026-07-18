@@ -3,7 +3,7 @@ name: Publish CI image
 # Builds and publishes the pre-baked toolchain image used by the Linux
 # verify job in verify.yml. The image bundles LLVM 20.1.6, SAW 1.5 with
 # bundled solvers, PowerShell 7.6.2, Rust stable + llvm-tools-preview,
-# and the latest saw-spec-gen release so the verify job skips the ~1 GB
+# and a pinned saw-spec-gen release so the verify job skips the ~1 GB
 # install dance every run.
 #
 # Triggers:
