@@ -7,7 +7,7 @@ title: SDEP_cpp
 
 ## Coverage at a glance
 
-✅ 6 proven · 🔲 0 bounded · 🔒 0 trusted assumptions · 🧩 11 adapters/stand-ins · ⚠️ 17 **unverified** · 📄 27 spec-only
+✅ 6 proven · 🔲 0 bounded · 🔒 0 trusted assumptions · 🧩 25 adapters/stand-ins · ⚠️ 17 **unverified** · 📄 32 spec-only
 
 See the full breakdown — including every real function the codebase contains, whether or not it was modeled — on the [Coverage Matrix](coverage.md). Pages here that carry a 🧩, 🔲, or ⚠️ badge surface the caveat in a banner at the top.
 
@@ -47,6 +47,15 @@ All type definitions: [types.md](types.md)
 | [loggedOf](functions/loggedOf.md) | 🧩 ABI adapter / stand-in | Tests whether `r` is well-formed. |
 | [statusEngagedByte](functions/statusEngagedByte.md) | 🧩 ABI adapter / stand-in | Computes 8 bits from `s`. |
 | [statusPayloadBytes](functions/statusPayloadBytes.md) | 🧩 ABI adapter / stand-in | Computes 16 bytes from `s`. |
+| [asciiLower](functions/asciiLower.md) | — | URL host canonicalization — LLVM: (ptr host, i8 hostLen) -> i8 Mirrors cpp/src/decision.cpp::classifyCanonicalHost. The function lowercases ASCII host bytes, rejects userinfo-smuggling (`@`) in the consumed prefix, and classifies common aliases for IMDS / WireServer. |
+| [hostEqLit10](functions/hostEqLit10.md) | — | Compares computed and provided values over `host` and `lit`, returning `True` on match. |
+| [hostEqLit13](functions/hostEqLit13.md) | — | Compares computed and provided values over `host` and `lit`, returning `True` on match. |
+| [hostEqLit15](functions/hostEqLit15.md) | — | Compares computed and provided values over `host` and `lit`, returning `True` on match. |
+| [hostEqLit18](functions/hostEqLit18.md) | — | Compares computed and provided values over `host` and `lit`, returning `True` on match. |
+| [hasUserinfo](functions/hasUserinfo.md) | — | Compares computed and provided values over `host` and `hostLen`, returning `True` on match. |
+| [isImdsAlias](functions/isImdsAlias.md) | — | Checks whether the imds alias is valid by comparing the computed and expected values. |
+| [isWireServerAlias](functions/isWireServerAlias.md) | — | Checks whether the wire server alias is valid by comparing the computed and expected values. |
+| [classifyCanonicalHost](functions/classifyCanonicalHost.md) | ⚠️ Implemented, unverified | Evaluates 5 conditions on `host` and `hostLen` in priority order, returning the first applicable 8 bits. Defaults to `CH_Unknown_b` when no prior condition matches. |
 | [hmacSha256](functions/hmacSha256.md) | — | Specs only use equality of HMAC outputs; the placeholder body is opaque to the solver, which models `hmacSha256` as an uninterpreted pure function for proof purposes. |
 | [isValidSignature](functions/isValidSignature.md) | ⚠️ Implemented, unverified | Checks whether the signature is valid by comparing the computed and expected values. |
 | [canonNormalized](functions/canonNormalized.md) | — | Compares computed and provided values over `n` and `b`, returning `True` on match. |
@@ -57,6 +66,18 @@ All type definitions: [types.md](types.md)
 | [lpHeader](functions/lpHeader.md) | — | Computes 2 * (1 + StructFieldLen) bytes from `h`. |
 | [canonicalizeS](functions/canonicalizeS.md) | 📄 Spec-only | Computes 3 * (1 + StructFieldLen) + MaxHeaders * 2 * (1 + StructFieldLen) + 8 bytes from `r`. |
 | [verifierTimestamp_current](functions/verifierTimestamp_current.md) | — | Computes 64 bits from `r` and `_`. |
+| [ksEngaged](functions/ksEngaged.md) | 🧩 ABI adapter / stand-in | Predicates the body reads out of the pre-state object image `pre` together with the requested key id `kid`. |
+| [ksWasActive](functions/ksWasActive.md) | 🧩 ABI adapter / stand-in | Compares computed and provided values over `pre`, returning `True` on match. |
+| [ksIdMatch](functions/ksIdMatch.md) | 🧩 ABI adapter / stand-in | Compares computed and provided values over `pre` and `kid`, returning `True` on match. |
+| [keyStoreActivateRet](functions/keyStoreActivateRet.md) | 🧩 ABI adapter / stand-in | Returned ActivationResult byte — structurally identical to the C++ branch ladder, same branch order. |
+| [keyStoreActivatePost](functions/keyStoreActivatePost.md) | 🧩 ABI adapter / stand-in | Post-state object image. The body mutates EXACTLY one byte — the `isActive` flag — and only on a matching activation of an inactive key; every other byte (mutex, keyId, secret, createdAt, engaged) is carried through unchanged. This is the monotone "latch": once set, `isActive` is never cleared by `activate`. |
+| [newKeyStored](functions/newKeyStored.md) | 🧩 ABI adapter / stand-in | The body forces the incoming key INACTIVE before storing it. |
+| [keyStoreProvisionPost](functions/keyStoreProvisionPost.md) | 🧩 ABI adapter / stand-in | Post-state object image. On the engaged (TOFU-locked) path nothing changes; on the empty path the 64-byte (inactivated) key is written into the optional payload at offset 80 and the engaged flag at 144 is set. Bytes 0..79 (mutex) and 145..151 (tail padding) are preserved. |
+| [keyStoreProvisionRet](functions/keyStoreProvisionRet.md) | 🧩 ABI adapter / stand-in | Returned optional<EnrollmentKey> image (72 bytes: 64-byte payload · engaged@64 · 7 bytes tail). ONLY meaningful on the empty (fresh) path, where the body memcpy's the just-stored 72-byte optional out of the object — so the tail bytes mirror the object's tail (pre[145..151]). |
+| [boolOfByte](functions/boolOfByte.md) | — | ── KeyStore read accessors — hasKey() / isActive() ─────────────────── Both take the lock, read the optional, and return a bool without mutating the object. hasKey() reports whether a key is engaged; isActive() reports engaged AND the key's isActive flag. |
+| [keyStoreHasKeyRet](functions/keyStoreHasKeyRet.md) | 🧩 ABI adapter / stand-in | Cryptol indexes words MSB-first (`@ 0` is bit 7), while LLVM i8->i1 truncation keeps the LSB. Use `@ 7` to mirror the implementation. |
+| [keyStoreIsActiveRet](functions/keyStoreIsActiveRet.md) | 🧩 ABI adapter / stand-in | Tests whether `pre` is well-formed. |
+| [keyStoreCurrentRet](functions/keyStoreCurrentRet.md) | 📄 Spec-only | KeyStore::current returns the optional<EnrollmentKey> stored in `key_`. |
 
 Per-function detail pages: [functions](functions/index.md)
 
@@ -73,6 +94,8 @@ Per-function detail pages: [functions](functions/index.md)
 | [enforceAccess matrix-coverage closures](properties/enforce-access-matrix-coverage-closures.md) | P26–P27 |
 | [Structured-request properties](properties/structured-request-properties.md) | P28–P29 |
 | [Intentional counterexamples](properties/intentional-counterexamples.md) | P30–P32 |
+| [prove)](properties/prove).md) | KS1–PROV5 |
+| [KeyStore read accessors — hasKey() / isActive()](properties/key-store-read-accessors-—-has-key()-is-active().md) | ACC1 |
 
 
 ## Additional Documentation

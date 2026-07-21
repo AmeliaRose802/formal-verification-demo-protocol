@@ -9,10 +9,10 @@
 | ✅ | Proven | 6 |
 | 🔲 | Proven (bounded) | 0 |
 | 🔒 | Trusted assumption | 0 |
-| 🧩 | ABI adapter / stand-in | 11 |
+| 🧩 | ABI adapter / stand-in | 25 |
 | ⚠️ | Implemented, unverified | 17 |
-| 📄 | Spec-only | 27 |
-| | **Total** | **61** |
+| 📄 | Spec-only | 32 |
+| | **Total** | **80** |
 
 > ⚠️ **17 real functions have no proof and no declared abstraction.** These are the gaps a security review needs to inspect first.
 
@@ -25,7 +25,7 @@ Real production functions with no proof. This is the gap.
 | `activate` | impl (cpp) | `keyStoreActivateRet` | — | `C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp` |
 | `canonicalizePayload` | impl (cpp) | — | — | `C:/Users/ameliapayne/demo_protocol/cpp/src/canonical.cpp` |
 | `canonicalize_lp` | impl (cpp) | `canonicalize_lp_ret` *(bounded model only)* | — | `C:/Users/ameliapayne/demo_protocol/cpp/include/sdep/canonical_lp.hpp` |
-| `classifyCanonicalHost` | impl (cpp) | — | — | `C:/Users/ameliapayne/demo_protocol/cpp/include/sdep/decision.hpp` |
+| [`classifyCanonicalHost`](functions/classifyCanonicalHost.md) | model + impl (SDEP_cpp ↔ cpp) | — | — | `C:/Users/ameliapayne/demo_protocol/cpp/include/sdep/decision.hpp` · not attempted |
 | `current` | impl (cpp) | `keyStoreCurrentRet` | — | `C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp` |
 | `hasKey` | impl (cpp) | `keyStoreHasKeyRet` | — | `C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp` |
 | `has_metadata_header` | impl (cpp) | — | — | `C:/Users/ameliapayne/demo_protocol/cpp/src/controller.cpp` |
@@ -62,12 +62,26 @@ Cryptol definitions with no real-code counterpart (placeholders, uninterpreted f
 | [`allowedOf`](functions/allowedOf.md) | model (SDEP_cpp) | — | — | Accessor over the packed enforceAccess outcome; modeling helper, exercised via the enforceAccess proof. · not attempted |
 | [`canonicalize_lp_post`](functions/canonicalize_lp_post.md) | model (SDEP_cpp) | — | — | Bounded (MAX_LEN) length-prefix encoder model; the production canonicalize_lp in cpp/src/decision.cpp is proven separately under the length bound. · not attempted |
 | [`canonicalize_lp_ret`](functions/canonicalize_lp_ret.md) | model (SDEP_cpp) | stands in for `canonicalize_lp`, `canonicalize_lp` | — | Byte-count model for the bounded length-prefix encoder; paired with canonicalize_lp_post. · not attempted |
+| [`ek_off_isActive`](functions/ek_off_isActive.md) | model (SDEP_cpp) | — | — | byte offset of EnrollmentKey.isActive within the 64-byte key record. · not attempted |
 | [`isAccessDecision_b`](functions/isAccessDecision_b.md) | model (SDEP_cpp) | — | — | Well-formedness predicate over the AccessDecision ABI byte — a modeling precondition, not standalone code. · not attempted |
 | [`isAccessMode_b`](functions/isAccessMode_b.md) | model (SDEP_cpp) | — | — | Well-formedness predicate over the AccessMode ABI byte — a modeling precondition, not standalone code. · not attempted |
 | [`isActivationResult_b`](functions/isActivationResult_b.md) | model (SDEP_cpp) | — | — | Well-formedness predicate over the ActivationResult ABI byte — a modeling precondition, not standalone code. · not attempted |
 | [`isAuthResult_b`](functions/isAuthResult_b.md) | model (SDEP_cpp) | — | — | Well-formedness predicate over the AuthResult ABI byte — a modeling precondition, not standalone code. · not attempted |
 | [`isKeyVaultResult_b`](functions/isKeyVaultResult_b.md) | model (SDEP_cpp) | — | — | Well-formedness predicate over the KeyVaultResult ABI byte — a modeling precondition used inside the proven decision functions, not a standalone implementation. · not attempted |
+| [`keyStoreActivatePost`](functions/keyStoreActivatePost.md) | model (SDEP_cpp) | — | — | Cryptol model of KeyStore::activate's post-state (one-byte isActive latch); implementation-level SAW proof pending. · not attempted |
+| [`keyStoreActivateRet`](functions/keyStoreActivateRet.md) | model (SDEP_cpp) | stands in for `activate`, `activate`, `activate`, `activate`, `activate`, `activate`, `activate`, `activate`, `activate`, `activate`, `activate`, `activate`, `activate`, `activate`, `activate`, `activate` | — | Cryptol model of KeyStore::activate's result ladder; implementation-level SAW proof pending. · not attempted |
+| [`keyStoreHasKeyRet`](functions/keyStoreHasKeyRet.md) | model (SDEP_cpp) | stands in for `hasKey`, `hasKey`, `hasKey`, `hasKey`, `hasKey`, `hasKey`, `hasKey`, `hasKey`, `hasKey`, `hasKey`, `hasKey`, `hasKey` | — | model of KeyStore::hasKey() (optional has_value). · not attempted |
+| [`keyStoreIsActiveRet`](functions/keyStoreIsActiveRet.md) | model (SDEP_cpp) | stands in for `isActive`, `isActive`, `isActive`, `isActive`, `isActive`, `isActive`, `isActive`, `isActive`, `isActive`, `isActive`, `isActive`, `isActive` | — | model of KeyStore::isActive() (engaged && key_->isActive). · not attempted |
+| [`keyStoreProvisionPost`](functions/keyStoreProvisionPost.md) | model (SDEP_cpp) | — | — | Cryptol model of KeyStore::provision's post-state; implementation-level SAW proof pending. · not attempted |
+| [`keyStoreProvisionRet`](functions/keyStoreProvisionRet.md) | model (SDEP_cpp) | stands in for `provision`, `provision`, `provision`, `provision`, `provision`, `provision`, `provision`, `provision`, `provision`, `provision`, `provision`, `provision`, `provision`, `provision` | — | Cryptol model of KeyStore::provision's returned optional on the fresh-enrolment path. · not attempted |
+| [`ksEngaged`](functions/ksEngaged.md) | model (SDEP_cpp) | — | — | model predicate reading the KeyStore object image — stands in for the C++ field reads. · not attempted |
+| [`ksIdMatch`](functions/ksIdMatch.md) | model (SDEP_cpp) | — | — | model predicate (keyId equality) standing in for the C++ Uuid::operator==. · not attempted |
+| [`ksWasActive`](functions/ksWasActive.md) | model (SDEP_cpp) | — | — | model predicate (isActive byte) standing in for the C++ field read. · not attempted |
+| [`ks_off_engaged`](functions/ks_off_engaged.md) | model (SDEP_cpp) | — | — | byte offset of the optional engaged flag in the KeyStore object image; an addressing constant for the model, not executable code. · not attempted |
+| [`ks_off_isActive`](functions/ks_off_isActive.md) | model (SDEP_cpp) | — | — | byte offset of key_->isActive in the KeyStore object image; an addressing constant for the model, not executable code. · not attempted |
+| [`ks_off_keyId`](functions/ks_off_keyId.md) | model (SDEP_cpp) | — | — | byte offset of key_->keyId in the KeyStore object image; an addressing constant for the model, not executable code. · not attempted |
 | [`loggedOf`](functions/loggedOf.md) | model (SDEP_cpp) | — | — | Accessor over the packed enforceAccess outcome; modeling helper, exercised via the enforceAccess proof. · not attempted |
+| [`newKeyStored`](functions/newKeyStored.md) | model (SDEP_cpp) | — | — | model of the `newKey.isActive = false` write the body performs prior to storing. · not attempted |
 | [`statusEngagedByte`](functions/statusEngagedByte.md) | model (SDEP_cpp) | — | — | Accessor over the getStatus EnrollmentStatus bytes; modeling helper. · not attempted |
 | [`statusPayloadBytes`](functions/statusPayloadBytes.md) | model (SDEP_cpp) | — | — | Accessor over the getStatus EnrollmentStatus bytes; modeling helper. · not attempted |
 
@@ -89,6 +103,10 @@ Lives in the model on purpose (gap-exhibiting reference functions, etc.) — no 
 | [`AR_Authenticated_b`](functions/AR_Authenticated_b.md) | model (SDEP_cpp) | — | — | — |
 | [`AR_Unauthenticated_b`](functions/AR_Unauthenticated_b.md) | model (SDEP_cpp) | — | — | — |
 | [`AR_VaultUnavailable_b`](functions/AR_VaultUnavailable_b.md) | model (SDEP_cpp) | — | — | — |
+| [`CH_Imds_b`](functions/CH_Imds_b.md) | model (SDEP_cpp) | — | — | — |
+| [`CH_Unknown_b`](functions/CH_Unknown_b.md) | model (SDEP_cpp) | — | — | — |
+| [`CH_UserinfoPresent_b`](functions/CH_UserinfoPresent_b.md) | model (SDEP_cpp) | — | — | — |
+| [`CH_WireServer_b`](functions/CH_WireServer_b.md) | model (SDEP_cpp) | — | — | — |
 | [`ER_Disabled_b`](functions/ER_Disabled_b.md) | model (SDEP_cpp) | — | — | not attempted |
 | [`ER_InternalError_b`](functions/ER_InternalError_b.md) | model (SDEP_cpp) | — | — | — |
 | [`ER_Succeeded_b`](functions/ER_Succeeded_b.md) | model (SDEP_cpp) | — | — | — |
@@ -104,4 +122,5 @@ Lives in the model on purpose (gap-exhibiting reference functions, etc.) — no 
 | [`PR_Succeeded_b`](functions/PR_Succeeded_b.md) | model (SDEP_cpp) | — | — | — |
 | [`PR_Unauthorized_b`](functions/PR_Unauthorized_b.md) | model (SDEP_cpp) | — | — | — |
 | [`canonicalizeS`](functions/canonicalizeS.md) | model (SDEP_cpp) | — | — | not attempted |
+| [`keyStoreCurrentRet`](functions/keyStoreCurrentRet.md) | model (SDEP_cpp) | stands in for `current`, `current`, `current`, `current`, `current`, `current`, `current`, `current`, `current`, `current`, `current` | — | not attempted |
 

@@ -86,3 +86,10 @@ Structural request shape used by the canonicalizer model: HTTP method, path, bod
 
 Used by: [`requestNormalized`](functions/requestNormalized.md), [`canonicalizeS`](functions/canonicalizeS.md), [`verifierTimestamp_current`](functions/verifierTimestamp_current.md)
 
+### KS_BYTES
+**Type:** `[152]` — `152`-bit value
+
+Bounded check over the configured finite model. Offsets into the 152-byte KeyStore image.
+
+Used by: [`ksEngaged`](functions/ksEngaged.md), [`ksWasActive`](functions/ksWasActive.md), [`ksIdMatch`](functions/ksIdMatch.md), [`keyStoreActivateRet`](functions/keyStoreActivateRet.md), [`keyStoreActivatePost`](functions/keyStoreActivatePost.md), [`keyStoreProvisionPost`](functions/keyStoreProvisionPost.md), [`keyStoreProvisionRet`](functions/keyStoreProvisionRet.md), [`keyStoreHasKeyRet`](functions/keyStoreHasKeyRet.md), [`keyStoreIsActiveRet`](functions/keyStoreIsActiveRet.md), [`keyStoreCurrentRet`](functions/keyStoreCurrentRet.md)
+

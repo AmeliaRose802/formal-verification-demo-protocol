@@ -76,6 +76,12 @@ AD_Allow_b           = 0 : [8]
 AD_Deny_b            = 1 : [8]
 AD_NoRule_b          = 2 : [8]
 
+// CanonHostClass
+CH_Imds_b            = 0 : [8]
+CH_WireServer_b      = 1 : [8]
+CH_Unknown_b         = 2 : [8]
+CH_UserinfoPresent_b = 3 : [8]
+
 ////////////////////////////////////////////////////////////////////////
 // 4.1 provisionKey — LLVM: (i1, i1, i8, i1) -> i8
 ////////////////////////////////////////////////////////////////////////
@@ -336,6 +342,61 @@ statusEngagedByte  s = s @ 18
 
 statusPayloadBytes : [20][8] -> [16][8]
 statusPayloadBytes s = take`{16} (drop`{2} s)
+
+////////////////////////////////////////////////////////////////////////
+// URL host canonicalization — LLVM: (ptr host, i8 hostLen) -> i8
+////////////////////////////////////////////////////////////////////////
+//
+// Mirrors cpp/src/decision.cpp::classifyCanonicalHost. The function
+// lowercases ASCII host bytes, rejects userinfo-smuggling (`@`) in the
+// consumed prefix, and classifies common aliases for IMDS / WireServer.
+
+private
+  asciiLower : [8] -> [8]
+  asciiLower c = if c >= 0x41 /\ c <= 0x5A then c + 32 else c
+
+  hostEqLit10 : [32][8] -> [10][8] -> Bit
+  hostEqLit10 host lit = and [ asciiLower (host @ i) == asciiLower (lit @ i)
+                             | i <- ([0 .. 9] : [10][8]) ]
+
+  hostEqLit13 : [32][8] -> [13][8] -> Bit
+  hostEqLit13 host lit = and [ asciiLower (host @ i) == asciiLower (lit @ i)
+                             | i <- ([0 .. 12] : [13][8]) ]
+
+  hostEqLit15 : [32][8] -> [15][8] -> Bit
+  hostEqLit15 host lit = and [ asciiLower (host @ i) == asciiLower (lit @ i)
+                             | i <- ([0 .. 14] : [15][8]) ]
+
+  hostEqLit18 : [32][8] -> [18][8] -> Bit
+  hostEqLit18 host lit = and [ asciiLower (host @ i) == asciiLower (lit @ i)
+                             | i <- ([0 .. 17] : [18][8]) ]
+
+  hasUserinfo : [32][8] -> [8] -> Bit
+  hasUserinfo host hostLen =
+    or [ (i < hostLen) /\ ((host @ i) == 0x40)
+       | i <- ([0 .. 31] : [32][8]) ]
+
+  isImdsAlias : [32][8] -> [8] -> Bit
+  isImdsAlias host hostLen =
+       (hostLen == 15 /\ hostEqLit15 host "169.254.169.254")
+    \/ (hostLen == 10 /\ hostEqLit10 host "2852039166")
+    \/ (hostLen == 10 /\ hostEqLit10 host "0xa9fea9fe")
+    \/ (hostLen == 18 /\ hostEqLit18 host "[::ffff:a9fe:a9fe]")
+
+  isWireServerAlias : [32][8] -> [8] -> Bit
+  isWireServerAlias host hostLen =
+       (hostLen == 13 /\ hostEqLit13 host "168.63.129.16")
+    \/ (hostLen == 10 /\ hostEqLit10 host "2822734096")
+    \/ (hostLen == 10 /\ hostEqLit10 host "0xa83f8110")
+    \/ (hostLen == 18 /\ hostEqLit18 host "[::ffff:a83f:8110]")
+
+classifyCanonicalHost : [32][8] -> [8] -> [8]
+classifyCanonicalHost host hostLen =
+  if hostLen == 0 \/ hostLen > 32 then CH_Unknown_b
+   | hasUserinfo host hostLen      then CH_UserinfoPresent_b
+   | isImdsAlias host hostLen      then CH_Imds_b
+   | isWireServerAlias host hostLen then CH_WireServer_b
+  else                                  CH_Unknown_b
 
 ////////////////////////////////////////////////////////////////////////
 // 4.8 Abstract HMAC primitives (for P8, P9)
@@ -716,3 +777,243 @@ property P32_AuthenticatedImpliesEnrolled fleetEnabled validMetadata activationR
   ( fleetEnabled /\ validMetadata ) ==>
     enrollDevice fleetEnabled validMetadata
                      AR_Authenticated_b activationResult == ER_Succeeded_b
+
+////////////////////////////////////////////////////////////////////////
+// 4.10  KeyStore::activate — stateful object-transition model
+////////////////////////////////////////////////////////////////////////
+//
+// This is the whole-object view of the production state machine in
+// cpp/src/key_store.cpp:
+//
+//   ActivationResult KeyStore::activate(const Uuid& keyId) {
+//     std::scoped_lock lock(mu_);
+//     if (!key_.has_value())        return ActivationResult::IoFailure;
+//     if (key_->keyId != keyId)     return ActivationResult::IoFailure;
+//     if (key_->isActive)           return ActivationResult::AlreadyActive;
+//     key_->isActive = true;
+//     return ActivationResult::Success;
+//   }
+//
+// The functions below model the SEQUENTIAL transition: the `KeyStore`
+// object is treated as the flat 152-byte image laid out by the MSVC ABI,
+// and one call to `activate` is EXPECTED to agree with them for both the
+// returned `ActivationResult` byte AND the resulting object image. This
+// is a Cryptol-level model only — an implementation-level SAW proof
+// (saw-spec-gen cannot yet generate stateful mutating-`this` specs) is
+// future work; see the CONCURRENCY CAVEAT below.
+//
+// Byte layout of the `KeyStore` object (confirmed via -fdump-record-
+// layouts and the -O1 LLVM IR):
+//
+//   [  0,  80)  std::mutex mu_         (opaque; recursion counter @ 76)
+//   [ 80,  96)  key_->keyId   (Uuid, 16 bytes)
+//   [ 96, 128)  key_->secret  (32 bytes)
+//   [128]       key_->isActive   (bool, 0/1)
+//   [136, 144)  key_->createdAt  (int64)
+//   [144]       key_._Has_value  (optional engaged flag, 0/1)
+//
+// CONCURRENCY CAVEAT. The `std::scoped_lock` is out of scope: this
+// Cryptol model captures the single-threaded transition the body
+// performs once the lock is held, and the KS1-KS4 properties are proven
+// about that model. An implementation-level SAW proof tying it to the
+// C++ body is future work; there the mutex bytes would be treated as
+// opaque and the lock/unlock calls modeled as memory-neutral no-ops.
+
+// Offsets into the 152-byte KeyStore image.
+type KS_BYTES   = 152
+// @coverage abstraction: byte offset of key_->keyId in the KeyStore object image; an addressing constant for the model, not executable code.
+ks_off_keyId    = 80 : Integer   // start of key_->keyId (16 bytes)
+// @coverage abstraction: byte offset of key_->isActive in the KeyStore object image; an addressing constant for the model, not executable code.
+ks_off_isActive = 128 : Integer  // key_->isActive byte
+// @coverage abstraction: byte offset of the optional engaged flag in the KeyStore object image; an addressing constant for the model, not executable code.
+ks_off_engaged  = 144 : Integer  // optional engaged flag
+
+// Predicates the body reads out of the pre-state object image `pre`
+// together with the requested key id `kid`.
+// @coverage abstraction: model predicate reading the KeyStore object image — stands in for the C++ field reads.
+ksEngaged : [KS_BYTES][8] -> Bit
+ksEngaged pre = (pre @ ks_off_engaged) == 1
+
+// @coverage abstraction: model predicate (isActive byte) standing in for the C++ field read.
+ksWasActive : [KS_BYTES][8] -> Bit
+ksWasActive pre = (pre @ ks_off_isActive) == 1
+
+// @coverage abstraction: model predicate (keyId equality) standing in for the C++ Uuid::operator==.
+ksIdMatch : [KS_BYTES][8] -> [16][8] -> Bit
+ksIdMatch pre kid = (take`{16} (drop`{80} pre)) == kid
+
+// Returned ActivationResult byte — structurally identical to the C++
+// branch ladder, same branch order.
+// @coverage abstraction: Cryptol model of KeyStore::activate's result ladder; implementation-level SAW proof pending.
+keyStoreActivateRet : [KS_BYTES][8] -> [16][8] -> [8]
+keyStoreActivateRet pre kid =
+  if ~ (ksEngaged pre)      then AC_IoFailure_b
+   | ~ (ksIdMatch pre kid)  then AC_IoFailure_b
+   | ksWasActive pre        then AC_AlreadyActive_b
+  else                           AC_Success_b
+
+// Post-state object image. The body mutates EXACTLY one byte — the
+// `isActive` flag — and only on a matching activation of an inactive
+// key; every other byte (mutex, keyId, secret, createdAt, engaged) is
+// carried through unchanged. This is the monotone "latch": once set,
+// `isActive` is never cleared by `activate`.
+// @coverage abstraction: Cryptol model of KeyStore::activate's post-state (one-byte isActive latch); implementation-level SAW proof pending.
+keyStoreActivatePost : [KS_BYTES][8] -> [16][8] -> [KS_BYTES][8]
+keyStoreActivatePost pre kid =
+  update pre ks_off_isActive newActive
+  where
+    newActive = if (ksEngaged pre) /\ (ksIdMatch pre kid) /\ ~(ksWasActive pre)
+                then 1
+                else pre @ ks_off_isActive
+
+// ── Cryptol properties (design-level corollaries, provable by :prove) ──
+
+// KS1: the isActive latch is monotone — activate never clears an
+// already-active key, regardless of which key id is presented.
+property KS1_ActivateLatchMonotone pre kid =
+  ((pre @ ks_off_isActive) <= 1) ==>
+    (keyStoreActivatePost pre kid @ ks_off_isActive)
+      >= (pre @ ks_off_isActive)
+
+// KS2: a successful Success result implies the key is active afterwards,
+// and AlreadyActive implies it was active before (and stays active).
+property KS2_SuccessImpliesActive pre kid =
+  ((pre @ ks_off_isActive) <= 1) /\ ((pre @ ks_off_engaged) <= 1) ==>
+    (keyStoreActivateRet pre kid == AC_Success_b ==>
+        (keyStoreActivatePost pre kid @ ks_off_isActive) == 1) /\
+    (keyStoreActivateRet pre kid == AC_AlreadyActive_b ==>
+        (keyStoreActivatePost pre kid @ ks_off_isActive) == 1)
+
+// KS3: activate only ever touches the isActive byte — every other byte
+// of the object image is preserved (frame condition). Stated as: the
+// slice before byte 128 and the slice after byte 128 are both carried
+// through unchanged.
+property KS3_OnlyIsActiveChanges pre kid =
+  (take`{128} (keyStoreActivatePost pre kid) == take`{128} pre) /\
+  (drop`{129} (keyStoreActivatePost pre kid) == drop`{129} pre)
+
+// KS4: IoFailure (no key / wrong key) leaves isActive completely
+// unchanged — a failed activation has no side effect on the flag.
+property KS4_IoFailureNoEffect pre kid =
+  (keyStoreActivateRet pre kid == AC_IoFailure_b) ==>
+    (keyStoreActivatePost pre kid @ ks_off_isActive)
+      == (pre @ ks_off_isActive)
+
+// ── KeyStore::provision — Trust-On-First-Use (TOFU) enrollment ─────────
+//
+// `provision(EnrollmentKey newKey) -> optional<EnrollmentKey>` is the
+// other half of the KeyStore lifecycle: it installs the FIRST key into
+// an empty store and is otherwise inert. Its body (held under the same
+// scoped_lock, modelled as a memory-neutral no-op here) does:
+//
+//   if key_ already engaged           -> return nullopt, store UNCHANGED
+//   else  newKey.isActive := false;   -> store newKey, engage; return Some
+//
+// This is the TOFU latch: once any key exists, provision can never
+// overwrite it (re-enrolment must go through the wipe path, out of
+// scope). The freshly stored key is always written INACTIVE — activation
+// is a separate, explicit step (`activate`), so provisioning alone never
+// yields a usable (active) credential.
+//
+// EnrollmentKey is a 64-byte POD: keyId@0 (16) · secret@16 (32) ·
+// isActive@48 (bool) · createdAt@56 (i64). Inside the KeyStore optional
+// it sits at object offset 80, so its isActive lands at 80+48 = 128 and
+// the optional engaged flag at 80+64 = 144 (consistent with activate).
+
+// @coverage abstraction: byte offset of EnrollmentKey.isActive within the 64-byte key record.
+ek_off_isActive = 48 : Integer
+
+// The body forces the incoming key INACTIVE before storing it.
+// @coverage abstraction: model of the `newKey.isActive = false` write the body performs prior to storing.
+newKeyStored : [64][8] -> [64][8]
+newKeyStored nk = update nk ek_off_isActive 0
+
+// Post-state object image. On the engaged (TOFU-locked) path nothing
+// changes; on the empty path the 64-byte (inactivated) key is written
+// into the optional payload at offset 80 and the engaged flag at 144 is
+// set. Bytes 0..79 (mutex) and 145..151 (tail padding) are preserved.
+// @coverage abstraction: Cryptol model of KeyStore::provision's post-state; implementation-level SAW proof pending.
+keyStoreProvisionPost : [KS_BYTES][8] -> [64][8] -> [KS_BYTES][8]
+keyStoreProvisionPost pre nk =
+  if (pre @ ks_off_engaged) == 1
+  then pre
+  else (take`{80} pre) # (newKeyStored nk) # [1] # (drop`{145} pre)
+
+// Returned optional<EnrollmentKey> image (72 bytes: 64-byte payload ·
+// engaged@64 · 7 bytes tail). ONLY meaningful on the empty (fresh) path,
+// where the body memcpy's the just-stored 72-byte optional out of the
+// object — so the tail bytes mirror the object's tail (pre[145..151]).
+// On the engaged path the return is nullopt and its payload is left
+// uninitialised (only the engaged byte, asserted 0, is defined); an
+// implementation-level proof of that path would need a partial
+// postcondition. (Implementation-level SAW proof pending.)
+// @coverage abstraction: Cryptol model of KeyStore::provision's returned optional on the fresh-enrolment path.
+keyStoreProvisionRet : [KS_BYTES][8] -> [64][8] -> [72][8]
+keyStoreProvisionRet pre nk = (newKeyStored nk) # [1] # (drop`{145} pre)
+
+// ── Cryptol properties (provable by :prove) ───────────────────────────
+
+// PROV1: TOFU frame condition — provisioning into an already-engaged
+// store is a no-op on the object image (the existing key is never
+// overwritten).
+property PROV1_TofuFrame pre nk =
+  ((pre @ ks_off_engaged) == 1) ==>
+    (keyStoreProvisionPost pre nk == pre)
+
+// PROV2: a freshly provisioned key is always stored INACTIVE — provision
+// alone never produces an active credential.
+property PROV2_FreshKeyInactive pre nk =
+  ((pre @ ks_off_engaged) == 0) ==>
+    ((keyStoreProvisionPost pre nk @ ks_off_isActive) == 0)
+
+// PROV3: provisioning into an empty store engages it (sets the optional
+// flag), so a subsequent provision hits the TOFU lock.
+property PROV3_FreshEngages pre nk =
+  ((pre @ ks_off_engaged) == 0) ==>
+    ((keyStoreProvisionPost pre nk @ ks_off_engaged) == 1)
+
+// PROV4: the returned key (fresh path) is itself inactive — the caller
+// receives a provisional, not-yet-usable credential.
+property PROV4_ReturnedKeyInactive pre nk =
+  (keyStoreProvisionRet pre nk @ ek_off_isActive) == 0
+
+// PROV5: provision never touches the mutex bytes (object offsets 0..79),
+// on either path — the lock region is carried through verbatim.
+property PROV5_MutexPreserved pre nk =
+  take`{80} (keyStoreProvisionPost pre nk) == take`{80} pre
+
+// ── KeyStore read accessors — hasKey() / isActive() ───────────────────
+// Both take the lock, read the optional, and return a bool without
+// mutating the object. hasKey() reports whether a key is engaged;
+// isActive() reports engaged AND the key's isActive flag.
+//
+// The implementation materializes C++ bool from stored bytes via i8->i1
+// truncation in LLVM (low-bit projection), not a strict byte == 1 test.
+// To match implementation behavior for fully symbolic object images, model
+// bool fields as low-bit views.
+private
+  boolOfByte : [8] -> Bit
+  // Cryptol indexes words MSB-first (`@ 0` is bit 7), while LLVM i8->i1
+  // truncation keeps the LSB. Use `@ 7` to mirror the implementation.
+  boolOfByte b = (b @ 7) == 1
+
+// @coverage abstraction: model of KeyStore::hasKey() (optional has_value).
+keyStoreHasKeyRet : [KS_BYTES][8] -> Bit
+keyStoreHasKeyRet pre = boolOfByte (pre @ ks_off_engaged)
+
+// @coverage abstraction: model of KeyStore::isActive() (engaged && key_->isActive).
+keyStoreIsActiveRet : [KS_BYTES][8] -> Bit
+keyStoreIsActiveRet pre = boolOfByte (pre @ ks_off_engaged) /\ boolOfByte (pre @ ks_off_isActive)
+
+// ACC1: an active store necessarily has a key — isActive() implies
+// hasKey(). This couples the two accessors so a caller can rely on
+// isActive() as a strictly stronger check.
+property ACC1_ActiveImpliesHasKey pre =
+  keyStoreIsActiveRet pre ==> keyStoreHasKeyRet pre
+
+// KeyStore::current returns the optional<EnrollmentKey> stored in `key_`.
+// In the flat KeyStore image this is the trailing 72 bytes:
+//   payload[64] at [80..143], has_value at [144], tail padding [145..151].
+// Model as an exact slice copy from the object image.
+keyStoreCurrentRet : [KS_BYTES][8] -> [72][8]
+keyStoreCurrentRet pre = drop`{80} pre

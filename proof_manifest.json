@@ -46,13 +46,13 @@
           "impl_file": "decision.cpp",
           "solver": "z3",
           "status": "proven",
-          "time_secs": 1.3379876
+          "time_secs": 2.0026061
         }
       },
       "overall": {
         "solver": "z3",
         "status": "proven",
-        "time_secs": 1.3379876
+        "time_secs": 2.0026061
       }
     },
     "canonicalizeS": {
@@ -85,19 +85,39 @@
         "status": "not_attempted"
       }
     },
+    "classifyCanonicalHost": {
+      "by_language": {
+        "cpp": {
+          "status": "not_attempted"
+        }
+      },
+      "overall": {
+        "status": "not_attempted"
+      }
+    },
+    "ek_off_isActive": {
+      "by_language": {
+        "cpp": {
+          "status": "not_attempted"
+        }
+      },
+      "overall": {
+        "status": "not_attempted"
+      }
+    },
     "enforceAccess": {
       "by_language": {
         "cpp": {
           "impl_file": "decision.cpp",
           "solver": "z3",
           "status": "proven",
-          "time_secs": 1.3304557
+          "time_secs": 2.0707055
         }
       },
       "overall": {
         "solver": "z3",
         "status": "proven",
-        "time_secs": 1.3304557
+        "time_secs": 2.0707055
       }
     },
     "enrollDevice": {
@@ -106,13 +126,13 @@
           "impl_file": "decision.cpp",
           "solver": "z3",
           "status": "proven",
-          "time_secs": 2.0004528
+          "time_secs": 1.2843827
         }
       },
       "overall": {
         "solver": "z3",
         "status": "proven",
-        "time_secs": 2.0004528
+        "time_secs": 1.2843827
       }
     },
     "getStatus": {
@@ -121,13 +141,13 @@
           "impl_file": "decision.cpp",
           "solver": "z3",
           "status": "proven",
-          "time_secs": 7.9286276
+          "time_secs": 5.2701809
         }
       },
       "overall": {
         "solver": "z3",
         "status": "proven",
-        "time_secs": 7.9286276
+        "time_secs": 5.2701809
       }
     },
     "isAccessDecision_b": {
@@ -186,16 +206,156 @@
           "impl_file": "decision.cpp",
           "solver": "z3",
           "status": "proven",
-          "time_secs": 1.8681506
+          "time_secs": 1.2162708
         }
       },
       "overall": {
         "solver": "z3",
         "status": "proven",
-        "time_secs": 1.8681506
+        "time_secs": 1.2162708
+      }
+    },
+    "keyStoreActivatePost": {
+      "by_language": {
+        "cpp": {
+          "status": "not_attempted"
+        }
+      },
+      "overall": {
+        "status": "not_attempted"
+      }
+    },
+    "keyStoreActivateRet": {
+      "by_language": {
+        "cpp": {
+          "status": "not_attempted"
+        }
+      },
+      "overall": {
+        "status": "not_attempted"
+      }
+    },
+    "keyStoreCurrentRet": {
+      "by_language": {
+        "cpp": {
+          "status": "not_attempted"
+        }
+      },
+      "overall": {
+        "status": "not_attempted"
+      }
+    },
+    "keyStoreHasKeyRet": {
+      "by_language": {
+        "cpp": {
+          "status": "not_attempted"
+        }
+      },
+      "overall": {
+        "status": "not_attempted"
+      }
+    },
+    "keyStoreIsActiveRet": {
+      "by_language": {
+        "cpp": {
+          "status": "not_attempted"
+        }
+      },
+      "overall": {
+        "status": "not_attempted"
+      }
+    },
+    "keyStoreProvisionPost": {
+      "by_language": {
+        "cpp": {
+          "status": "not_attempted"
+        }
+      },
+      "overall": {
+        "status": "not_attempted"
+      }
+    },
+    "keyStoreProvisionRet": {
+      "by_language": {
+        "cpp": {
+          "status": "not_attempted"
+        }
+      },
+      "overall": {
+        "status": "not_attempted"
+      }
+    },
+    "ksEngaged": {
+      "by_language": {
+        "cpp": {
+          "status": "not_attempted"
+        }
+      },
+      "overall": {
+        "status": "not_attempted"
+      }
+    },
+    "ksIdMatch": {
+      "by_language": {
+        "cpp": {
+          "status": "not_attempted"
+        }
+      },
+      "overall": {
+        "status": "not_attempted"
+      }
+    },
+    "ksWasActive": {
+      "by_language": {
+        "cpp": {
+          "status": "not_attempted"
+        }
+      },
+      "overall": {
+        "status": "not_attempted"
+      }
+    },
+    "ks_off_engaged": {
+      "by_language": {
+        "cpp": {
+          "status": "not_attempted"
+        }
+      },
+      "overall": {
+        "status": "not_attempted"
+      }
+    },
+    "ks_off_isActive": {
+      "by_language": {
+        "cpp": {
+          "status": "not_attempted"
+        }
+      },
+      "overall": {
+        "status": "not_attempted"
+      }
+    },
+    "ks_off_keyId": {
+      "by_language": {
+        "cpp": {
+          "status": "not_attempted"
+        }
+      },
+      "overall": {
+        "status": "not_attempted"
       }
     },
     "loggedOf": {
+      "by_language": {
+        "cpp": {
+          "status": "not_attempted"
+        }
+      },
+      "overall": {
+        "status": "not_attempted"
+      }
+    },
+    "newKeyStored": {
       "by_language": {
         "cpp": {
           "status": "not_attempted"
@@ -211,13 +371,13 @@
           "impl_file": "decision.cpp",
           "solver": "z3",
           "status": "proven",
-          "time_secs": 8.9486208
+          "time_secs": 4.3766843
         }
       },
       "overall": {
         "solver": "z3",
         "status": "proven",
-        "time_secs": 8.9486208
+        "time_secs": 4.3766843
       }
     },
     "statusEngagedByte": {
