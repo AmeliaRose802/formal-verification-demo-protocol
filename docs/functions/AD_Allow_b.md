@@ -1,6 +1,6 @@
-# `AD_Allow_b`  ⚠️
+# `AD_Allow_b`  📄
 
-> ⚠️ **Implemented, unverified.** This function exists in the codebase but **no machine-checked equivalence proof** has been discharged.
+> 📄 **Spec-only.** This definition lives in the Cryptol model on purpose — typically as a gap-exhibiting reference function — and has **no production implementation**.
 
 ### Formal definition (Cryptol)
 

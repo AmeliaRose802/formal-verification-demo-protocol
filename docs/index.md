@@ -7,7 +7,7 @@ title: SDEP_cpp
 
 ## Coverage at a glance
 
-✅ 5 proven · 🔲 0 bounded · 🧩 11 abstractions · ⚠️ 28 **unverified** · 📄 0 spec-only
+✅ 6 proven · 🔲 0 bounded · 🔒 0 trusted assumptions · 🧩 11 adapters/stand-ins · ⚠️ 17 **unverified** · 📄 27 spec-only
 
 See the full breakdown — including every real function the codebase contains, whether or not it was modeled — on the [Coverage Matrix](coverage.md). Pages here that carry a 🧩, 🔲, or ⚠️ badge surface the caveat in a banner at the top.
 
@@ -35,27 +35,27 @@ All type definitions: [types.md](types.md)
 | [isValidRequestDate](functions/isValidRequestDate.md) | ✅ Proven | `std::int64_t` semantics. The implementation in cpp/include/sdep/auth.hpp first rejects negative timestamps / window (otherwise the subtraction `currentTime - requestTs` can wrap signed-overflow when requestTs is near INT64_MIN — found by SAW on 2026-05-30, see FINDINGS.md §1). The shim below mirrors that guard exactly so the SAW equivalence proof goes through for all i64 inputs. |
 | [packOutcome](functions/packOutcome.md) | — | Computes 16 bits from `allowed` and `logged`. |
 | [enforceAccess](functions/enforceAccess.md) | ✅ Proven | Evaluates 8 conditions on `mode` and `decision` in priority order, returning the first applicable 16 bits. Defaults to `packOutcome True  False` when no prior condition matches. |
-| [getStatus](functions/getStatus.md) | ⚠️ Implemented, unverified | Computes `// pre-call bytes of the optional storage (havoc)     [20][8]` from `fleetEnabled`, `hasKey`, `keyIsActive`, `keyId`, and `preBytes`. |
-| [canonicalize_lp_post](functions/canonicalize_lp_post.md) | 🧩 Model abstraction | Length-prefixed canonicalization writes |
-| [canonicalize_lp_ret](functions/canonicalize_lp_ret.md) | 🧩 Model abstraction | Return value of canonicalize_lp: total bytes written = 2 + nm + nb. |
-| [isKeyVaultResult_b](functions/isKeyVaultResult_b.md) | 🧩 Model abstraction | Well-formedness predicates over ABI-width enum reps C++ enums are `enum class : std::uint8_t` so the LLVM ABI parameter is i8.  Symbolic execution explores all 256 values; valid program states only ever produce values in the declared range.  These predicates assert that range for use as preconditions in properties. |
-| [isAuthResult_b](functions/isAuthResult_b.md) | 🧩 Model abstraction | Checks whether the auth result b is valid for the given inputs. |
-| [isActivationResult_b](functions/isActivationResult_b.md) | 🧩 Model abstraction | Checks whether the activation result b is valid for the given inputs. |
-| [isAccessMode_b](functions/isAccessMode_b.md) | 🧩 Model abstraction | Checks whether the access mode b is valid for the given inputs. |
-| [isAccessDecision_b](functions/isAccessDecision_b.md) | 🧩 Model abstraction | Checks whether the access decision b is valid for the given inputs. |
-| [allowedOf](functions/allowedOf.md) | 🧩 Model abstraction | enforceAccess result extractors enforceAccess packs the EnforceOutcome struct into one i16 with little-endian byte order: low byte = allowed (0 or 1), high byte = logged (0 or 1). These helpers project the i16 back to Bits. |
-| [loggedOf](functions/loggedOf.md) | 🧩 Model abstraction | Tests whether `r` is well-formed. |
-| [statusEngagedByte](functions/statusEngagedByte.md) | 🧩 Model abstraction | Computes 8 bits from `s`. |
-| [statusPayloadBytes](functions/statusPayloadBytes.md) | 🧩 Model abstraction | Computes 16 bytes from `s`. |
+| [getStatus](functions/getStatus.md) | ✅ Proven | Computes `// pre-call bytes of the optional storage (havoc)     [20][8]` from `fleetEnabled`, `hasKey`, `keyIsActive`, `keyId`, and `preBytes`. |
+| [canonicalize_lp_post](functions/canonicalize_lp_post.md) | 🧩 ABI adapter / stand-in | Length-prefixed canonicalization writes |
+| [canonicalize_lp_ret](functions/canonicalize_lp_ret.md) | 🧩 ABI adapter / stand-in | Return value of canonicalize_lp: total bytes written = 2 + nm + nb. |
+| [isKeyVaultResult_b](functions/isKeyVaultResult_b.md) | 🧩 ABI adapter / stand-in | Well-formedness predicates over ABI-width enum reps C++ enums are `enum class : std::uint8_t` so the LLVM ABI parameter is i8.  Symbolic execution explores all 256 values; valid program states only ever produce values in the declared range.  These predicates assert that range for use as preconditions in properties. |
+| [isAuthResult_b](functions/isAuthResult_b.md) | 🧩 ABI adapter / stand-in | Checks whether the auth result b is valid for the given inputs. |
+| [isActivationResult_b](functions/isActivationResult_b.md) | 🧩 ABI adapter / stand-in | Checks whether the activation result b is valid for the given inputs. |
+| [isAccessMode_b](functions/isAccessMode_b.md) | 🧩 ABI adapter / stand-in | Checks whether the access mode b is valid for the given inputs. |
+| [isAccessDecision_b](functions/isAccessDecision_b.md) | 🧩 ABI adapter / stand-in | Checks whether the access decision b is valid for the given inputs. |
+| [allowedOf](functions/allowedOf.md) | 🧩 ABI adapter / stand-in | enforceAccess result extractors enforceAccess packs the EnforceOutcome struct into one i16 with little-endian byte order: low byte = allowed (0 or 1), high byte = logged (0 or 1). These helpers project the i16 back to Bits. |
+| [loggedOf](functions/loggedOf.md) | 🧩 ABI adapter / stand-in | Tests whether `r` is well-formed. |
+| [statusEngagedByte](functions/statusEngagedByte.md) | 🧩 ABI adapter / stand-in | Computes 8 bits from `s`. |
+| [statusPayloadBytes](functions/statusPayloadBytes.md) | 🧩 ABI adapter / stand-in | Computes 16 bytes from `s`. |
 | [hmacSha256](functions/hmacSha256.md) | — | Specs only use equality of HMAC outputs; the placeholder body is opaque to the solver, which models `hmacSha256` as an uninterpreted pure function for proof purposes. |
-| [isValidSignature](functions/isValidSignature.md) | — | Checks whether the signature is valid by comparing the computed and expected values. |
+| [isValidSignature](functions/isValidSignature.md) | ⚠️ Implemented, unverified | Checks whether the signature is valid by comparing the computed and expected values. |
 | [canonNormalized](functions/canonNormalized.md) | — | Compares computed and provided values over `n` and `b`, returning `True` on match. |
 | [canonLenPrefixed](functions/canonLenPrefixed.md) | — | Bounded model writes a one-byte length tag followed by the FieldLen-byte field buffer. Production uses a 64-bit big-endian tag, but the injectivity argument that P23-P25 rely on is identical at any width. |
 | [fieldNormalized](functions/fieldNormalized.md) | — | Compares computed and provided values over `f`, returning `True` on match. |
 | [requestNormalized](functions/requestNormalized.md) | — | Tests whether `r` is well-formed. |
 | [lpField](functions/lpField.md) | — | Computes 1 + StructFieldLen bytes from `f`. |
 | [lpHeader](functions/lpHeader.md) | — | Computes 2 * (1 + StructFieldLen) bytes from `h`. |
-| [canonicalizeS](functions/canonicalizeS.md) | ⚠️ Implemented, unverified | Computes 3 * (1 + StructFieldLen) + MaxHeaders * 2 * (1 + StructFieldLen) + 8 bytes from `r`. |
+| [canonicalizeS](functions/canonicalizeS.md) | 📄 Spec-only | Computes 3 * (1 + StructFieldLen) + MaxHeaders * 2 * (1 + StructFieldLen) + 8 bytes from `r`. |
 | [verifierTimestamp_current](functions/verifierTimestamp_current.md) | — | Computes 64 bits from `r` and `_`. |
 
 Per-function detail pages: [functions](functions/index.md)

@@ -1,6 +1,4 @@
-# `getStatus`  ⚠️
-
-> ⚠️ **Implemented, unverified.** This function exists in the codebase but **no machine-checked equivalence proof** has been discharged. Real implementation: `C:/Users/ameliapayne/demo_protocol/cpp/src/decision.cpp`. Verification **failed**: verify script exited with code 2.
+# `getStatus`  ✅
 
 ### Signature
 
@@ -36,8 +34,6 @@ getStatus fleetEnabled hasKey keyIsActive keyId preBytes =
                      else take`{16} preBytes
     optionalBytes = payloadBytes # [engagedByte]
 ```
-
-> **Verification failed:** verify script exited with code 2
 
 4.6 getStatus — LLVM: sret(20 byte EnrollmentStatus), (i1,i1,i1,ptr Uuid)
 EnrollmentStatus IR layout (alignment 1, 20 bytes):

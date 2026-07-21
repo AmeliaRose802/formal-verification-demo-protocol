@@ -66,7 +66,7 @@ statusEngagedByte (getStatus fleetEnabled hasKey False keyId preBytes) == 0
 
 > ⚠ **Implementation equivalence is incomplete.** This property holds against the Cryptol model. For the guarantee to carry over to the compiled code, every involved function must also have a SAW equivalence proof.
 >
-> - ✗ equivalence proof **failed**: `getStatus`
+> - ✓ proven equivalent: `getStatus`
 > - ✗ equivalence proof **not yet attempted**: `statusEngagedByte`
 
 **Involved:** [`getStatus`](../functions/getStatus.md), [`statusEngagedByte`](../functions/statusEngagedByte.md)
@@ -86,7 +86,7 @@ P4: Key ID is revealed after activation.
 
 > ⚠ **Implementation equivalence is incomplete.** This property holds against the Cryptol model. For the guarantee to carry over to the compiled code, every involved function must also have a SAW equivalence proof.
 >
-> - ✗ equivalence proof **failed**: `getStatus`
+> - ✓ proven equivalent: `getStatus`
 > - ✗ equivalence proof **not yet attempted**: `statusEngagedByte`, `statusPayloadBytes`
 
 **Involved:** [`getStatus`](../functions/getStatus.md), [`statusEngagedByte`](../functions/statusEngagedByte.md), [`statusPayloadBytes`](../functions/statusPayloadBytes.md)

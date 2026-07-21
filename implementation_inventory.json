@@ -1,10 +1,285 @@
 {
   "functions": [
     {
+      "name": "activate",
+      "lang": "cpp",
+      "symbol": "?activate@KeyStore@sdep@@QEAA?AW4ActivationResult@2@AEBUUuid@2@@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreActivateRet"
+    },
+    {
+      "name": "activate",
+      "lang": "cpp",
+      "symbol": "?activate@KeyStore@sdep@@QEAA?AW4ActivationResult@2@AEBUUuid@2@@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreActivateRet"
+    },
+    {
+      "name": "activate",
+      "lang": "cpp",
+      "symbol": "?activate@KeyStore@sdep@@QEAA?AW4ActivationResult@2@AEBUUuid@2@@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreActivateRet"
+    },
+    {
+      "name": "activate",
+      "lang": "cpp",
+      "symbol": "?activate@KeyStore@sdep@@QEAA?AW4ActivationResult@2@AEBUUuid@2@@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreActivateRet"
+    },
+    {
+      "name": "activate",
+      "lang": "cpp",
+      "symbol": "?activate@KeyStore@sdep@@QEAA?AW4ActivationResult@2@AEBUUuid@2@@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreActivateRet"
+    },
+    {
+      "name": "activate",
+      "lang": "cpp",
+      "symbol": "?activate@KeyStore@sdep@@QEAA?AW4ActivationResult@2@AEBUUuid@2@@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreActivateRet"
+    },
+    {
+      "name": "activate",
+      "lang": "cpp",
+      "symbol": "?activate@KeyStore@sdep@@QEAA?AW4ActivationResult@2@AEBUUuid@2@@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreActivateRet"
+    },
+    {
+      "name": "activate",
+      "lang": "cpp",
+      "symbol": "?activate@KeyStore@sdep@@QEAA?AW4ActivationResult@2@AEBUUuid@2@@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreActivateRet"
+    },
+    {
+      "name": "activate",
+      "lang": "cpp",
+      "symbol": "?activate@KeyStore@sdep@@QEAA?AW4ActivationResult@2@AEBUUuid@2@@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreActivateRet"
+    },
+    {
+      "name": "activate",
+      "lang": "cpp",
+      "symbol": "?activate@KeyStore@sdep@@QEAA?AW4ActivationResult@2@AEBUUuid@2@@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreActivateRet"
+    },
+    {
+      "name": "activate",
+      "lang": "cpp",
+      "symbol": "?activate@KeyStore@sdep@@QEAA?AW4ActivationResult@2@AEBUUuid@2@@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreActivateRet"
+    },
+    {
+      "name": "activate",
+      "lang": "cpp",
+      "symbol": "?activate@KeyStore@sdep@@QEAA?AW4ActivationResult@2@AEBUUuid@2@@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreActivateRet"
+    },
+    {
+      "name": "activate",
+      "lang": "cpp",
+      "symbol": "?activate@KeyStore@sdep@@QEAA?AW4ActivationResult@2@AEBUUuid@2@@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreActivateRet"
+    },
+    {
+      "name": "activate",
+      "lang": "cpp",
+      "symbol": "?activate@KeyStore@sdep@@QEAA?AW4ActivationResult@2@AEBUUuid@2@@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreActivateRet"
+    },
+    {
+      "name": "activate",
+      "lang": "cpp",
+      "symbol": "?activate@KeyStore@sdep@@QEAA?AW4ActivationResult@2@AEBUUuid@2@@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreActivateRet"
+    },
+    {
+      "name": "activate",
+      "lang": "cpp",
+      "symbol": "?activate@KeyStore@sdep@@QEAA?AW4ActivationResult@2@AEBUUuid@2@@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreActivateRet"
+    },
+    {
+      "name": "authenticate",
+      "lang": "cpp",
+      "symbol": "?authenticate@sdep@@YA_N_N00@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/include/sdep/auth.hpp"
+    },
+    {
       "name": "authenticate",
       "lang": "cpp",
       "symbol": "?authenticate@sdep@@YA_N_N00@Z",
       "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/decision.cpp"
+    },
+    {
+      "name": "authenticate",
+      "lang": "cpp",
+      "symbol": "?authenticate@sdep@@YA_N_N00@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/decision.cpp"
+    },
+    {
+      "name": "canonicalizePayload",
+      "lang": "cpp",
+      "symbol": "?canonicalizePayload@sdep@@YA?AV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@AEBUDeviceRequest@1@@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/canonical.cpp"
+    },
+    {
+      "name": "canonicalizePayload",
+      "lang": "cpp",
+      "symbol": "?canonicalizePayload@sdep@@YA?AV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@AEBUDeviceRequest@1@@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/canonical.cpp"
+    },
+    {
+      "name": "canonicalizePayload",
+      "lang": "cpp",
+      "symbol": "?canonicalizePayload@sdep@@YA?AV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@AEBUDeviceRequest@1@@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/canonical.cpp"
+    },
+    {
+      "name": "canonicalizePayload",
+      "lang": "cpp",
+      "symbol": "?canonicalizePayload@sdep@@YA?AV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@AEBUDeviceRequest@1@@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/canonical.cpp"
+    },
+    {
+      "name": "canonicalize_lp",
+      "lang": "cpp",
+      "symbol": "?canonicalize_lp@sdep@@YA_KPEAEPEBEE1E@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/include/sdep/canonical_lp.hpp",
+      "models": "canonicalize_lp_ret",
+      "models_note": "bounded model only"
+    },
+    {
+      "name": "canonicalize_lp",
+      "lang": "cpp",
+      "symbol": "?canonicalize_lp@sdep@@YA_KPEAEPEBEE1E@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/decision.cpp",
+      "models": "canonicalize_lp_ret",
+      "models_note": "bounded model only"
+    },
+    {
+      "name": "classifyCanonicalHost",
+      "lang": "cpp",
+      "symbol": "?classifyCanonicalHost@sdep@@YA?AW4CanonHostClass@1@PEBEE@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/include/sdep/decision.hpp",
+      "models_note": "bounded model only"
+    },
+    {
+      "name": "classifyCanonicalHost",
+      "lang": "cpp",
+      "symbol": "?classifyCanonicalHost@sdep@@YA?AW4CanonHostClass@1@PEBEE@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/decision.cpp",
+      "models_note": "bounded model only"
+    },
+    {
+      "name": "classifyCanonicalHost",
+      "lang": "cpp",
+      "symbol": "?classifyCanonicalHost@sdep@@YA?AW4CanonHostClass@1@PEBEE@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/decision.cpp",
+      "models_note": "bounded model only"
+    },
+    {
+      "name": "classifyCanonicalHost",
+      "lang": "cpp",
+      "symbol": "?classifyCanonicalHost@sdep@@YA?AW4CanonHostClass@1@PEBEE@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/decision.cpp",
+      "models_note": "bounded model only"
+    },
+    {
+      "name": "current",
+      "lang": "cpp",
+      "symbol": "?current@KeyStore@sdep@@QEBA?AV?$optional@UEnrollmentKey@sdep@@@std@@XZ",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreCurrentRet"
+    },
+    {
+      "name": "current",
+      "lang": "cpp",
+      "symbol": "?current@KeyStore@sdep@@QEBA?AV?$optional@UEnrollmentKey@sdep@@@std@@XZ",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreCurrentRet"
+    },
+    {
+      "name": "current",
+      "lang": "cpp",
+      "symbol": "?current@KeyStore@sdep@@QEBA?AV?$optional@UEnrollmentKey@sdep@@@std@@XZ",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreCurrentRet"
+    },
+    {
+      "name": "current",
+      "lang": "cpp",
+      "symbol": "?current@KeyStore@sdep@@QEBA?AV?$optional@UEnrollmentKey@sdep@@@std@@XZ",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreCurrentRet"
+    },
+    {
+      "name": "current",
+      "lang": "cpp",
+      "symbol": "?current@KeyStore@sdep@@QEBA?AV?$optional@UEnrollmentKey@sdep@@@std@@XZ",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreCurrentRet"
+    },
+    {
+      "name": "current",
+      "lang": "cpp",
+      "symbol": "?current@KeyStore@sdep@@QEBA?AV?$optional@UEnrollmentKey@sdep@@@std@@XZ",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreCurrentRet"
+    },
+    {
+      "name": "current",
+      "lang": "cpp",
+      "symbol": "?current@KeyStore@sdep@@QEBA?AV?$optional@UEnrollmentKey@sdep@@@std@@XZ",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreCurrentRet"
+    },
+    {
+      "name": "current",
+      "lang": "cpp",
+      "symbol": "?current@KeyStore@sdep@@QEBA?AV?$optional@UEnrollmentKey@sdep@@@std@@XZ",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreCurrentRet"
+    },
+    {
+      "name": "current",
+      "lang": "cpp",
+      "symbol": "?current@KeyStore@sdep@@QEBA?AV?$optional@UEnrollmentKey@sdep@@@std@@XZ",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreCurrentRet"
+    },
+    {
+      "name": "current",
+      "lang": "cpp",
+      "symbol": "?current@KeyStore@sdep@@QEBA?AV?$optional@UEnrollmentKey@sdep@@@std@@XZ",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreCurrentRet"
+    },
+    {
+      "name": "current",
+      "lang": "cpp",
+      "symbol": "?current@KeyStore@sdep@@QEBA?AV?$optional@UEnrollmentKey@sdep@@@std@@XZ",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreCurrentRet"
+    },
+    {
+      "name": "enforceAccess",
+      "lang": "cpp",
+      "symbol": "?enforceAccess@sdep@@YA?AUEnforceOutcome@1@W4AccessMode@1@W4AccessDecision@1@@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/include/sdep/access.hpp"
     },
     {
       "name": "enforceAccess",
@@ -16,7 +291,19 @@
       "name": "enrollDevice",
       "lang": "cpp",
       "symbol": "?enrollDevice@sdep@@YA?AW4EnrollmentResult@1@_N0W4AuthResult@1@W4ActivationResult@1@@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/include/sdep/decision.hpp"
+    },
+    {
+      "name": "enrollDevice",
+      "lang": "cpp",
+      "symbol": "?enrollDevice@sdep@@YA?AW4EnrollmentResult@1@_N0W4AuthResult@1@W4ActivationResult@1@@Z",
       "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/decision.cpp"
+    },
+    {
+      "name": "getStatus",
+      "lang": "cpp",
+      "symbol": "?getStatus@sdep@@YA?AUEnrollmentStatus@1@_N00AEBUUuid@1@@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/include/sdep/decision.hpp"
     },
     {
       "name": "getStatus",
@@ -25,9 +312,400 @@
       "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/decision.cpp"
     },
     {
+      "name": "hasKey",
+      "lang": "cpp",
+      "symbol": "?hasKey@KeyStore@sdep@@QEBA_NXZ",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreHasKeyRet"
+    },
+    {
+      "name": "hasKey",
+      "lang": "cpp",
+      "symbol": "?hasKey@KeyStore@sdep@@QEBA_NXZ",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreHasKeyRet"
+    },
+    {
+      "name": "hasKey",
+      "lang": "cpp",
+      "symbol": "?hasKey@KeyStore@sdep@@QEBA_NXZ",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreHasKeyRet"
+    },
+    {
+      "name": "hasKey",
+      "lang": "cpp",
+      "symbol": "?hasKey@KeyStore@sdep@@QEBA_NXZ",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "ksHasKey"
+    },
+    {
+      "name": "hasKey",
+      "lang": "cpp",
+      "symbol": "?hasKey@KeyStore@sdep@@QEBA_NXZ",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "ksHasKey"
+    },
+    {
+      "name": "hasKey",
+      "lang": "cpp",
+      "symbol": "?hasKey@KeyStore@sdep@@QEBA_NXZ",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreHasKeyRet"
+    },
+    {
+      "name": "hasKey",
+      "lang": "cpp",
+      "symbol": "?hasKey@KeyStore@sdep@@QEBA_NXZ",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreHasKeyRet"
+    },
+    {
+      "name": "hasKey",
+      "lang": "cpp",
+      "symbol": "?hasKey@KeyStore@sdep@@QEBA_NXZ",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreHasKeyRet"
+    },
+    {
+      "name": "hasKey",
+      "lang": "cpp",
+      "symbol": "?hasKey@KeyStore@sdep@@QEBA_NXZ",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreHasKeyRet"
+    },
+    {
+      "name": "hasKey",
+      "lang": "cpp",
+      "symbol": "?hasKey@KeyStore@sdep@@QEBA_NXZ",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreHasKeyRet"
+    },
+    {
+      "name": "hasKey",
+      "lang": "cpp",
+      "symbol": "?hasKey@KeyStore@sdep@@QEBA_NXZ",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreHasKeyRet"
+    },
+    {
+      "name": "hasKey",
+      "lang": "cpp",
+      "symbol": "?hasKey@KeyStore@sdep@@QEBA_NXZ",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreHasKeyRet"
+    },
+    {
+      "name": "hasKey",
+      "lang": "cpp",
+      "symbol": "?hasKey@KeyStore@sdep@@QEBA_NXZ",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreHasKeyRet"
+    },
+    {
+      "name": "hasKey",
+      "lang": "cpp",
+      "symbol": "?hasKey@KeyStore@sdep@@QEBA_NXZ",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreHasKeyRet"
+    },
+    {
+      "name": "has_metadata_header",
+      "lang": "cpp",
+      "symbol": "?has_metadata_header@FleetController@sdep@@CA_NAEBUDeviceRequest@2@@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/controller.cpp"
+    },
+    {
+      "name": "id_bad",
+      "lang": "cpp",
+      "symbol": "?id_bad@tiny@@YAEE@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/saw/_tiny_verified_disproved/scalar.cpp",
+      "models": "id_spec"
+    },
+    {
+      "name": "id_good",
+      "lang": "cpp",
+      "symbol": "?id_good@tiny@@YAEE@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/saw/_tiny_verified_disproved/scalar.cpp",
+      "models": "id_spec"
+    },
+    {
+      "name": "isActive",
+      "lang": "cpp",
+      "symbol": "?isActive@KeyStore@sdep@@QEBA_NXZ",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreIsActiveRet"
+    },
+    {
+      "name": "isActive",
+      "lang": "cpp",
+      "symbol": "?isActive@KeyStore@sdep@@QEBA_NXZ",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreIsActiveRet"
+    },
+    {
+      "name": "isActive",
+      "lang": "cpp",
+      "symbol": "?isActive@KeyStore@sdep@@QEBA_NXZ",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreIsActiveRet"
+    },
+    {
+      "name": "isActive",
+      "lang": "cpp",
+      "symbol": "?isActive@KeyStore@sdep@@QEBA_NXZ",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "ksIsActive"
+    },
+    {
+      "name": "isActive",
+      "lang": "cpp",
+      "symbol": "?isActive@KeyStore@sdep@@QEBA_NXZ",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "ksIsActive"
+    },
+    {
+      "name": "isActive",
+      "lang": "cpp",
+      "symbol": "?isActive@KeyStore@sdep@@QEBA_NXZ",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreIsActiveRet"
+    },
+    {
+      "name": "isActive",
+      "lang": "cpp",
+      "symbol": "?isActive@KeyStore@sdep@@QEBA_NXZ",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreIsActiveRet"
+    },
+    {
+      "name": "isActive",
+      "lang": "cpp",
+      "symbol": "?isActive@KeyStore@sdep@@QEBA_NXZ",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreIsActiveRet"
+    },
+    {
+      "name": "isActive",
+      "lang": "cpp",
+      "symbol": "?isActive@KeyStore@sdep@@QEBA_NXZ",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreIsActiveRet"
+    },
+    {
+      "name": "isActive",
+      "lang": "cpp",
+      "symbol": "?isActive@KeyStore@sdep@@QEBA_NXZ",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreIsActiveRet"
+    },
+    {
+      "name": "isActive",
+      "lang": "cpp",
+      "symbol": "?isActive@KeyStore@sdep@@QEBA_NXZ",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreIsActiveRet"
+    },
+    {
+      "name": "isActive",
+      "lang": "cpp",
+      "symbol": "?isActive@KeyStore@sdep@@QEBA_NXZ",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreIsActiveRet"
+    },
+    {
+      "name": "isActive",
+      "lang": "cpp",
+      "symbol": "?isActive@KeyStore@sdep@@QEBA_NXZ",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreIsActiveRet"
+    },
+    {
+      "name": "isActive",
+      "lang": "cpp",
+      "symbol": "?isActive@KeyStore@sdep@@QEBA_NXZ",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreIsActiveRet"
+    },
+    {
+      "name": "isValidClaims",
+      "lang": "cpp",
+      "symbol": "?isValidClaims@sdep@@YA_NV?$basic_string_view@DU?$char_traits@D@std@@@std@@AEBV?$vector@V?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@V?$allocator@V?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@2@@3@@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/auth.cpp"
+    },
+    {
       "name": "isValidRequestDate",
       "lang": "cpp",
       "symbol": "?isValidRequestDate@sdep@@YA_N_J00@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/include/sdep/auth.hpp"
+    },
+    {
+      "name": "isValidRequestDate",
+      "lang": "cpp",
+      "symbol": "?isValidRequestDate@sdep@@YA_N_J00@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/decision.cpp"
+    },
+    {
+      "name": "isValidSignature",
+      "lang": "cpp",
+      "symbol": "?isValidSignature@sdep@@YA_NV?$span@$$CBE$0?0@std@@AEBUDeviceRequest@1@0@Z",
+      "file": "../src/auth.cpp"
+    },
+    {
+      "name": "isValidSignature",
+      "lang": "cpp",
+      "symbol": "?isValidSignature@sdep@@YA_NV?$span@$$CBE$0?0@std@@AEBUDeviceRequest@1@0@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/auth.cpp"
+    },
+    {
+      "name": "isValidSignature",
+      "lang": "cpp",
+      "symbol": "?isValidSignature@sdep@@YA_NV?$span@$$CBE$0?0@std@@AEBUDeviceRequest@1@0@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/auth.cpp"
+    },
+    {
+      "name": "isValidSignature",
+      "lang": "cpp",
+      "symbol": "?isValidSignature@sdep@@YA_NV?$span@$$CBE$0?0@std@@AEBUDeviceRequest@1@0@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/auth.cpp"
+    },
+    {
+      "name": "outerFirstByte",
+      "lang": "cpp",
+      "symbol": "?outerFirstByte@repro@@YAEPEBUOuter@1@@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/saw/_nested_raw_bytes_repro/nested_raw_bytes.cpp",
+      "models": "outerFirstByte_disproved"
+    },
+    {
+      "name": "outerFirstByte",
+      "lang": "cpp",
+      "symbol": "?outerFirstByte@repro@@YAEPEBUOuter@1@@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/saw/_nested_raw_bytes_repro/nested_raw_bytes.cpp",
+      "models": "outerFirstByte_verified"
+    },
+    {
+      "name": "outerHasData",
+      "lang": "cpp",
+      "symbol": "?outerHasData@repro@@YA_NPEBUOuter@1@@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/saw/_nested_raw_bytes_repro/nested_raw_bytes.cpp",
+      "models": "outerHasDataSpec123"
+    },
+    {
+      "name": "outerHasData",
+      "lang": "cpp",
+      "symbol": "?outerHasData@repro@@YA_NPEBUOuter@1@@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/saw/_nested_raw_bytes_repro/nested_raw_bytes.cpp",
+      "models": "outerHasData_disproved"
+    },
+    {
+      "name": "outerHasData",
+      "lang": "cpp",
+      "symbol": "?outerHasData@repro@@YA_NPEBUOuter@1@@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/saw/_nested_raw_bytes_repro/nested_raw_bytes.cpp",
+      "models": "outerHasData_verified"
+    },
+    {
+      "name": "provision",
+      "lang": "cpp",
+      "symbol": "?provision@KeyStore@sdep@@QEAA?AV?$optional@UEnrollmentKey@sdep@@@std@@UEnrollmentKey@2@@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreProvisionRet"
+    },
+    {
+      "name": "provision",
+      "lang": "cpp",
+      "symbol": "?provision@KeyStore@sdep@@QEAA?AV?$optional@UEnrollmentKey@sdep@@@std@@UEnrollmentKey@2@@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreProvisionRet"
+    },
+    {
+      "name": "provision",
+      "lang": "cpp",
+      "symbol": "?provision@KeyStore@sdep@@QEAA?AV?$optional@UEnrollmentKey@sdep@@@std@@UEnrollmentKey@2@@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreProvisionRet"
+    },
+    {
+      "name": "provision",
+      "lang": "cpp",
+      "symbol": "?provision@KeyStore@sdep@@QEAA?AV?$optional@UEnrollmentKey@sdep@@@std@@UEnrollmentKey@2@@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreProvisionRet"
+    },
+    {
+      "name": "provision",
+      "lang": "cpp",
+      "symbol": "?provision@KeyStore@sdep@@QEAA?AV?$optional@UEnrollmentKey@sdep@@@std@@UEnrollmentKey@2@@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreProvisionRet"
+    },
+    {
+      "name": "provision",
+      "lang": "cpp",
+      "symbol": "?provision@KeyStore@sdep@@QEAA?AV?$optional@UEnrollmentKey@sdep@@@std@@UEnrollmentKey@2@@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreProvisionRet"
+    },
+    {
+      "name": "provision",
+      "lang": "cpp",
+      "symbol": "?provision@KeyStore@sdep@@QEAA?AV?$optional@UEnrollmentKey@sdep@@@std@@UEnrollmentKey@2@@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreProvisionRet"
+    },
+    {
+      "name": "provision",
+      "lang": "cpp",
+      "symbol": "?provision@KeyStore@sdep@@QEAA?AV?$optional@UEnrollmentKey@sdep@@@std@@UEnrollmentKey@2@@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreProvisionRet"
+    },
+    {
+      "name": "provision",
+      "lang": "cpp",
+      "symbol": "?provision@KeyStore@sdep@@QEAA?AV?$optional@UEnrollmentKey@sdep@@@std@@UEnrollmentKey@2@@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreProvisionRet"
+    },
+    {
+      "name": "provision",
+      "lang": "cpp",
+      "symbol": "?provision@KeyStore@sdep@@QEAA?AV?$optional@UEnrollmentKey@sdep@@@std@@UEnrollmentKey@2@@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreProvisionRet"
+    },
+    {
+      "name": "provision",
+      "lang": "cpp",
+      "symbol": "?provision@KeyStore@sdep@@QEAA?AV?$optional@UEnrollmentKey@sdep@@@std@@UEnrollmentKey@2@@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreProvisionRet"
+    },
+    {
+      "name": "provision",
+      "lang": "cpp",
+      "symbol": "?provision@KeyStore@sdep@@QEAA?AV?$optional@UEnrollmentKey@sdep@@@std@@UEnrollmentKey@2@@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreProvisionRet"
+    },
+    {
+      "name": "provision",
+      "lang": "cpp",
+      "symbol": "?provision@KeyStore@sdep@@QEAA?AV?$optional@UEnrollmentKey@sdep@@@std@@UEnrollmentKey@2@@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreProvisionRet"
+    },
+    {
+      "name": "provision",
+      "lang": "cpp",
+      "symbol": "?provision@KeyStore@sdep@@QEAA?AV?$optional@UEnrollmentKey@sdep@@@std@@UEnrollmentKey@2@@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/key_store.cpp",
+      "models": "keyStoreProvisionRet"
+    },
+    {
+      "name": "provisionKey",
+      "lang": "cpp",
+      "symbol": "?provisionKey@sdep@@YA?AW4ProvisionResult@1@_N0W4KeyVaultResult@1@0@Z",
       "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/decision.cpp"
     },
     {
@@ -35,6 +713,32 @@
       "lang": "cpp",
       "symbol": "?provisionKey@sdep@@YA?AW4ProvisionResult@1@_N0W4KeyVaultResult@1@0@Z",
       "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/decision.cpp"
+    },
+    {
+      "name": "provisionKey",
+      "lang": "cpp",
+      "symbol": "?provisionKey@sdep@@YA?AW4ProvisionResult@1@_N0W4KeyVaultResult@1@0@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/decision.cpp"
+    },
+    {
+      "name": "provisionKey",
+      "lang": "cpp",
+      "symbol": "?provisionKey@sdep@@YA?AW4ProvisionResult@1@_N0W4KeyVaultResult@1@0@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/src/decision.cpp"
+    },
+    {
+      "name": "readNested_bad",
+      "lang": "cpp",
+      "symbol": "?readNested_bad@tiny@@YAEUOuter@1@@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/saw/_tiny_verified_disproved/tiny.cpp",
+      "models": "readNested_spec"
+    },
+    {
+      "name": "readNested_good",
+      "lang": "cpp",
+      "symbol": "?readNested_good@tiny@@YAEUOuter@1@@Z",
+      "file": "C:/Users/ameliapayne/demo_protocol/cpp/saw/_tiny_verified_disproved/tiny.cpp",
+      "models": "readNested_spec"
     }
   ]
 }

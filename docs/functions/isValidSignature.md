@@ -1,4 +1,6 @@
-# `isValidSignature`  `internal helper`
+# `isValidSignature`  ⚠️  `internal helper`
+
+> ⚠️ **Implemented, unverified.** This function exists in the codebase but **no machine-checked equivalence proof** has been discharged. Real implementation: `../src/auth.cpp`.
 
 ### Signature
 
