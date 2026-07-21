@@ -47,6 +47,6 @@ flowchart TD
 ```
 
 ### Related Properties
-- [KS2 — Success Implies Active](../properties/prove).md#ks2--success-implies-active)
-- [KS4 — Io Failure No Effect](../properties/prove).md#ks4--io-failure-no-effect)
+- [KS2 — Success Implies Active](../properties/intentional-counterexamples.md#ks2--success-implies-active)
+- [KS4 — Io Failure No Effect](../properties/intentional-counterexamples.md#ks4--io-failure-no-effect)
 

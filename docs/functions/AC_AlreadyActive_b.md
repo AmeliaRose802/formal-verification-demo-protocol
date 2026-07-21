@@ -11,5 +11,5 @@ AC_AlreadyActive_b   = 1 : [8]
 ### Related Properties
 - [P1 — Active Key Cannot Be Reactivated](../properties/key-lifecycle-safety.md#p1--active-key-cannot-be-reactivated)
 - [P22 — Activation Io Failure Is Internal Error](../properties/error-handling.md#p22--activation-io-failure-is-internal-error)
-- [KS2 — Success Implies Active](../properties/prove).md#ks2--success-implies-active)
+- [KS2 — Success Implies Active](../properties/intentional-counterexamples.md#ks2--success-implies-active)
 

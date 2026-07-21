@@ -46,13 +46,13 @@
           "impl_file": "decision.cpp",
           "solver": "z3",
           "status": "proven",
-          "time_secs": 2.0026061
+          "time_secs": 2.1857871
         }
       },
       "overall": {
         "solver": "z3",
         "status": "proven",
-        "time_secs": 2.0026061
+        "time_secs": 2.1857871
       }
     },
     "canonicalizeS": {
@@ -111,13 +111,13 @@
           "impl_file": "decision.cpp",
           "solver": "z3",
           "status": "proven",
-          "time_secs": 2.0707055
+          "time_secs": 2.2636173
         }
       },
       "overall": {
         "solver": "z3",
         "status": "proven",
-        "time_secs": 2.0707055
+        "time_secs": 2.2636173
       }
     },
     "enrollDevice": {
@@ -126,13 +126,13 @@
           "impl_file": "decision.cpp",
           "solver": "z3",
           "status": "proven",
-          "time_secs": 1.2843827
+          "time_secs": 1.4280033
         }
       },
       "overall": {
         "solver": "z3",
         "status": "proven",
-        "time_secs": 1.2843827
+        "time_secs": 1.4280033
       }
     },
     "getStatus": {
@@ -141,13 +141,13 @@
           "impl_file": "decision.cpp",
           "solver": "z3",
           "status": "proven",
-          "time_secs": 5.2701809
+          "time_secs": 5.2215141
         }
       },
       "overall": {
         "solver": "z3",
         "status": "proven",
-        "time_secs": 5.2701809
+        "time_secs": 5.2215141
       }
     },
     "isAccessDecision_b": {
@@ -206,13 +206,13 @@
           "impl_file": "decision.cpp",
           "solver": "z3",
           "status": "proven",
-          "time_secs": 1.2162708
+          "time_secs": 1.4635638
         }
       },
       "overall": {
         "solver": "z3",
         "status": "proven",
-        "time_secs": 1.2162708
+        "time_secs": 1.4635638
       }
     },
     "keyStoreActivatePost": {
@@ -371,13 +371,13 @@
           "impl_file": "decision.cpp",
           "solver": "z3",
           "status": "proven",
-          "time_secs": 4.3766843
+          "time_secs": 2.280723
         }
       },
       "overall": {
         "solver": "z3",
         "status": "proven",
-        "time_secs": 4.3766843
+        "time_secs": 2.280723
       }
     },
     "statusEngagedByte": {

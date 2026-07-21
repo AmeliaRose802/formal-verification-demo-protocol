@@ -28,5 +28,5 @@ Cryptol indexes words MSB-first (`@ 0` is bit 7), while LLVM i8->i1
 truncation keeps the LSB. Use `@ 7` to mirror the implementation.
 
 ### Related Properties
-- [ACC1 — Active Implies Has Key](../properties/key-store-read-accessors-—-has-key()-is-active().md#acc1--active-implies-has-key)
+- [ACC1 — Active Implies Has Key](../properties/intentional-counterexamples.md#acc1--active-implies-has-key)
 

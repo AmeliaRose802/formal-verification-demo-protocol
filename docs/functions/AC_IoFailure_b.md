@@ -10,5 +10,5 @@ AC_IoFailure_b       = 2 : [8]
 
 ### Related Properties
 - [P32 — Authenticated Implies Enrolled](../properties/intentional-counterexamples.md#p32--authenticated-implies-enrolled)
-- [KS4 — Io Failure No Effect](../properties/prove).md#ks4--io-failure-no-effect)
+- [KS4 — Io Failure No Effect](../properties/intentional-counterexamples.md#ks4--io-failure-no-effect)
 

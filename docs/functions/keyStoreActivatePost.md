@@ -37,8 +37,8 @@ carried through unchanged. This is the monotone "latch": once set,
 `isActive` is never cleared by `activate`.
 
 ### Related Properties
-- [KS1 — Activate Latch Monotone](../properties/prove).md#ks1--activate-latch-monotone)
-- [KS2 — Success Implies Active](../properties/prove).md#ks2--success-implies-active)
-- [KS3 — Only Is Active Changes](../properties/prove).md#ks3--only-is-active-changes)
-- [KS4 — Io Failure No Effect](../properties/prove).md#ks4--io-failure-no-effect)
+- [KS1 — Activate Latch Monotone](../properties/intentional-counterexamples.md#ks1--activate-latch-monotone)
+- [KS2 — Success Implies Active](../properties/intentional-counterexamples.md#ks2--success-implies-active)
+- [KS3 — Only Is Active Changes](../properties/intentional-counterexamples.md#ks3--only-is-active-changes)
+- [KS4 — Io Failure No Effect](../properties/intentional-counterexamples.md#ks4--io-failure-no-effect)
 

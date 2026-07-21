@@ -866,7 +866,7 @@ keyStoreActivatePost pre kid =
                 then 1
                 else pre @ ks_off_isActive
 
-// ── Cryptol properties (design-level corollaries, provable by :prove) ──
+// Cryptol properties below are design-level corollaries, provable with prove.
 
 // KS1: the isActive latch is monotone — activate never clears an
 // already-active key, regardless of which key id is presented.
@@ -899,7 +899,7 @@ property KS4_IoFailureNoEffect pre kid =
     (keyStoreActivatePost pre kid @ ks_off_isActive)
       == (pre @ ks_off_isActive)
 
-// ── KeyStore::provision — Trust-On-First-Use (TOFU) enrollment ─────────
+// KeyStore::provision - Trust-On-First-Use (TOFU) enrollment
 //
 // `provision(EnrollmentKey newKey) -> optional<EnrollmentKey>` is the
 // other half of the KeyStore lifecycle: it installs the FIRST key into
@@ -951,7 +951,7 @@ keyStoreProvisionPost pre nk =
 keyStoreProvisionRet : [KS_BYTES][8] -> [64][8] -> [72][8]
 keyStoreProvisionRet pre nk = (newKeyStored nk) # [1] # (drop`{145} pre)
 
-// ── Cryptol properties (provable by :prove) ───────────────────────────
+// Cryptol properties below are provable with prove.
 
 // PROV1: TOFU frame condition — provisioning into an already-engaged
 // store is a no-op on the object image (the existing key is never
@@ -982,7 +982,7 @@ property PROV4_ReturnedKeyInactive pre nk =
 property PROV5_MutexPreserved pre nk =
   take`{80} (keyStoreProvisionPost pre nk) == take`{80} pre
 
-// ── KeyStore read accessors — hasKey() / isActive() ───────────────────
+// KeyStore read accessors - hasKey and isActive
 // Both take the lock, read the optional, and return a bool without
 // mutating the object. hasKey() reports whether a key is engaged;
 // isActive() reports engaged AND the key's isActive flag.

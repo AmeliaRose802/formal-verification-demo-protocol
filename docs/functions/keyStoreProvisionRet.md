@@ -35,5 +35,5 @@ implementation-level proof of that path would need a partial
 postcondition. (Implementation-level SAW proof pending.)
 
 ### Related Properties
-- [PROV4 — Returned Key Inactive](../properties/prove).md#prov4--returned-key-inactive)
+- [PROV4 — Returned Key Inactive](../properties/intentional-counterexamples.md#prov4--returned-key-inactive)
 

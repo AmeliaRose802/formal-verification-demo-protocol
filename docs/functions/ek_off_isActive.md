@@ -10,7 +10,7 @@ ek_off_isActive = 48 : Integer
 
 > **Not yet verified.**
 
-── KeyStore::provision — Trust-On-First-Use (TOFU) enrollment ─────────
+KeyStore::provision - Trust-On-First-Use (TOFU) enrollment
 `provision(EnrollmentKey newKey) -> optional<EnrollmentKey>` is the
 other half of the KeyStore lifecycle: it installs the FIRST key into
 an empty store and is otherwise inert. Its body (held under the same
@@ -32,5 +32,5 @@ it sits at object offset 80, so its isActive lands at 80+48 = 128 and
 the optional engaged flag at 80+64 = 144 (consistent with activate).
 
 ### Related Properties
-- [PROV4 — Returned Key Inactive](../properties/prove).md#prov4--returned-key-inactive)
+- [PROV4 — Returned Key Inactive](../properties/intentional-counterexamples.md#prov4--returned-key-inactive)
 

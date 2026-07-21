@@ -27,5 +27,5 @@ keyStoreIsActiveRet pre = boolOfByte (pre @ ks_off_engaged) /\ boolOfByte (pre @
 Tests whether `pre` is well-formed.
 
 ### Related Properties
-- [ACC1 — Active Implies Has Key](../properties/key-store-read-accessors-—-has-key()-is-active().md#acc1--active-implies-has-key)
+- [ACC1 — Active Implies Has Key](../properties/intentional-counterexamples.md#acc1--active-implies-has-key)
 

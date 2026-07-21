@@ -74,7 +74,7 @@ All type definitions: [types.md](types.md)
 | [newKeyStored](functions/newKeyStored.md) | 🧩 ABI adapter / stand-in | The body forces the incoming key INACTIVE before storing it. |
 | [keyStoreProvisionPost](functions/keyStoreProvisionPost.md) | 🧩 ABI adapter / stand-in | Post-state object image. On the engaged (TOFU-locked) path nothing changes; on the empty path the 64-byte (inactivated) key is written into the optional payload at offset 80 and the engaged flag at 144 is set. Bytes 0..79 (mutex) and 145..151 (tail padding) are preserved. |
 | [keyStoreProvisionRet](functions/keyStoreProvisionRet.md) | 🧩 ABI adapter / stand-in | Returned optional<EnrollmentKey> image (72 bytes: 64-byte payload · engaged@64 · 7 bytes tail). ONLY meaningful on the empty (fresh) path, where the body memcpy's the just-stored 72-byte optional out of the object — so the tail bytes mirror the object's tail (pre[145..151]). |
-| [boolOfByte](functions/boolOfByte.md) | — | ── KeyStore read accessors — hasKey() / isActive() ─────────────────── Both take the lock, read the optional, and return a bool without mutating the object. hasKey() reports whether a key is engaged; isActive() reports engaged AND the key's isActive flag. |
+| [boolOfByte](functions/boolOfByte.md) | — | KeyStore read accessors - hasKey and isActive Both take the lock, read the optional, and return a bool without mutating the object. hasKey() reports whether a key is engaged; isActive() reports engaged AND the key's isActive flag. |
 | [keyStoreHasKeyRet](functions/keyStoreHasKeyRet.md) | 🧩 ABI adapter / stand-in | Cryptol indexes words MSB-first (`@ 0` is bit 7), while LLVM i8->i1 truncation keeps the LSB. Use `@ 7` to mirror the implementation. |
 | [keyStoreIsActiveRet](functions/keyStoreIsActiveRet.md) | 🧩 ABI adapter / stand-in | Tests whether `pre` is well-formed. |
 | [keyStoreCurrentRet](functions/keyStoreCurrentRet.md) | 📄 Spec-only | KeyStore::current returns the optional<EnrollmentKey> stored in `key_`. |
@@ -93,9 +93,7 @@ Per-function detail pages: [functions](functions/index.md)
 | [Canonicalization byte-injectivity](properties/canonicalization-byte-injectivity.md) | P23–P25 |
 | [enforceAccess matrix-coverage closures](properties/enforce-access-matrix-coverage-closures.md) | P26–P27 |
 | [Structured-request properties](properties/structured-request-properties.md) | P28–P29 |
-| [Intentional counterexamples](properties/intentional-counterexamples.md) | P30–P32 |
-| [prove)](properties/prove).md) | KS1–PROV5 |
-| [KeyStore read accessors — hasKey() / isActive()](properties/key-store-read-accessors-—-has-key()-is-active().md) | ACC1 |
+| [Intentional counterexamples](properties/intentional-counterexamples.md) | P30–ACC1 |
 
 
 ## Additional Documentation

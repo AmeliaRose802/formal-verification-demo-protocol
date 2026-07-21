@@ -34,8 +34,8 @@ into the optional payload at offset 80 and the engaged flag at 144 is
 set. Bytes 0..79 (mutex) and 145..151 (tail padding) are preserved.
 
 ### Related Properties
-- [PROV1 — Tofu Frame](../properties/prove).md#prov1--tofu-frame)
-- [PROV2 — Fresh Key Inactive](../properties/prove).md#prov2--fresh-key-inactive)
-- [PROV3 — Fresh Engages](../properties/prove).md#prov3--fresh-engages)
-- [PROV5 — Mutex Preserved](../properties/prove).md#prov5--mutex-preserved)
+- [PROV1 — Tofu Frame](../properties/intentional-counterexamples.md#prov1--tofu-frame)
+- [PROV2 — Fresh Key Inactive](../properties/intentional-counterexamples.md#prov2--fresh-key-inactive)
+- [PROV3 — Fresh Engages](../properties/intentional-counterexamples.md#prov3--fresh-engages)
+- [PROV5 — Mutex Preserved](../properties/intentional-counterexamples.md#prov5--mutex-preserved)
 

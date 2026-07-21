@@ -20,7 +20,7 @@
 boolOfByte b = (b @ 7) == 1
 ```
 
-── KeyStore read accessors — hasKey() / isActive() ───────────────────
+KeyStore read accessors - hasKey and isActive
 Both take the lock, read the optional, and return a bool without
 mutating the object. hasKey() reports whether a key is engaged;
 isActive() reports engaged AND the key's isActive flag.
