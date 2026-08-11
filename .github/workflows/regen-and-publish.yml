@@ -5,31 +5,34 @@
 # ---------------
 # Previously the published site only refreshed when someone ran the
 # pretty-specs pipeline *locally* (scripts/regen-docs.ps1), committed the
-# regenerated docs/, and opened a PR — then pages.yml deployed the
-# committed docs/. This workflow removes that manual loop: when source
-# (Cryptol model, C++/Rust implementations, extra docs, assets, docfx
-# config) lands on `main`, CI re-runs the exact same pipeline inside the
-# verification toolchain container and deploys the freshly rendered site.
+# regenerated docs/, and opened a PR. This workflow removes that manual
+# loop: when source (Cryptol model, C++/Rust implementations, extra docs,
+# assets, docfx config) lands on `main`, CI re-runs the exact same pipeline
+# inside the verification toolchain container and deploys the freshly
+# rendered site.
 #
 # It publishes the *freshly rendered* _site rather than committing docs/
 # back to the repo, so it never needs write access to a protected `main`
-# and can't create an auto-commit trigger loop. The committed docs/ in the
-# repo remains the last human-reviewed snapshot; the live site always
-# reflects current source. (pages.yml stays as a manual fallback that
-# deploys the committed docs/.)
+# and can't create an auto-commit trigger loop. docs/ is generated output
+# (gitignored, never committed); the live site is rendered fresh from
+# source on every push by this workflow, which is the sole publisher.
 #
 # Toolchain
 # ---------
 # - The container image already bundles LLVM, SAW, Z3, Cryptol and pwsh.
 # - The pretty-specs renderer is consumed as a *published binary* from the
-#   public AmeliaRose802/crystal-cryptal GitHub Release (pinned via
-#   PRETTY_SPECS_VERSION below), so no Rust build of the renderer is needed.
-# - crystal-cryptal's release does NOT ship pipeline.ps1, so that script is
-#   vendored into this repo at scripts/vendor/pipeline.ps1. Keep its banner's
-#   tag in sync with PRETTY_SPECS_VERSION when bumping.
-# - saw-spec-gen (the spec generator) still has no published binary, so it is
-#   checked out + built from source here; pipeline.ps1 also needs its
-#   verify.ps1 from the repo root.
+#   public AmeliaRose802/crystal-cryptal GitHub Release. It tracks the
+#   *latest* release (the tag is resolved at run time via the GitHub API),
+#   so the docs always render with the newest renderer and its native
+#   `--pipeline` orchestrator.
+# - saw-spec-gen (the spec generator) is likewise consumed as a *published
+#   binary* from its GitHub Release (also tracking the *latest* release,
+#   resolved at run time via the GitHub API) and driven through its native
+#   `verify-cpp` CLI command. The workflow therefore needs no saw-spec-gen
+#   checkout, no from-source `cargo build`,
+#   and none of the PowerShell wrappers (verify.ps1 / scripts/vendor/
+#   pipeline.ps1): it drives pretty-specs' native `--pipeline` (which calls
+#   `verify-cpp` itself) directly in the "Regenerate docs" step below.
 
 name: Regenerate docs and publish
 
@@ -45,7 +48,6 @@ on:
       - 'coverage.toml'
       - 'docfx.json'
       - 'scripts/regen-docs.ps1'
-      - 'scripts/vendor/pipeline.ps1'
       - '.github/workflows/regen-and-publish.yml'
   workflow_dispatch:
 
@@ -54,14 +56,12 @@ permissions:
   pages: write
   id-token: write
 
-# Pinned published renderer. Bump together with the tag in the banner of
-# scripts/vendor/pipeline.ps1 (and re-vendor that file) when upgrading.
-env:
-  PRETTY_SPECS_VERSION: v0.2.0
-  PRETTY_SPECS_SHA256: c26272c89d8a28fda490f19ac277a2be70708f34f2649447049688c6ac702191
+# Both tools track the latest published release (the tag is resolved at run
+# time via the GitHub API — see the download steps), so there's no version
+# or digest pin to maintain.
 
-# Share the Pages concurrency group with pages.yml so the two never try to
-# deploy at the same time. Don't cancel an in-flight deployment.
+# This is the sole GitHub Pages publisher. The `pages` concurrency group
+# guards against overlapping deploys; don't cancel an in-flight deployment.
 concurrency:
   group: pages
   cancel-in-progress: false
@@ -83,79 +83,125 @@ jobs:
       - name: Checkout demo_protocol
         uses: actions/checkout@v4
 
-      - name: Checkout saw-spec-gen (spec generator)
-        uses: actions/checkout@v4
-        with:
-          repository: AmeliaRose802/saw-spec-gen
-          path: .tools/saw-spec-gen
-
-      - name: Download pretty-specs ${{ env.PRETTY_SPECS_VERSION }} (published binary)
+      - name: Download pretty-specs (latest published binary)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $ErrorActionPreference = 'Stop'
-          $ver   = $env:PRETTY_SPECS_VERSION
+          $repo = 'AmeliaRose802/crystal-cryptal'
+
+          # Resolve the newest release tag at run time (no version pin). A token
+          # raises the API rate limit and works for public-repo release reads.
+          $headers = @{ 'User-Agent' = 'demo_protocol-ci'; 'Accept' = 'application/vnd.github+json' }
+          if ($env:GH_TOKEN) { $headers['Authorization'] = "Bearer $env:GH_TOKEN" }
+          $rel = Invoke-RestMethod -UseBasicParsing -Headers $headers -Uri "https://api.github.com/repos/$repo/releases/latest"
+          $ver = $rel.tag_name
+          Write-Host "Latest pretty-specs release: $ver"
+
           $asset = "pretty-specs-$ver-x86_64-unknown-linux-gnu.tar.gz"
-          $url   = "https://github.com/AmeliaRose802/crystal-cryptal/releases/download/$ver/$asset"
+          $url   = "https://github.com/$repo/releases/download/$ver/$asset"
           New-Item -ItemType Directory -Force -Path .tools/pretty-specs, .tools/bin | Out-Null
           Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile ".tools/$asset"
-
-          # Verify against the pinned digest so a moved/retagged asset can't slip in.
-          $actual = (Get-FileHash ".tools/$asset" -Algorithm SHA256).Hash.ToLower()
-          if ($actual -ne $env:PRETTY_SPECS_SHA256) {
-            throw "pretty-specs asset sha256 mismatch: got $actual expected $($env:PRETTY_SPECS_SHA256)"
-          }
 
           tar -xzf ".tools/$asset" -C .tools/pretty-specs
           $found = @(Get-ChildItem -Recurse -File -Path .tools/pretty-specs -Filter pretty-specs)
           if ($found.Count -eq 0) { throw "pretty-specs binary not found inside $asset" }
           Copy-Item $found[0].FullName .tools/bin/pretty-specs -Force
           & chmod '+x' .tools/bin/pretty-specs
-          # Smoke test: the binary has no --version flag (usage is
-          # `pretty-specs --favicon <PATH> [INPUTS]...`); --help exits 0.
-          & .tools/bin/pretty-specs --help
-          if ($LASTEXITCODE -ne 0) { throw "pretty-specs --help failed (exit $LASTEXITCODE)" }
+          # Smoke test: confirm the binary runs and exposes the native
+          # `--pipeline` orchestrator we depend on below.
+          & .tools/bin/pretty-specs --version
+          if ($LASTEXITCODE -ne 0) { throw "pretty-specs --version failed (exit $LASTEXITCODE)" }
 
-      - name: Cache cargo + saw-spec-gen build
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            .tools/saw-spec-gen/target
-          key: regen-cargo-${{ hashFiles('.tools/saw-spec-gen/Cargo.lock') }}
-          restore-keys: |
-            regen-cargo-
-
-      - name: Build saw-spec-gen
+      - name: Download saw-spec-gen (pinned v0.1.13 binary)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $ErrorActionPreference = 'Stop'
-          Push-Location .tools/saw-spec-gen
-          cargo build --release
-          Pop-Location
+          $repo = 'AmeliaRose802/saw-spec-gen'
+
+          # Pinned saw-spec-gen release. Bump in lockstep with the Dockerfile
+          # (SAW_SPEC_GEN_TAG) and scripts/ci-install.ps1 ($SawSpecGenTag).
+          $ver = 'v0.1.13'
+          Write-Host "Pinned saw-spec-gen release: $ver"
+
+          $asset = 'saw-spec-gen-linux-x86_64.tar.gz'
+          $url   = "https://github.com/$repo/releases/download/$ver/$asset"
+          New-Item -ItemType Directory -Force -Path .tools/saw-spec-gen, .tools/bin | Out-Null
+          Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile ".tools/$asset"
+
+          tar -xzf ".tools/$asset" -C .tools/saw-spec-gen
+          $found = @(Get-ChildItem -Recurse -File -Path .tools/saw-spec-gen -Filter saw-spec-gen)
+          if ($found.Count -eq 0) { throw "saw-spec-gen binary not found inside $asset" }
+          Copy-Item $found[0].FullName .tools/bin/saw-spec-gen -Force
+          & chmod '+x' .tools/bin/saw-spec-gen
+          & .tools/bin/saw-spec-gen --version
+          if ($LASTEXITCODE -ne 0) { throw "saw-spec-gen --version failed (exit $LASTEXITCODE)" }
 
       - name: Regenerate docs + proof manifest
         run: |
           $ErrorActionPreference = 'Stop'
-          $pretty   = (Resolve-Path '.tools/bin/pretty-specs').Path
-          $pipeline = (Resolve-Path 'scripts/vendor/pipeline.ps1').Path
-          $ssgRoot  = (Resolve-Path '.tools/saw-spec-gen').Path
-          $ssgBin   = Join-Path $ssgRoot 'target/release/saw-spec-gen'
+          # The native `--pipeline` orchestrator shells out to saw-spec-gen's
+          # `verify-cpp`, whose exit code is meaningful (e.g. a genuine disproof
+          # is non-zero). pretty-specs records each result and still exits 0, so
+          # don't let pwsh 7.4+ throw on the first non-zero native exit.
+          $PSNativeCommandUseErrorActionPreference = $false
+
+          $pretty = (Resolve-Path '.tools/bin/pretty-specs').Path
+          $ssg    = (Resolve-Path '.tools/bin/saw-spec-gen').Path
+
+          $spec      = 'cpp/saw/SDEP_cpp.cry'
+          $verifyOut = 'verify_out'
+          $manifest  = 'proof_manifest.json'
+          $docs      = 'docs'
+
+          $implFiles = @(Get-ChildItem -Path 'cpp/src' -Filter '*.cpp' -File | Sort-Object Name)
+          if ($implFiles.Count -eq 0) { throw 'No C++ implementation files found under cpp/src/*.cpp' }
+
+          $implArgs = @()
+          foreach ($f in $implFiles) {
+            $rel = $f.FullName.Replace((Get-Location).Path + [IO.Path]::DirectorySeparatorChar, '')
+            $rel = $rel.Replace('\\', '/')
+            $implArgs += @('--impl', $rel)
+          }
 
           # Clean prior outputs so we never publish a stale mixture.
-          Remove-Item -Recurse -Force verify_out, docs, proof_manifest.json, pipeline.log -ErrorAction SilentlyContinue
+          Remove-Item -Recurse -Force $verifyOut, $docs, $manifest, pipeline.log -ErrorAction SilentlyContinue
 
-          & $pipeline `
-            -Spec cpp/saw/SDEP_cpp.cry `
-            -Impl cpp/src/decision.cpp -ImplLang cpp `
-            -CxxIncludeDirs cpp/include -CxxStandard c++20 `
-            -ExtraClangFlags '-fexceptions','-fno-inline' `
-            -PrettySpecs $pretty `
-            -SawSpecGen $ssgBin `
-            -SawSpecGenRoot $ssgRoot `
-            -Output docs -VerifyOutput verify_out `
-            -ExtraDocs 'extra_docs:Formal Verification' `
-            -Logo assets/sat-pudding.png `
-            -Favicon assets/fabicon.png `
-            *>&1 | Tee-Object pipeline.log
+          Start-Transcript -Path pipeline.log | Out-Null
+          try {
+            # One native command replaces the old hand-rolled Steps 0-4 (and the
+            # retired scripts/vendor/pipeline.ps1): it renders docs, emits the
+            # function list, runs `saw-spec-gen verify-cpp` per function, adapts
+            # the results into the manifest, and re-renders with proof badges.
+            # `--docfx` is required so DocFX gets its toc.yml. Cryptol-only
+            # helpers with no C++ symbol soft-skip via --spec-only-on-missing
+            # (pretty-specs' default unless --strict-on-missing).
+            $pipelineArgs = @(
+              $spec,
+              '--pipeline'
+            ) + $implArgs + @(
+              '--impl-lang',        'cpp',
+              '--saw-spec-gen',     $ssg,
+              '--cxx-include-dir',  'cpp/include',
+              '--cxx-standard',     'c++20',
+              '--clang-flag',       '-fexceptions',
+              '--clang-flag',       '-fno-inline',
+              '--verify-output',    $verifyOut,
+              '--manifest-output',  $manifest,
+              '-o',                 $docs,
+              '--docfx',
+              '--logo',             'assets/sat-pudding.png',
+              '--favicon',          'assets/fabicon.png',
+              '--extra-docs',       'extra_docs:Formal Verification'
+            )
+            Write-Host "  > pretty-specs $($pipelineArgs -join ' ')" -ForegroundColor DarkGray
+            & $pretty @pipelineArgs
+            if ($LASTEXITCODE -ne 0) { throw "pretty-specs --pipeline exited with code $LASTEXITCODE" }
+          }
+          finally {
+            Stop-Transcript | Out-Null
+          }
 
           if (-not (Test-Path docs/index.md)) {
             throw "Regeneration failed: docs/ was not produced. See pipeline.log."

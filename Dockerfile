@@ -31,7 +31,7 @@ ARG SAW_UBUNTU_VERSION=24.04
 ARG LLVM_VERSION=20.1.6
 ARG PWSH_VERSION=7.6.2
 ARG RUST_TOOLCHAIN=stable
-ARG SAW_SPEC_GEN_TAG=v0.1.0
+ARG SAW_SPEC_GEN_TAG=v0.1.13
 
 ENV DEBIAN_FRONTEND=noninteractive \
     LANG=C.UTF-8 \
@@ -99,12 +99,12 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
 # binary. We download the official release tarball from GitHub:
 #   https://github.com/AmeliaRose802/saw-spec-gen/releases/tag/${SAW_SPEC_GEN_TAG}
 # The tarball contains a single binary at archive root (no parent dir),
-# so we extract straight into /root/.demo_protocol/bin/. The v0.1.0
-# Linux binary is built against GLIBC 2.39, which ubuntu:24.04 ships.
+# so we extract straight into /root/.demo_protocol/bin/. The Linux
+# binary is built against GLIBC 2.39, which ubuntu:24.04 ships.
 #
 # SAW_SPEC_GEN_TAG controls which release to pull:
 #   - "latest"  → resolves via releases/latest/download/...
-#   - anything else (e.g. "v0.1.0") → that specific tag
+#   - anything else (e.g. "v0.1.13") → that specific tag
 RUN mkdir -p /root/.demo_protocol/bin \
  && if [ "${SAW_SPEC_GEN_TAG}" = "latest" ]; then \
         ssg_url="https://github.com/AmeliaRose802/saw-spec-gen/releases/latest/download/saw-spec-gen-linux-x86_64.tar.gz"; \
