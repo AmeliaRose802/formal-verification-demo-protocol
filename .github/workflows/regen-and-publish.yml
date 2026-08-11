@@ -113,7 +113,7 @@ jobs:
           & .tools/bin/pretty-specs --version
           if ($LASTEXITCODE -ne 0) { throw "pretty-specs --version failed (exit $LASTEXITCODE)" }
 
-      - name: Download saw-spec-gen (pinned v0.1.13 binary)
+      - name: Download saw-spec-gen (pinned v0.1.15 binary)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -122,7 +122,7 @@ jobs:
 
           # Pinned saw-spec-gen release. Bump in lockstep with the Dockerfile
           # (SAW_SPEC_GEN_TAG) and scripts/ci-install.ps1 ($SawSpecGenTag).
-          $ver = 'v0.1.13'
+          $ver = 'v0.1.15'
           Write-Host "Pinned saw-spec-gen release: $ver"
 
           $asset = 'saw-spec-gen-linux-x86_64.tar.gz'
