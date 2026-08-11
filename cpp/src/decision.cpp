@@ -172,4 +172,69 @@ getStatus(bool fleetEnabled,
     };
 }
 
+// ── URL host canonicalization ────────────────────────────────────────
+namespace {
+
+constexpr std::uint8_t kMaxHostBytes = 32;
+
+[[nodiscard]] bool asciiEqIgnoreCase(std::uint8_t a, std::uint8_t b) {
+    const std::uint8_t la = (a >= 'A' && a <= 'Z') ? static_cast<std::uint8_t>(a + 32) : a;
+    const std::uint8_t lb = (b >= 'A' && b <= 'Z') ? static_cast<std::uint8_t>(b + 32) : b;
+    return la == lb;
+}
+
+[[nodiscard]] std::uint8_t toLowerAscii(std::uint8_t c) {
+    if (c >= 'A' && c <= 'Z') {
+        return static_cast<std::uint8_t>(c + 32);
+    }
+    return c;
+}
+
+[[nodiscard]] bool hostEq(const std::uint8_t* lowered,
+                          std::uint8_t len,
+                          const char* lit,
+                          std::uint8_t litLen) {
+    if (len != litLen) return false;
+    for (std::uint8_t i = 0; i < len; ++i) {
+        if (!asciiEqIgnoreCase(lowered[i], static_cast<std::uint8_t>(lit[i]))) {
+            return false;
+        }
+    }
+    return true;
+}
+
+} // namespace
+
+CanonHostClass
+classifyCanonicalHost(const std::uint8_t* host,
+                      std::uint8_t hostLen) noexcept {
+    if (hostLen == 0 || hostLen > kMaxHostBytes) {
+        return CanonHostClass::Unknown;
+    }
+
+    std::uint8_t lower[kMaxHostBytes] = {};
+    for (std::uint8_t i = 0; i < hostLen; ++i) {
+        if (host[i] == '@') {
+            return CanonHostClass::UserinfoPresent;
+        }
+        lower[i] = toLowerAscii(host[i]);
+    }
+
+    if (hostEq(lower, hostLen, "169.254.169.254", 15) ||
+        hostEq(lower, hostLen, "2852039166", 10) ||
+        hostEq(lower, hostLen, "0xa9fea9fe", 10) ||
+        hostEq(lower, hostLen, "[::ffff:a9fe:a9fe]", 18)) {
+        return CanonHostClass::Imds;
+    }
+
+    if (hostEq(lower, hostLen, "168.63.129.16", 13) ||
+        hostEq(lower, hostLen, "2822734096", 10) ||
+        hostEq(lower, hostLen, "0xa83f8110", 10) ||
+        hostEq(lower, hostLen, "[::ffff:a83f:8110]", 18)) {
+        return CanonHostClass::WireServer;
+    }
+
+    return CanonHostClass::Unknown;
+}
+
 } // namespace sdep
