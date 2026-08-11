@@ -1,0 +1,84 @@
+# saw-spec-gen project config for the SDEP ABI-width model.
+#
+# Auto-discovered as the sibling `<cryptol-spec-stem>.toml` next to
+# cpp/saw/SDEP_cpp.cry (saw-spec-gen search order #1), and passed
+# explicitly by scripts/regen-docs.ps1 via --saw-spec-gen-config.
+#
+# All spec shaping (buffer sizes, length preconditions, out-buffer
+# bindings) lives here rather than on the command line. Global keys apply
+# everywhere; [functions.<cryptol_fn>] tables carry per-function overrides
+# keyed by the Cryptol function name.
+
+# Cryptol helpers with no matching C++ symbol soft-skip as not_attempted
+# instead of failing the pipeline.
+spec_only_on_missing = true
+
+# Bind the defaulted `sdep::operator==(const Uuid&, const Uuid&)` to a
+# byte-equality contract so saw-spec-gen assumes it instead of unfolding
+# std::array::operator== -> std::equal -> memcmp (whose length is a
+# symbolic pointer-difference at -O0, defeating the faithful memcmp
+# override). The 16-byte Uuid images compare equal iff their bytes match.
+[[uninterpreted]]
+cryptol_fn = "uuidEq"
+symbol     = "??8sdep@@YA_NAEBUUuid@0@0@Z"
+
+# classifyCanonicalHost(const uint8_t* host, uint8_t hostLen) -> CanonHostClass
+# `host` is an _In_reads_(32) readable buffer; `hostLen` is bounded by the
+# buffer size so symbolic execution never reads past the 32-byte region.
+# Restores the 7th pure-decision-function equivalence proof (z3, ~38s).
+[functions.classifyCanonicalHost]
+in_buffer_size  = ["host=32"]
+max_len_precond = ["hostLen=32"]
+
+# KeyStore::provision(EnrollmentKey newKey) -> std::optional<EnrollmentKey>
+# Stateful mutating method: the 152-byte `this` object image is both read
+# (pre-state) and written (post-state via keyStoreProvisionPost); the
+# 64-byte EnrollmentKey arg is passed by value (hidden pointer); the
+# 72-byte optional return is sret. has_value() is the low bit of the
+# engaged byte, matching the verified read accessors.
+[functions.keyStoreProvisionRet]
+out_buffer_param = ["this=152"]
+cryptol_fn_out   = ["this=keyStoreProvisionPost"]
+# isActive (offset 128) and the optional engaged flag (offset 144) are
+# read as bit0 by C++ but tested `== 1` by the model; pin them canonical.
+preconditions    = ["(this_pre @ 128) <= 1", "(this_pre @ 144) <= 1"]
+# The returned std::optional<EnrollmentKey> is 72 bytes: 64-byte payload +
+# has_value@64 + 7 padding bytes (65..71) that a memcpy fills from the
+# uninitialized source optional. Assert only the 65 meaningful bytes so
+# the undefined padding is never read; the model returns [65][8].
+sret_assert_bytes = 65
+
+# KeyStore read accessors (const methods, read the 152-byte object image).
+[functions.keyStoreHasKeyRet]
+in_buffer_size = ["this=152"]
+
+[functions.keyStoreIsActiveRet]
+in_buffer_size = ["this=152"]
+
+# KeyStore::current() -> std::optional<EnrollmentKey> (72-byte sret return).
+[functions.keyStoreCurrentRet]
+in_buffer_size = ["this=152"]
+
+# KeyStore::activate(const Uuid& keyId) — stateful mutating method.
+[functions.keyStoreActivateRet]
+out_buffer_param = ["this=152"]
+cryptol_fn_out   = ["this=keyStoreActivatePost"]
+in_buffer_size   = ["keyId=16"]
+# The object's `bool` bytes — EnrollmentKey.isActive (offset 128) and the
+# std::optional engaged flag (offset 144) — are read by C++ as `trunc i8
+# to i1` (bit 0), while the Cryptol model tests `== 1`. Constrain them to
+# the canonical {0,1} bool representation so the two agree (a bool holding
+# any other byte is UB in C++, so this loses no real behaviour).
+preconditions    = ["(this_pre @ 128) <= 1", "(this_pre @ 144) <= 1"]
+
+# canonicalize_lp(out, m, nm, b, nb) -> size_t — length-prefixed encoder.
+# Output-pointer + return-value split: the return byte-count is modeled by
+# canonicalize_lp_ret; the post-state of the `out` buffer by
+# canonicalize_lp_post. Bounded model: fields m,b are 4-byte buffers whose
+# used lengths nm,nb are bounded by 4 (max_len_precond), and `out` is the
+# 10-byte destination (2 + 4 + 4).
+[functions.canonicalize_lp_ret]
+in_buffer_size   = ["m=4", "b=4"]
+out_buffer_param = ["out=10"]
+cryptol_fn_out   = ["out=canonicalize_lp_post"]
+max_len_precond  = ["nm=4", "nb=4"]
